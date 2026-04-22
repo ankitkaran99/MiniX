@@ -1,3 +1,6 @@
+(function (global) {
+  'use strict';
+
 const MiniXScrollPlugin = (() => {
   const STATE_KEY = '__minixScrollState';
 
@@ -84,14 +87,15 @@ const MiniXScrollPlugin = (() => {
   }
 
   function afterDomPaint(fn) {
+    const raf = global.requestAnimationFrame || ((cb) => setTimeout(cb, 0));
     queueMicrotask(() => {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(fn);
+      raf(() => {
+        raf(fn);
       });
     });
   }
 
-  const plugin = MiniX_Plugin.define({
+  const plugin = {
     name: 'minix-scroll',
     version: '16.0.0',
 
@@ -221,7 +225,8 @@ const MiniXScrollPlugin = (() => {
         const onScroll = () => {
           if (destroyed || ticking) return;
           ticking = true;
-          requestAnimationFrame(() => {
+          const raf = global.requestAnimationFrame || ((fn) => setTimeout(fn, 0));
+          raf(() => {
             ticking = false;
             maybeRun('scroll');
           });
@@ -247,9 +252,15 @@ const MiniXScrollPlugin = (() => {
         return destroy;
       });
     }
-  });
+  };
 
   return plugin;
 })();
 
-window.MiniXScrollPlugin = MiniXScrollPlugin;
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = MiniXScrollPlugin;
+}
+if (global) {
+  global.MiniXScrollPlugin = MiniXScrollPlugin;
+}
+})(typeof window !== 'undefined' ? window : globalThis);

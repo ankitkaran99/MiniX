@@ -54,6 +54,13 @@
         return app?.options?.compiler ?? app?.compiler ?? null;
     }
 
+    function definePlugin(definition) {
+        const MiniXPlugin = global?.MiniX_Plugin || (typeof MiniX_Plugin !== 'undefined' ? MiniX_Plugin : null);
+        return MiniXPlugin && typeof MiniXPlugin.define === 'function'
+            ? MiniXPlugin.define(definition)
+            : definition;
+    }
+
     function isFormElement(el) {
         return !!el && el.tagName === 'FORM';
     }
@@ -440,7 +447,7 @@
 
     // ─── Validate Plugin ──────────────────────────────────────────────────────
 
-    const MiniXValidatePlugin = MiniX_Plugin.define({
+    const MiniXValidatePlugin = definePlugin({
         name:    'minix-validate',
         version: '13.2.0',
 
@@ -708,7 +715,7 @@
 
     // ─── Ajax Plugin ──────────────────────────────────────────────────────────
 
-    const MiniXAjaxPlugin = MiniX_Plugin.define({
+    const MiniXAjaxPlugin = definePlugin({
         name:    'minix-ajax',
         version: '13.2.0',
 
@@ -732,6 +739,7 @@
                     onComplete:   resolveMethod(instance, eventMap.onComplete)   || NOOP_ASYNC,
                     onLoader:     resolveMethod(instance, eventMap.onLoader)     || NOOP_ASYNC,
                 };
+                let ajaxSubmitting = false;
 
                 const onSubmit = async (event) => {
                     if (event.defaultPrevented) return;
@@ -742,7 +750,8 @@
                     // [FIX-19] Atomic check-and-set: read and set isSubmitting in the
                     // same synchronous turn so two submit events firing in the same
                     // microtask tick cannot both pass the guard before either sets the flag.
-                    if (formApi?.isSubmitting) return;
+                    if (ajaxSubmitting || formApi?.isSubmitting) return;
+                    ajaxSubmitting = true;
                     if (formApi) formApi.setSubmitting(true);
                     // NOTE: from this point on, setSubmitting(false) MUST be called in the
                     // finally block below regardless of what happens — see FIX-12/FIX-15.
@@ -847,6 +856,7 @@
                             }
                         } finally {
                             if (loaderRequested) await handlers.onLoader(false, el, eventMap);
+                            ajaxSubmitting = false;
                             if (formApi) formApi.setSubmitting(false);
                         }
                     }

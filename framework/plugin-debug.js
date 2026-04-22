@@ -87,23 +87,33 @@ const MiniX_Debug = (() => {
   /** @type {Array<{ts:number, type:string, component:string, detail:object}>} */
   const _events = [];
   let   _eventSeq = 0;
+  let   _dispatchDepth = 0;
 
   function _record(type, componentName, detail = {}) {
     const entry = { seq: ++_eventSeq, ts: Date.now(), type, component: componentName, detail };
     if (_events.length >= MAX_EVENTS) _events.shift();
     _events.push(entry);
-    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+    if (!_dispatchDepth && typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      // Pass only the new entry — callers that need the full log can call getEvents()
       const EventCtor = window.CustomEvent || (typeof CustomEvent !== 'undefined' ? CustomEvent : null);
       if (EventCtor) {
-        window.dispatchEvent(new EventCtor('minix-debug:event', {
-          detail: {
-            event: entry,
-            events: _events.slice()
+        _dispatchDepth++;
+        if (typeof MiniX_State !== 'undefined') MiniX_State._suppressDevCaptureDepth++;
+        try {
+          window.dispatchEvent(new EventCtor('minix-debug:event', { detail: { event: entry } }));
+        } finally {
+          if (typeof MiniX_State !== 'undefined') {
+            MiniX_State._suppressDevCaptureDepth = Math.max(0, MiniX_State._suppressDevCaptureDepth - 1);
           }
-        }));
+          _dispatchDepth--;
+        }
       }
     }
-    _refreshComponentsTabSoon();
+    if (_panel && _activeTab === 'events') {
+      _renderPanelEvents();
+    } else if (_panel) {
+      _refreshComponentsTabSoon();
+    }
     return entry;
   }
 
@@ -115,18 +125,21 @@ const MiniX_Debug = (() => {
     return cls?.name || componentOrName?.instance?.constructor?.name || 'AnonymousComponent';
   }
 
+  // Shared JSON replacer — avoids allocating an identical closure in both _safeSerialise and _safeClone
+  function _jsonReplacer(_k, v) {
+    if (typeof v === 'function') return '[Function]';
+    if (v instanceof Map) return { __Map: [...v.entries()] };
+    if (v instanceof Set) return { __Set: [...v.values()] };
+    return v;
+  }
+
   function _safeSerialise(value, maxLen = MAX_VALUE_LEN) {
     if (value === null)      return 'null';
     if (value === undefined) return 'undefined';
     if (typeof value === 'function') return `[Function: ${value.name || 'anonymous'}]`;
     let s;
     try {
-      s = JSON.stringify(value, (_k, v) => {
-        if (typeof v === 'function') return '[Function]';
-        if (v instanceof Map)   return { __Map: [...v.entries()] };
-        if (v instanceof Set)   return { __Set: [...v.values()] };
-        return v;
-      });
+      s = JSON.stringify(value, _jsonReplacer);
     } catch (_) {
       s = String(value);
     }
@@ -136,12 +149,7 @@ const MiniX_Debug = (() => {
 
   function _safeClone(value) {
     try {
-      return JSON.parse(JSON.stringify(value, (_k, v) => {
-        if (typeof v === 'function') return '[Function]';
-        if (v instanceof Map) return { __Map: [...v.entries()] };
-        if (v instanceof Set) return { __Set: [...v.values()] };
-        return v;
-      }));
+      return JSON.parse(JSON.stringify(value, _jsonReplacer));
     } catch (_) {
       return _safeSerialise(value, 300);
     }
@@ -164,28 +172,25 @@ const MiniX_Debug = (() => {
     }
   }
 
+  const _HTML_ESCAPE_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
   function _escapeHtml(value) {
-    return String(value)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
+    return String(value).replace(/[&<>"']/g, (c) => _HTML_ESCAPE_MAP[c]);
   }
 
   function _componentSummary(id, comp) {
     const name = _componentLabel(comp);
+    // Count keys from raw state without cloning — clone only for display
+    let stateKeys = 0;
+    let propKeys = 0;
+    try {
+      const raw = comp.state?.raw?.();
+      const rawState = raw?.__raw || raw;
+      if (rawState) stateKeys = Object.keys(rawState).length;
+    } catch (_) {}
+    try { propKeys = Object.keys(comp.props || {}).length; } catch (_) {}
     const state = _componentStateSnapshot(comp);
     const props = _componentPropsSnapshot(comp);
-    return {
-      id,
-      name,
-      mounted: !!comp.isMounted,
-      state,
-      props,
-      stateKeys: Object.keys(state || {}).length,
-      propKeys: Object.keys(props || {}).length,
-    };
+    return { id, name, mounted: !!comp.isMounted, state, props, stateKeys, propKeys };
   }
 
   function _storeSnapshot(store) {
@@ -213,7 +218,6 @@ const MiniX_Debug = (() => {
           old: oldVal,
           new: newVal,
           meta,
-          snapshot: _storeSnapshot(store)
         };
         _storeEvents.push({ ts: Date.now(), detail });
         if (_storeEvents.length > MAX_PANEL_ENTRIES) _storeEvents.shift();
@@ -256,11 +260,13 @@ const MiniX_Debug = (() => {
       _storeBridgePatched = true;
       _storeOriginalDefine = api.define;
       const originalDefine = api.define.bind(api);
-      api.define = (name, def) => {
+      const patched = (name, def) => {
         const store = originalDefine(name, def);
         _hookStore(name, store);
         return store;
       };
+      _patches.push({ obj: api, key: 'define', original: api.define });
+      api.define = patched;
     }
 
     if (typeof api.list === 'function' && typeof api.use === 'function') {
@@ -341,17 +347,19 @@ const MiniX_Debug = (() => {
 
   function _diffObjects(prev = {}, next = {}) {
     const changes = [];
-    const allKeys = new Set([...Object.keys(prev || {}), ...Object.keys(next || {})]);
-    for (const k of allKeys) {
-      const p = prev?.[k];
-      const n = next?.[k];
-      if (!Object.is(p, n)) changes.push({ key: k, from: p, to: n });
+    // Check all keys in prev (covers removed + changed)
+    for (const k in prev) {
+      if (Object.prototype.hasOwnProperty.call(prev, k) && !Object.is(prev[k], next[k])) {
+        changes.push({ key: k, from: prev[k], to: next[k] });
+      }
+    }
+    // Check keys in next that were not in prev (covers added)
+    for (const k in next) {
+      if (Object.prototype.hasOwnProperty.call(next, k) && !Object.prototype.hasOwnProperty.call(prev, k)) {
+        changes.push({ key: k, from: undefined, to: next[k] });
+      }
     }
     return changes;
-  }
-
-  function _isPrimitive(v) {
-    return v === null || v === undefined || typeof v !== 'object';
   }
 
   // ─── Feature flag defaults ──────────────────────────────────────────────────
@@ -387,10 +395,11 @@ const MiniX_Debug = (() => {
 
   const _patches = []; // { obj, key, original }
 
-  function _patch(obj, key, replacement) {
-    if (!obj || !(key in obj)) return;
-    _patches.push({ obj, key, original: obj[key] });
-    obj[key] = replacement;
+  function _definePlugin(definition) {
+    const PluginCtor = (typeof MiniX_Plugin !== 'undefined' ? MiniX_Plugin : null);
+    return PluginCtor && typeof PluginCtor.define === 'function'
+      ? PluginCtor.define(definition)
+      : definition;
   }
 
   function _restorePatches() {
@@ -398,13 +407,16 @@ const MiniX_Debug = (() => {
     _patches.length = 0;
   }
 
+  // Module-level constant — avoids re-allocating this object on every _log call
+  const _LOG_CLR = {
+    lifecycle: CLR.lifecycle, watcher: CLR.watcher, directive: CLR.directive,
+    props: CLR.props, loop: CLR.loop, effect: CLR.effect,
+  };
+
   // ─── Core logger ────────────────────────────────────────────────────────────
 
   function _log(flags, category, componentName, message, detail = null) {
-    const colourKey = {
-      lifecycle: CLR.lifecycle, watcher: CLR.watcher, directive: CLR.directive,
-      props: CLR.props, loop: CLR.loop, effect: CLR.effect,
-    }[category] || CLR.plugin;
+    const colourKey = _LOG_CLR[category] || CLR.plugin;
 
     const prefix = `%c[MiniX Debug]%c %c${category}%c ${componentName}`;
     const styles = [CLR.plugin, '', colourKey, CLR.label];
@@ -441,10 +453,9 @@ const MiniX_Debug = (() => {
 
   // ─── Watcher tracing ────────────────────────────────────────────────────────
 
-  function _wrapStateWatchers(flags, componentInstance, state, componentName) {
+  function _wrapStateWatchers(flags, state, componentName) {
     if (!flags.watchers || !state?.watch) return;
     if (state.__minixDebugWatchersWrapped) return;
-    state.__minixDebugWatchersWrapped = true;
 
     const originalWatch = state.watch.bind(state);
     // Shadow watch on the component's state proxy — wrap every registered
@@ -470,14 +481,36 @@ const MiniX_Debug = (() => {
       };
       return originalWatch(path, wrapped);
     };
+    // Mark as wrapped only after successful replacement
+    state.__minixDebugWatchersWrapped = true;
   }
 
   function _hookStateRefresh(flags, component) {
     const state = component?.state;
     if (!state || state.__minixDebugRefreshHooked) return;
     state.__minixDebugRefreshHooked = true;
+    const componentName = _componentLabel(component);
 
-    _wrapStateWatchers(flags, component.instance, state, _componentLabel(component));
+    _wrapStateWatchers(flags, state, componentName);
+
+    if (flags.watchers && !state.__minixDebugDevCaptureHooked) {
+      const previousDevCaptureHook = typeof state._onDevCapture === 'function' ? state._onDevCapture.bind(state) : null;
+      state._onDevCapture = (entry, raw = {}) => {
+        if (previousDevCaptureHook) previousDevCaptureHook(entry, raw);
+        if (_dispatchDepth) return;
+        _record('state', componentName, {
+          operation: entry.operation || raw.operation,
+          path: entry.path || '',
+          old: entry.oldValue,
+          new: entry.newValue,
+          meta: entry.meta || raw.meta || {},
+          caller: entry.caller,
+          trace: entry.trace
+        });
+        _refreshComponentsTabSoon();
+      };
+      state.__minixDebugDevCaptureHooked = true;
+    }
 
     if (typeof state._bubbleTargetNotify === 'function') {
       const originalBubbleNotify = state._bubbleTargetNotify.bind(state);
@@ -515,25 +548,6 @@ const MiniX_Debug = (() => {
       }
     }
     _refreshComponentsTabSoon();
-  }
-
-  // ─── x-for loop warnings ────────────────────────────────────────────────────
-
-  /**
-   * Installs a proxy around MiniX_Compiler.prototype._compileForDirective
-   * (before it is called per-element) so we can inspect every x-for expression
-   * and its resolved keys without touching the hot effect inner loop.
-   *
-   * The check runs once at compile time and once per reactive update via the
-   * runtime key-seen Set that _compileForDirective already maintains.
-   */
-  function _patchLoopDirective(flags, componentName) {
-    if (!flags.loops) return null;
-
-    // We intercept _compileForDirective at the Compiler prototype level so the
-    // wrapping applies globally (all components) for one-time patching.
-    // The warning messages carry the component name supplied at patch time.
-    return null; // patching done globally in _installGlobalPatches below
   }
 
   // ─── Global Compiler patches ────────────────────────────────────────────────
@@ -633,34 +647,35 @@ const MiniX_Debug = (() => {
 
   // ─── In-page debug panel ────────────────────────────────────────────────────
 
+  // Scheduler: prefer rAF, fall back to setTimeout — evaluated once at load time
+  const _schedule = typeof requestAnimationFrame === 'function'
+    ? (fn) => requestAnimationFrame(fn)
+    : (fn) => setTimeout(fn, 0);
+
   let _panel = null;
-  let _panelLog = [];
+  let _activeTab = 'events';   // tracks which tab is currently visible
   const MAX_PANEL_ENTRIES = 100;
   let _componentsRefreshPending = false;
 
   function _refreshComponentsTabSoon() {
     if (!_panel || _componentsRefreshPending) return;
-    const activePane = _panel.querySelector('#minix-debug-components:not([style*="display: none"]), #minix-debug-stores:not([style*="display: none"]), #minix-debug-router:not([style*="display: none"])');
-    if (!activePane) return;
+    if (_activeTab === 'events') return;  // no state tab is visible
     _componentsRefreshPending = true;
-    const schedule = typeof requestAnimationFrame === 'function'
-      ? requestAnimationFrame
-      : (fn) => setTimeout(fn, 0);
-    schedule(() => {
+    _schedule(() => {
       _componentsRefreshPending = false;
       if (!_panel) return;
       _renderActiveStateTab();
     });
   }
 
+  // Cached references to panel child elements (set in _createPanel, nulled on close/uninstall)
+  let _panelEls = null;
+
   function _renderActiveStateTab() {
-    if (!_panel) return;
-    const componentsEl = _panel.querySelector('#minix-debug-components');
-    const storesEl = _panel.querySelector('#minix-debug-stores');
-    const routerEl = _panel.querySelector('#minix-debug-router');
-    if (componentsEl && componentsEl.style.display !== 'none') _renderComponentsTab(componentsEl);
-    if (storesEl && storesEl.style.display !== 'none') _renderStoresTab(storesEl);
-    if (routerEl && routerEl.style.display !== 'none') _renderRouterTab(routerEl);
+    if (!_panel || !_panelEls) return;
+    if (_activeTab === 'components') _renderComponentsTab(_panelEls.components);
+    else if (_activeTab === 'stores')     _renderStoresTab(_panelEls.stores);
+    else if (_activeTab === 'router')     _renderRouterTab(_panelEls.router);
   }
 
   function _createPanel() {
@@ -708,6 +723,7 @@ const MiniX_Debug = (() => {
       .minix-event:hover { background:#313244; }
       .minix-event.lifecycle { border-color:#0ea5e9; }
       .minix-event.watcher   { border-color:#f59e0b; }
+      .minix-event.state     { border-color:#fb923c; background:#2b2118; }
       .minix-event.directive { border-color:#10b981; }
       .minix-event.props     { border-color:#8b5cf6; }
       .minix-event.loop      { border-color:#ef4444; background:#2d1a1a; }
@@ -781,18 +797,26 @@ const MiniX_Debug = (() => {
     `;
     document.body.appendChild(_panel);
 
+    // Cache element references so we avoid repeated querySelector calls
+    _panelEls = {
+      events:     _panel.querySelector('#minix-debug-events'),
+      components: _panel.querySelector('#minix-debug-components'),
+      stores:     _panel.querySelector('#minix-debug-stores'),
+      router:     _panel.querySelector('#minix-debug-router'),
+      count:      _panel.querySelector('#minix-debug-count'),
+      toggle:     _panel.querySelector('#minix-debug-toggle'),
+    };
+
     // ── Tab switching ──────────────────────────────────────────────────────────
     const tabs = _panel.querySelectorAll('#minix-debug-tabs button');
-    const eventsEl = _panel.querySelector('#minix-debug-events');
-    const componentsEl = _panel.querySelector('#minix-debug-components');
-    const storesEl = _panel.querySelector('#minix-debug-stores');
-    const routerEl = _panel.querySelector('#minix-debug-router');
+    const { events: eventsEl, components: componentsEl, stores: storesEl, router: routerEl } = _panelEls;
 
     tabs.forEach(tab => {
       tab.addEventListener('click', () => {
         tabs.forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
         const active = tab.dataset.tab;
+        _activeTab = active;
         eventsEl.style.display    = active === 'events'     ? '' : 'none';
         componentsEl.style.display = active === 'components' ? '' : 'none';
         storesEl.style.display     = active === 'stores'     ? '' : 'none';
@@ -806,15 +830,13 @@ const MiniX_Debug = (() => {
     // ── Controls ──────────────────────────────────────────────────────────────
     _panel.querySelector('#minix-debug-toggle').addEventListener('click', () => {
       _panel.classList.toggle('collapsed');
-      _panel.querySelector('#minix-debug-toggle').textContent =
-        _panel.classList.contains('collapsed') ? '▸' : '▾';
+      _panelEls.toggle.textContent = _panel.classList.contains('collapsed') ? '▸' : '▾';
     });
     _panel.querySelector('#minix-debug-close').addEventListener('click', () => {
-      _panel.remove(); _panel = null;
+      _panel.remove(); _panel = null; _panelEls = null; _activeTab = 'events';
     });
     _panel.querySelector('#minix-debug-clear').addEventListener('click', () => {
       _events.length = 0;
-      _panelLog.length = 0;
       _renderPanelEvents();
     });
     _panel.querySelector('#minix-debug-export').addEventListener('click', () => {
@@ -835,27 +857,35 @@ const MiniX_Debug = (() => {
     });
     document.addEventListener('mousemove', e => {
       if (!dragState || !_panel) return;
-      const x = e.clientX - dragState.startX;
-      const y = e.clientY - dragState.startY;
-      _panel.style.left   = `${Math.max(0, x)}px`;
-      _panel.style.top    = `${Math.max(0, y)}px`;
+      const panelW = _panel.offsetWidth;
+      const panelH = _panel.offsetHeight;
+      const maxX = window.innerWidth  - panelW;
+      const maxY = window.innerHeight - panelH;
+      const x = Math.min(Math.max(0, e.clientX - dragState.startX), maxX);
+      const y = Math.min(Math.max(0, e.clientY - dragState.startY), maxY);
+      _panel.style.left   = `${x}px`;
+      _panel.style.top    = `${y}px`;
       _panel.style.right  = 'auto';
       _panel.style.bottom = 'auto';
     });
     document.addEventListener('mouseup', () => { dragState = null; });
+
+    _renderPanelEvents();
   }
 
   function _renderPanelEvents() {
-    if (!_panel) return;
-    const el = _panel.querySelector('#minix-debug-events');
-    if (!el || el.style.display === 'none') return;
+    if (!_panel || _activeTab !== 'events') return;
+    const el = _panelEls?.events;
+    if (!el) return;
 
-    const typeLabel = { lifecycle:'L', watcher:'W', directive:'D', props:'P', loop:'!', effect:'E', store:'S', router:'R' };
+    const typeLabel = { lifecycle:'L', watcher:'W', state:'M', directive:'D', props:'P', loop:'!', effect:'E', store:'S', router:'R' };
     el.innerHTML = _events.slice(-MAX_PANEL_ENTRIES).reverse().map(ev => {
       const icon = typeLabel[ev.type] || '⚪';
       const time = new Date(ev.ts).toLocaleTimeString('en', { hour12:false, hour:'2-digit', minute:'2-digit', second:'2-digit' });
       const detail = ev.type === 'watcher'
         ? `<span class="phase">${_escapeHtml(ev.detail.path)}</span>`
+        : ev.type === 'state'
+        ? `<span class="phase">${_escapeHtml(`${ev.detail.operation || 'set'} ${ev.detail.path || '(root)'}`)}</span>`
         : ev.type === 'loop'
         ? `<span class="phase">${_escapeHtml(ev.detail.kind)}</span>`
         : ev.type === 'lifecycle'
@@ -873,8 +903,7 @@ const MiniX_Debug = (() => {
       </div>`;
     }).join('');
 
-    const countEl = _panel.querySelector('#minix-debug-count');
-    if (countEl) countEl.textContent = `${_events.length} events`;
+    if (_panelEls?.count) _panelEls.count.textContent = `${_events.length} events`;
   }
 
   function _renderComponentsTab(el) {
@@ -1035,7 +1064,6 @@ const MiniX_Debug = (() => {
       /** Clear the event log */
       clearEvents() {
         _events.length = 0;
-        _panelLog.length = 0;
         _renderPanelEvents();
         console.log('%c[MiniX Debug]%c Event log cleared.', CLR.plugin, '');
       },
@@ -1095,7 +1123,13 @@ const MiniX_Debug = (() => {
       /** Toggle flags at runtime */
       enable(flagsOrKey, value) {
         if (typeof flagsOrKey === 'string') {
-          console.log(`[MiniX Debug] flag "${flagsOrKey}" toggled (takes effect on next component mount).`);
+          if (value !== undefined) {
+            _defaultFlags[flagsOrKey] = value;
+            console.log(`[MiniX Debug] flag "${flagsOrKey}" = ${value}. Takes effect on next component mount.`);
+          } else {
+            _defaultFlags[flagsOrKey] = !_defaultFlags[flagsOrKey];
+            console.log(`[MiniX Debug] flag "${flagsOrKey}" toggled to ${_defaultFlags[flagsOrKey]}. Takes effect on next component mount.`);
+          }
         } else if (typeof flagsOrKey === 'object') {
           Object.assign(_defaultFlags, flagsOrKey);
           console.log('[MiniX Debug] Flags updated:', { ..._defaultFlags });
@@ -1132,11 +1166,13 @@ const MiniX_Debug = (() => {
   // ─── Plugin factory ─────────────────────────────────────────────────────────
 
   let _installCount = 0;
+  let _compIdSeq    = 0;   // dedicated counter for unique component IDs
+  const _installedApps = new Set();
 
   function plugin(userOptions = {}) {
     const flags = { ..._defaultFlags, ...userOptions };
 
-    return MiniX_Plugin.define({
+    return _definePlugin({
       name:    PLUGIN_NAME,
       version: PLUGIN_VERSION,
 
@@ -1144,6 +1180,7 @@ const MiniX_Debug = (() => {
         // Guard against double-install on the same app
         if (app.__minixDebugInstalled) return;
         app.__minixDebugInstalled = true;
+        _installedApps.add(app);
         _installCount++;
 
         // ── Apply global Compiler patches (once per page) ──────────────────
@@ -1170,9 +1207,8 @@ const MiniX_Debug = (() => {
         // us the earliest possible hook into the component's lifecycle.
         //
         app.addInstanceAPI((component) => {
-          const compId = `${_componentLabel(component)}-${++_installCount}`;
+          const compId = `${_componentLabel(component)}-${++_compIdSeq}`;
           _liveComponents.set(compId, component);
-          _hookMiniXStore();
           _hookRouter(component.instance?.$router || component.instance?.router);
 
           // Patch updateProps to emit prop diffs
@@ -1198,8 +1234,6 @@ const MiniX_Debug = (() => {
         app.addScope((component) => {
           const name = _componentLabel(component);
           _hookStateRefresh(flags, component);
-          _hookMiniXStore();
-          _hookRouter(component.instance?.$router || component.instance?.router);
 
           // One-time hook wrapping per component instance
           if (!component.__minixDebugHooked && component._callHook) {
@@ -1242,9 +1276,16 @@ const MiniX_Debug = (() => {
   function uninstall() {
     _restorePatches();
     _globalPatchesApplied = false;
+    _installCount = 0;
+    _compIdSeq = 0;
+    for (const app of _installedApps) {
+      try { delete app.__minixDebugInstalled; } catch (_) { app.__minixDebugInstalled = false; }
+    }
+    _installedApps.clear();
     _liveComponents.clear();
     _storeEvents.length = 0;
     _routerEvents.length = 0;
+    _activeTab = 'events';
     for (const cleanup of _storeCleanups.values()) {
       try { cleanup?.(); } catch (_) {}
     }
@@ -1255,9 +1296,6 @@ const MiniX_Debug = (() => {
       try { cleanup?.(); } catch (_) {}
     }
     _routers.clear();
-    if (typeof window !== 'undefined' && window.MiniXStore && _storeOriginalDefine) {
-      window.MiniXStore.define = _storeOriginalDefine;
-    }
     if (typeof window !== 'undefined' && _storeDebugListener) {
       window.removeEventListener('minix-store:debug', _storeDebugListener);
     }
@@ -1265,7 +1303,7 @@ const MiniX_Debug = (() => {
     _storeDebugListenerInstalled = false;
     _storeOriginalDefine = null;
     _storeBridgePatched = false;
-    if (_panel) { _panel.remove(); _panel = null; }
+    if (_panel) { _panel.remove(); _panel = null; _panelEls = null; }
     if (typeof window !== 'undefined') delete window.MxDB;
     console.log('%c[MiniX Debug]%c Uninstalled.', CLR.plugin, CLR.muted);
   }

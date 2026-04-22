@@ -250,6 +250,9 @@
       try {
         return require('./input-mask-engine');
       } catch (_) {}
+      try {
+        return require('../input-mask-engine/input-mask-engine');
+      } catch (_) {}
     }
     return null;
   }
@@ -316,5 +319,8 @@
     return out;
   }
 
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = MiniX_Mask_Plugin;
+  }
   global.MiniX_Mask_Plugin = MiniX_Mask_Plugin;
 })(typeof window !== 'undefined' ? window : globalThis);

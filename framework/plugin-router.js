@@ -954,7 +954,7 @@
 					el.addEventListener("click", onClick);
 					const activeCtrl = { el, refresh: updateHrefAndActive };
 					activeLinkControllers.add(activeCtrl);
-					createDebouncedEffect(compiler, component, () => {
+					const stopActiveEffect = createDebouncedEffect(compiler, component, () => {
 						void router.currentRoute.fullPath;
 						updateHrefAndActive();
 					});
@@ -962,6 +962,7 @@
 					return function cleanup() {
 						el.removeEventListener("click", onClick);
 						activeLinkControllers.delete(activeCtrl);
+						if (typeof stopActiveEffect === "function") stopActiveEffect();
 					};
 				});
 
@@ -1029,7 +1030,7 @@
 					el.addEventListener("click", onClick);
 					const activeCtrl = { el, refresh: updateHrefAndActive };
 					activeLinkControllers.add(activeCtrl);
-					createDebouncedEffect(compiler, component, () => {
+					const stopActiveEffect = createDebouncedEffect(compiler, component, () => {
 						void router.currentRoute.fullPath;
 						void router.currentRoute.params;
 						void router.currentRoute.query;
@@ -1039,6 +1040,7 @@
 					return function cleanup() {
 						el.removeEventListener("click", onClick);
 						activeLinkControllers.delete(activeCtrl);
+						if (typeof stopActiveEffect === "function") stopActiveEffect();
 					};
 				});
 
@@ -1328,10 +1330,17 @@
 	}
 
 	// Expose Loader as a separate utility (optional)
-	global.MiniXRouter = {
+	const MiniXRouter = {
 		createRouter,
 		createWebHistory,
 		createWebHashHistory,
 		Loader: MiniX_Loader
 	};
-})(window);
+
+	if (typeof module !== "undefined" && module.exports) {
+		module.exports = MiniXRouter;
+	}
+	if (global) {
+		global.MiniXRouter = MiniXRouter;
+	}
+})(typeof window !== "undefined" ? window : globalThis);

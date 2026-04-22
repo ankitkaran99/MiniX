@@ -1,12 +1,19 @@
 (function (global) {
   'use strict';
 
+  const InputMaskEngineCtor = global.InputMaskEngine || (
+    typeof module !== 'undefined' && module.exports
+      ? require('./input-mask-engine')
+      : null
+  );
+
   function isTextInput(el) {
     return el && el.tagName === 'INPUT';
   }
 
   function setCaret(el, start, end) {
-    requestAnimationFrame(() => {
+    const raf = global.requestAnimationFrame || ((fn) => setTimeout(fn, 0));
+    raf(() => {
       try { el.setSelectionRange(start, end); } catch (_) {}
     });
   }
@@ -36,7 +43,7 @@
     if (scopeOrOptions && typeof scopeOrOptions.querySelectorAll === 'function') {
       return { scope: scopeOrOptions, options: maybeOptions || {} };
     }
-    return { scope: document, options: scopeOrOptions || {} };
+    return { scope: global.document, options: scopeOrOptions || {} };
   }
 
   function bindMask(el, options) {
@@ -46,7 +53,11 @@
     const freeAttr = el.getAttribute('data-mask-free');
     if (!maskAttr && !freeAttr) return;
 
-    const engine = new InputMaskEngine({ tokens: options.tokens || {} });
+    if (typeof InputMaskEngineCtor !== 'function') {
+      throw new Error('MaskEngineDOM requires InputMaskEngine. Load input-mask-engine.js first.');
+    }
+
+    const engine = new InputMaskEngineCtor({ tokens: options.tokens || {} });
 
     let compiled = null;
     if (maskAttr) {
@@ -147,11 +158,17 @@
     bind: bindMask
   };
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function () {
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = global.MaskEngineDOM;
+  }
+
+  if (!global.document) return;
+
+  if (global.document.readyState === 'loading') {
+    global.document.addEventListener('DOMContentLoaded', function () {
       init();
     });
   } else {
     init();
   }
-})(window);
+})(typeof window !== 'undefined' ? window : globalThis);

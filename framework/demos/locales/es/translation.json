@@ -1,0 +1,45 @@
+{
+  "app": {
+    "eyebrow": "Plugin i18n de MiniX",
+    "title": "Un mostrador de reservas localizado",
+    "subtitle": "Esta demo usa i18next, i18next-fetch-backend, directivas x-i18n y las APIs de instancia this.$t y this.$i18n."
+  },
+  "hero": {
+    "heading": "Bienvenido, {{name}}.",
+    "copy": "Tu itinerario esta preparado para {{count}} invitado.",
+    "copy_one": "Tu itinerario esta preparado para {{count}} invitado.",
+    "copy_other": "Tu itinerario esta preparado para {{count}} invitados.",
+    "primaryAction": "Confirmar reserva",
+    "secondaryAction": "Revisar itinerario"
+  },
+  "booking": {
+    "title": "Detalles de la reserva",
+    "summary": "{{name}} tiene {{count}} asiento reservado.",
+    "summary_one": "{{name}} tiene {{count}} asiento reservado.",
+    "summary_other": "{{name}} tiene {{count}} asientos reservados.",
+    "nameLabel": "Nombre del invitado",
+    "namePlaceholder": "Escribe un nombre",
+    "seatsLabel": "Asientos reservados",
+    "seatsValue": "{{count}} asiento",
+    "seatsValue_one": "{{count}} asiento",
+    "seatsValue_other": "{{count}} asientos"
+  },
+  "stats": {
+    "language": "Idioma activo",
+    "seats": "Asientos reservados",
+    "events": "Elementos del itinerario"
+  },
+  "itinerary": {
+    "title": "Itinerario",
+    "subtitle": "Estas filas se traducen dentro de un x-for con $t.",
+    "arrival": "Registro de llegada",
+    "workshop": "Taller de diseno",
+    "dinner": "Cena de equipo",
+    "statusConfirmed": "Confirmado",
+    "statusOpen": "Abierto",
+    "statusWaitlist": "Lista de espera"
+  },
+  "debug": {
+    "title": "Salida de la API del componente"
+  }
+}

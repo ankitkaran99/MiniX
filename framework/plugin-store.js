@@ -125,6 +125,13 @@ const MiniXStore = (() => {
       Boolean(window.CustomEvent || (typeof CustomEvent !== 'undefined' ? CustomEvent : null));
   }
 
+  function _definePlugin(definition) {
+    const PluginCtor = (typeof MiniX_Plugin !== 'undefined' ? MiniX_Plugin : null);
+    return PluginCtor && typeof PluginCtor.define === 'function'
+      ? PluginCtor.define(definition)
+      : definition;
+  }
+
   // ─── Internal store factory ────────────────────────────────────────────────
 
   function _createStore(name, def) {
@@ -382,7 +389,7 @@ const MiniXStore = (() => {
           // Pass the reactive proxy to the getter fn, not the raw object.
           // The proxy's get trap calls _trackTargetEffect, so the effect
           // auto-subscribes to exactly the state keys the getter reads.
-          entry.value = fn(stateProxy);
+          entry.value = fn.call(actionCtx, stateProxy);
         },
         { lazy: true, scheduler: _onDepChanged }
       );
@@ -672,7 +679,7 @@ const MiniXStore = (() => {
    * @returns {PluginDefinition}
    */
   function plugin() {
-    return MiniX_Plugin.define({
+    return _definePlugin({
       name: 'mini-x-store',
       version: '1.1.0',
 

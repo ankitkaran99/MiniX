@@ -25,12 +25,8 @@
     } else {
         global.MiniXDataTablePlugin = factory(global, global.jQuery);
     }
-})(typeof window !== 'undefined' ? window : this, function (window, $) {
+})(typeof window !== 'undefined' ? window : globalThis, function (window, $) {
     'use strict';
-
-    if (!$ || !$.fn || !$.fn.dataTable) {
-        throw new Error('MiniXDataTablePlugin requires jQuery and DataTables.');
-    }
 
     const STORE_KEY = '__mx_dt_store__';
     const INSTANCE_KEY = '__mx_dt_instance__';
@@ -54,6 +50,29 @@
         .replace(/"/g, '&quot;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
+    }
+
+    function encodeCellData(value) {
+        if (value == null) return '';
+        try {
+            return JSON.stringify(value);
+        } catch (e) {
+            return JSON.stringify(String(value));
+        }
+    }
+
+    function readCellData(mountEl) {
+        const raw = mountEl.getAttribute('data-minix-dt-cell-data');
+        if (raw == null || raw === '') return null;
+        try {
+            return JSON.parse(raw);
+        } catch (e) {
+            return raw;
+        }
+    }
+
+    function resolveJQuery() {
+        return $ || window.jQuery || window.$ || null;
     }
 
     function safeUnmount(instance) {
@@ -130,6 +149,10 @@
    install(app) {
        if (!app) {
            throw new Error('MiniXDataTablePlugin.install requires app instance.');
+       }
+       $ = resolveJQuery();
+       if (!$ || !$.fn || !$.fn.dataTable) {
+           throw new Error('MiniXDataTablePlugin requires jQuery and DataTables.');
        }
 
        const state = ensurePluginState(app);
@@ -218,6 +241,7 @@
                data-minix-dt-id="${escapeAttr(id)}"
                data-minix-dt-row="${escapeAttr(meta && meta.row != null ? meta.row : '')}"
                data-minix-dt-col="${escapeAttr(meta && meta.col != null ? meta.col : '')}"
+               data-minix-dt-cell-data="${escapeAttr(encodeCellData(cellData))}"
                ${attrString}
                >${innerHtml}</${tag}>`;
            };
@@ -338,7 +362,7 @@
            const meta = {
                row: mountEl.getAttribute('data-minix-dt-row'),
    col: mountEl.getAttribute('data-minix-dt-col'),
-   cellData: null
+   cellData: readCellData(mountEl)
            };
 
            const props = resolveProps(entry, rowData, rowNode, dtApi, mountEl, meta, mergedOptions);

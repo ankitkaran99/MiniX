@@ -13,11 +13,11 @@ class MiniX_State {
 				MiniX_State._scheduleCallbackFlush();
 				return;
 			}
-			// Snapshot values before clearing so jobs added during flush go next tick
+			
 			const q = MiniX_State._pendingCallbackQueue;
 			const jobs = [...q.values()]; q.clear();
-			// Each job is a [cb, newVal, oldVal, propStr, meta] tuple.
-			// Wrap each invocation so one throwing watcher doesn't abort the rest.
+			
+			
 			for (const job of jobs) {
 				try { job[0](job[1], job[2], job[3], job[4]); }
 				catch (err) { console.error('[MiniX] Watcher callback threw:', err); }
@@ -35,14 +35,15 @@ class MiniX_State {
 		this._globalWatchers = new Set();
 		this._targetWatchers = new WeakMap();
 		this._effectTargetRunnerMap = new WeakMap();
+		this._trackedEffects = new Set();
 		this._proxyPathMap = new WeakMap();
 		this._proxyPathMapDirty = false;
 		this._parentLinks = new WeakMap();
 		this._notifyDepth = 0;
-		// Per-instance WeakSet so reset() can swap it out, preventing stale proxies
-		// from a prior state from being returned as-is by _wrap() and _isWrappable().
-		// The old static MiniX_State._proxySet remains as a cross-instance fast-path
-		// for the _isWrappable check (avoids expensive RAW_FLAG / instanceof checks).
+		
+		
+		
+		
 		this._proxySet = new WeakSet();
 		this._dev = Boolean(options.dev);
 		this._devLabel = options.label || null;
@@ -50,15 +51,16 @@ class MiniX_State {
 		this._state = this._wrap(this._clone(initialState), []);
 	}
 
-	// ── Dev-mode helpers ────────────────────────────────────────────────────
+	
 
 	_devCapture(operation, path, oldVal, newVal, meta = {}) {
 		if (!this._dev) return;
+		if (MiniX_State._suppressDevCaptureDepth > 0) return;
 
-		// Parse the Error stack, strip internal MiniX frames, keep caller lines.
+		
 		const raw = new Error().stack || '';
 		const lines = raw.split('\n');
-		// Drop the Error message line and frames belonging to MiniX_State itself.
+		
 		const callerLines = lines.filter((line) => {
 			if (!line.includes('at ')) return false;
 			if (line.includes('MiniX_State.') || line.includes('MiniX_State._')) return false;
@@ -85,7 +87,7 @@ class MiniX_State {
 		const label = this._devLabel ? `[MiniX_State "${this._devLabel}"]` : '[MiniX_State]';
 		const pathStr = entry.path || '(root)';
 
-		// Use a collapsed group so the stack is accessible but not spammy by default.
+		
 		console.groupCollapsed(
 			`%c${label} %c${operation}%c  ${pathStr}  %c@ ${topFrame}`,
 			'color:#888;font-weight:normal',
@@ -107,9 +109,14 @@ class MiniX_State {
 		}
 		console.log('%ctrace\n', 'color:#888', trace);
 		console.groupEnd();
+
+		if (typeof this._onDevCapture === 'function') {
+			try { this._onDevCapture(entry, { operation, path, oldVal, newVal, meta }); }
+			catch (err) { console.error('[MiniX_State] dev capture hook threw:', err); }
+		}
 	}
 
-	// Shallow-safe clone for logging — avoids logging live proxies.
+	
 	_cloneForLog(value) {
 		if (value === null || typeof value !== 'object') return value;
 		try {
@@ -131,7 +138,7 @@ class MiniX_State {
 		}
 	}
 
-	// Public dev-mode API.
+	
 	getHistory() {
 		if (!this._dev) {
 			console.warn('[MiniX_State] getHistory() called but devMode is not enabled.');
@@ -160,6 +167,7 @@ class MiniX_State {
 
 	_clone(value, seen = new WeakMap()) {
 		if (value === null || typeof value !== 'object') return value;
+		if (value[MiniX_State.RAW_FLAG]) return value;
 		if (value.nodeType && typeof value.cloneNode === 'function') return value.cloneNode(true);
 		if (seen.has(value)) return seen.get(value);
 
@@ -194,23 +202,38 @@ class MiniX_State {
 		}
 
 		const proto = Object.getPrototypeOf(value);
-		// Fast path: plain objects (proto === Object.prototype or null) with only
-		// own enumerable string keys — the overwhelmingly common case for state.
-		// Skip the costly Reflect.ownKeys + getOwnPropertyDescriptor + defineProperty
-		// loop and use a simple for...in with hasOwnProperty guard instead.
+		
+		
+		
+		
 		if (proto === null || proto === Object.prototype) {
-			const out = proto === null ? Object.create(null) : {};
-			seen.set(value, out);
-			for (const key in value) {
-				if (!Object.prototype.hasOwnProperty.call(value, key)) continue;
-				out[key] = this._clone(value[key], seen);
+			const keys = Object.keys(value);
+			const ownKeys = Reflect.ownKeys(value);
+			let canFastClone = keys.length === ownKeys.length;
+			if (canFastClone) {
+				for (let i = 0; i < keys.length; i++) {
+					const desc = Object.getOwnPropertyDescriptor(value, keys[i]);
+					if (!desc || !desc.enumerable || !('value' in desc)) {
+						canFastClone = false;
+						break;
+					}
+				}
 			}
-			return out;
+			if (canFastClone) {
+				const out = proto === null ? Object.create(null) : {};
+				seen.set(value, out);
+				for (let i = 0; i < keys.length; i++) {
+					const key = keys[i];
+					out[key] = this._clone(value[key], seen);
+				}
+				return out;
+			}
 		}
-		// Slow path: non-standard proto, symbols, or non-enumerable properties.
-		const out = {};
+		
+		const out = proto === null ? Object.create(null) : {};
 		seen.set(value, out);
 		for (const key of Reflect.ownKeys(value)) {
+			if (key === '__minix_proxy__') continue;
 			const desc = Object.getOwnPropertyDescriptor(value, key);
 			if (!desc) continue;
 			if ('value' in desc) desc.value = this._clone(desc.value, seen);
@@ -227,12 +250,25 @@ class MiniX_State {
 		return value !== null && typeof value === 'object';
 	}
 
+	_isArrayIndex(prop) {
+		if (typeof prop === 'number') return Number.isInteger(prop) && prop >= 0 && prop < 4294967295;
+		if (typeof prop !== 'string' || prop === '') return false;
+		const index = Number(prop);
+		return Number.isInteger(index) && index >= 0 && index < 4294967295 && String(index) === prop;
+	}
+
+	_unwrapProxy(value) {
+		return value && typeof value === 'object' && MiniX_State._proxySet.has(value) && value.__raw
+			? value.__raw
+			: value;
+	}
+
 	_isWrappable(value) {
-		// Inline _isObject: avoid a method call on every proxy get
+		
 		if (value === null || typeof value !== 'object') return false;
-		// Check instance proxy set first: this instance's proxies must never be
-		// re-wrapped. The static _proxySet provides a cross-instance fast-exit for
-		// proxies owned by *other* MiniX_State instances (rare but possible).
+		
+		
+		
 		if (this._proxySet.has(value)) return false;
 		if (MiniX_State._proxySet.has(value)) return false;
 		if (value[MiniX_State.RAW_FLAG]) return false;
@@ -249,9 +285,9 @@ class MiniX_State {
 		const cached = cache.get(path);
 		if (cached !== undefined) return cached;
 		let normalized;
-		// Fast path: if the path contains no brackets, a simple split on '.' is sufficient
-		// and avoids the regex engine entirely. This covers the vast majority of paths
-		// (e.g. 'user', 'user.name', 'a.b.c').
+		
+		
+		
 		if (path.indexOf('[') === -1) {
 			normalized = path.indexOf('.') === -1 ? [path] : path.split('.');
 		} else {
@@ -268,14 +304,14 @@ class MiniX_State {
 	}
 
 	_joinPath(basePath, prop) {
-		// Symbols are rare; skip coercion for the common string prop case.
+		
 		const key = typeof prop === 'symbol' ? `Symbol(${String(prop)})` : prop;
 		if (!basePath) return key;
 		if (typeof basePath === 'string') return basePath + '.' + key;
-		// Arrays passed as basePath are fully joined only when non-empty.
+		
 		if (Array.isArray(basePath)) {
 			if (!basePath.length) return key;
-			// Inline join avoids Array.prototype.join overhead for short arrays.
+			
 			let s = basePath[0];
 			for (let i = 1; i < basePath.length; i++) s += '.' + basePath[i];
 			return s + '.' + key;
@@ -285,8 +321,8 @@ class MiniX_State {
 
 	_pathString(path) {
 		if (Array.isArray(path)) {
-			// Fast-path empty arrays — the most common call-site passes [] literally,
-			// which would always miss the WeakMap since each [] is a new object.
+			
+			
 			if (!path.length) return '';
 			const cached = MiniX_State._pathArrayCache.get(path);
 			if (cached !== undefined) return cached;
@@ -329,17 +365,18 @@ class MiniX_State {
 	}
 
 	_getCachedProxy(target, basePath = []) {
-		// Inline _pathString for the dominant string basePath case to avoid method call overhead
+		
 		const pathKey = typeof basePath === 'string' ? basePath : this._pathString(basePath);
-		// Ultra-fast path: if the target has exactly one proxy (the most common case),
-		// it's stored directly on the target as __minix_proxy__. One property read beats
-		// two WeakMap/Map lookups for the hot deep-reactive re-render path.
-		// Path key is stored in the WeakMap rather than on the proxy to avoid triggering
-		// the proxy get trap when reading it.
+		
+		
+		
+		
+		
 		const direct = target.__minix_proxy__;
 		if (direct !== undefined) {
 			const directPath = MiniX_State._proxyDirectPaths?.get(direct);
-			if (directPath === pathKey) return direct;
+			const directOwner = MiniX_State._proxyDirectOwners?.get(direct);
+			if (directPath === pathKey && directOwner === this) return direct;
 		}
 		const variants = this._proxyPathMap.get(target);
 		return variants ? variants.get(pathKey) : undefined;
@@ -347,29 +384,41 @@ class MiniX_State {
 
 	_setCachedProxy(target, basePath, proxy) {
 		const pathKey = typeof basePath === 'string' ? basePath : this._pathString(basePath);
-		// Store the proxy directly on the raw target for single-proxy fast-path retrieval.
-		// Use a non-enumerable property so it's transparent to user code.
-		// The path is stored separately in a WeakMap to avoid reading through the proxy trap.
+		
+		
+		
 		try {
 			if (target.__minix_proxy__ === undefined) {
 				Object.defineProperty(target, '__minix_proxy__', {
 					value: proxy, writable: true, enumerable: false, configurable: true
 				});
 				MiniX_State._proxyDirectPaths.set(proxy, pathKey);
+				MiniX_State._proxyDirectOwners.set(proxy, this);
 			}
-		} catch (_) { /* frozen or non-extensible — fall through to WeakMap only */ }
+		} catch (_) {  }
 		let variants = this._proxyPathMap.get(target);
 		if (!variants) {
 			variants = new Map();
 			this._proxyPathMap.set(target, variants);
 		}
 		variants.set(pathKey, proxy);
-		// Register in both instance set (for this._isWrappable / this._wrap fast-exit)
-		// and the static cross-instance set (for fast-exit in other MiniX_State instances).
+		
+		
 		this._proxySet.add(proxy);
 		MiniX_State._proxySet.add(proxy);
 		this._proxyPathMapDirty = true;
 		return proxy;
+	}
+
+	_untrackEffectIfDetached(effect) {
+		if (!effect || !effect.deps) {
+			this._trackedEffects.delete(effect);
+			return;
+		}
+		for (const dep of effect.deps) {
+			if (dep.depType === 'target' && dep.state === this) return;
+		}
+		this._trackedEffects.delete(effect);
 	}
 
 	_get(obj, path) {
@@ -417,14 +466,22 @@ class MiniX_State {
 	_linkTarget(target, basePath = '') {
 		const pathKey = typeof basePath === 'string' ? basePath : this._pathString(basePath);
 		if (!target || !pathKey) return;
-		if (this._parentLinks.has(target)) return;
 		const splitAt = pathKey.lastIndexOf('.');
 		const parentPath = splitAt === -1 ? '' : pathKey.slice(0, splitAt);
 		const parentKey = splitAt === -1 ? pathKey : pathKey.slice(splitAt + 1);
 		const rawState = this._state?.__raw || this._state;
 		const parentTarget = parentPath ? this._get(rawState, parentPath) : rawState;
 		if (parentTarget && (typeof parentTarget === 'object' || typeof parentTarget === 'function')) {
-			this._parentLinks.set(target, { parentTarget, parentKey });
+			let links = this._parentLinks.get(target);
+			if (!links) {
+				links = [];
+				this._parentLinks.set(target, links);
+			}
+			for (let i = 0; i < links.length; i++) {
+				const link = links[i];
+				if (link.parentTarget === parentTarget && link.parentKey === parentKey) return;
+			}
+			links.push({ parentTarget, parentKey });
 		}
 	}
 
@@ -447,6 +504,7 @@ class MiniX_State {
 	_trackTargetEffect(target, prop) {
 		const effect = MiniX_Effect.activeEffect;
 		if (!effect || !target || (typeof target !== 'object' && typeof target !== 'function')) return;
+		this._trackedEffects.add(effect);
 		let effectTargets = this._effectTargetRunnerMap.get(effect);
 		if (!effectTargets) {
 			effectTargets = new WeakMap();
@@ -458,10 +516,10 @@ class MiniX_State {
 			effectTargets.set(target, propMap);
 		}
 		const tv = effect._trackVersion;
-		// Single Map lookup instead of has() + get() — saves one Map operation per access.
+		
 		const existing = propMap.get(prop);
 		if (existing !== undefined) {
-			// Already subscribed — refresh version so _pruneStale keeps it alive on dirty runs.
+			
 			existing.__dep._trackedVersion = tv;
 			return;
 		}
@@ -474,14 +532,14 @@ class MiniX_State {
 		runner.__dep = dep;
 		if (!effect.deps) effect.deps = new Set();
 		effect.deps.add(dep);
-		effect._depsDirty = true; // new subscription — _pruneStale must run after this effect's turn
+		effect._depsDirty = true; 
 	}
 
 	_queuePlainCallback(cb, newVal, oldVal, propStr, meta) {
-		// Key by (cb.__minix_cbid__, propStr) so a single callback watching two different
-		// paths receives two separate notifications in the same tick.  Previously keying
-		// by cb alone caused the second .set() to overwrite the first, dropping the
-		// earlier notification.  Assign a stable numeric ID the first time we see cb.
+		
+		
+		
+		
 		if (cb.__minix_cbid__ === undefined) cb.__minix_cbid__ = ++MiniX_State._cbIdCounter;
 		const key = `${cb.__minix_cbid__}:${propStr}`;
 		MiniX_State._pendingCallbackQueue.set(key, [cb, newVal, oldVal, propStr, meta]);
@@ -509,15 +567,15 @@ class MiniX_State {
 
 		const direct = propMap.get(prop);
 		const metaType = meta.type || '';
-		// Fast-exit for the overwhelmingly common plain-set types — no structural semantics.
-		// 'set' (proxy write) and 'set:path' (public .set() API) never affect ITERATE_KEY.
+		
+		
 		const structural = metaType !== 'set' && metaType !== 'set:path' && (
 			(meta.structural === true)
 				|| MiniX_State._STRUCTURAL_TYPES.has(metaType)
 				|| (metaType.length > 5
-					&& (metaType.charCodeAt(0) === 97 /* a */ || metaType.charCodeAt(0) === 109 /* m */)
+					&& (metaType.charCodeAt(0) === 97  || metaType.charCodeAt(0) === 109 )
 					&& (metaType.startsWith('array:') || metaType.startsWith('map:')))
-				|| (metaType.length > 4 && metaType.charCodeAt(0) === 115 /* s */
+				|| (metaType.length > 4 && metaType.charCodeAt(0) === 115 
 					&& metaType !== 'set:path'
 					&& (metaType === 'set:add' || metaType === 'set:delete' || metaType === 'set:clear'))
 		);
@@ -527,8 +585,8 @@ class MiniX_State {
 			: null;
 		if (!direct && !iterate && !lengthWatchers) return;
 
-		// Fast path: direct-only watchers (the overwhelmingly common case).
-		// Inline the schedule call to avoid closure allocation per notify.
+		
+		
 		if (direct && !iterate && !lengthWatchers) {
 			const propStr = typeof prop === 'symbol' ? String(prop) : (prop == null ? '' : String(prop));
 			for (const cb of direct) {
@@ -539,7 +597,7 @@ class MiniX_State {
 			return;
 		}
 
-		// Slow path: need to dedup across direct + iterate + length watcher sets.
+		
 		const propStr = typeof prop === 'symbol' ? String(prop) : (prop == null ? '' : String(prop));
 		const queue = MiniX_State._notifyQueue;
 		queue.clear();
@@ -563,8 +621,8 @@ class MiniX_State {
 	_bubbleTargetNotify(target, prop, newVal, oldVal, meta = {}) {
 		if (!target || (typeof target !== 'object' && typeof target !== 'function')) return;
 
-		// Ultra-hot inline path for plain set operations (no structural semantics, no iteration).
-		// Avoids the full _notifyTarget call + meta routing overhead for the common case.
+		
+		
 		const metaType = meta.type;
 		if (metaType === 'set' || metaType === 'set:path') {
 			const propMap = this._targetWatchers.get(target);
@@ -579,27 +637,33 @@ class MiniX_State {
 				}
 			}
 			const hasGlobal = this._globalWatchers.size > 0;
-			const parentLink = this._parentLinks.get(target);
-			if (!parentLink) {
+			const parentLinks = this._parentLinks.get(target);
+			if (!parentLinks || !parentLinks.length) {
 				if (hasGlobal) this._notifyGlobalWatchers(newVal, oldVal, prop, meta);
 				return;
 			}
 			if (!hasGlobal && this._targetWatchers.size <= 1) return;
-			// Fall through to full bubble for parent-watching case
-			let currentProp = parentLink.parentKey;
-			let currentParent = parentLink.parentTarget;
-			let depth = 0;
+			
+			const stack = [];
+			for (let i = 0; i < parentLinks.length; i++) {
+				const link = parentLinks[i];
+				stack.push({ currentProp: link.parentKey, currentParent: link.parentTarget, depth: 0 });
+			}
 			let structuralMeta = null;
-			while (currentParent && depth < 64) {
+			while (stack.length) {
+				const { currentProp, currentParent, depth } = stack.pop();
+				if (!currentParent || depth >= 64) continue;
 				if (this._hasWatchersForTarget(currentParent)) {
 					if (!structuralMeta) structuralMeta = { ...meta, structural: true };
 					this._notifyTarget(currentParent, currentProp, newVal, oldVal, structuralMeta);
 				}
-				const link = this._parentLinks.get(currentParent);
-				if (!link) break;
-				currentProp = link.parentKey;
-				currentParent = link.parentTarget;
-				depth++;
+				const links = this._parentLinks.get(currentParent);
+				if (links && links.length) {
+					for (let i = 0; i < links.length; i++) {
+						const link = links[i];
+						stack.push({ currentProp: link.parentKey, currentParent: link.parentTarget, depth: depth + 1 });
+					}
+				}
 			}
 			if (hasGlobal) this._notifyGlobalWatchers(newVal, oldVal, prop, meta);
 			return;
@@ -607,33 +671,39 @@ class MiniX_State {
 
 		this._notifyTarget(target, prop, newVal, oldVal, meta);
 		const hasGlobal = this._globalWatchers.size > 0;
-		let currentTarget = this._parentLinks.get(target);
-		if (!currentTarget) {
+		const parentLinks = this._parentLinks.get(target);
+		if (!parentLinks || !parentLinks.length) {
 			if (hasGlobal) this._notifyGlobalWatchers(newVal, oldVal, prop, meta);
 			return;
 		}
-		// Fast-path: skip the entire parent walk when there are no global watchers
-		// and the _targetWatchers map only contains the leaf target (the overwhelmingly
-		// common case — components rarely watch parent paths like 'user' when only
-		// 'user.name' changes). Size===1 means only the leaf was ever subscribed.
+		
+		
+		
+		
 		if (!hasGlobal && this._targetWatchers.size <= 1) return;
-		let currentProp = currentTarget.parentKey;
-		let currentParent = currentTarget.parentTarget;
-		let depth = 0;
-		// Reuse a single structural-meta object for all bubble levels to avoid per-level allocation.
-		// We only create it lazily if there are actually watchers to notify.
+		
+		
 		let structuralMeta = null;
-		while (currentParent && depth < 64) {
+		const stack = [];
+		for (let i = 0; i < parentLinks.length; i++) {
+			const link = parentLinks[i];
+			stack.push({ currentProp: link.parentKey, currentParent: link.parentTarget, depth: 0 });
+		}
+		while (stack.length) {
+			const { currentProp, currentParent, depth } = stack.pop();
+			if (!currentParent || depth >= 64) continue;
 			if (this._hasWatchersForTarget(currentParent)) {
-				// Lazily create structural meta once and reuse across all bubble levels
+				
 				if (!structuralMeta) structuralMeta = { ...meta, structural: true };
 				this._notifyTarget(currentParent, currentProp, newVal, oldVal, structuralMeta);
 			}
-			const link = this._parentLinks.get(currentParent);
-			if (!link) break;
-			currentProp = link.parentKey;
-			currentParent = link.parentTarget;
-			depth++;
+			const links = this._parentLinks.get(currentParent);
+			if (links && links.length) {
+				for (let i = 0; i < links.length; i++) {
+					const link = links[i];
+					stack.push({ currentProp: link.parentKey, currentParent: link.parentTarget, depth: depth + 1 });
+				}
+			}
 		}
 		if (hasGlobal) this._notifyGlobalWatchers(newVal, oldVal, prop, meta);
 	}
@@ -643,12 +713,12 @@ class MiniX_State {
 	}
 
 	_trackEffect(path, target = null, prop = null) {
-		// Fast-exit: if no active effect, nothing to track
+		
 		if (!MiniX_Effect.activeEffect) return;
 		if (target) this._trackTargetEffect(target, prop);
-		// Note: path arg is only meaningful when target is null (Set.has path tracking).
-		// All other callers provide a target, making path unused — see proxy get handler
-		// which calls _trackTargetEffect directly to skip _joinPath entirely.
+		
+		
+		
 	}
 
 	_createMapProxy(target, basePath = []) {
@@ -673,23 +743,53 @@ class MiniX_State {
 						return obj.has(key);
 					};
 				}
-				if (prop === Symbol.iterator || prop === 'entries' || prop === 'values' || prop === 'keys' || prop === 'forEach') {
+				if (prop === 'keys') {
 					self._trackEffect(basePath, obj, MiniX_State.ITERATE_KEY);
-					const value = Reflect.get(obj, prop, obj);
-					return typeof value === 'function' ? value.bind(obj) : value;
+					return obj.keys.bind(obj);
+				}
+				if (prop === Symbol.iterator || prop === 'entries') {
+					return function* () {
+						self._trackEffect(basePath, obj, MiniX_State.ITERATE_KEY);
+						for (const [key, value] of obj.entries()) {
+							const childPath = self._joinPath(basePath, key);
+							yield [key, self._isWrappable(value) ? self._wrap(value, childPath) : value];
+						}
+					};
+				}
+				if (prop === 'values') {
+					return function* () {
+						self._trackEffect(basePath, obj, MiniX_State.ITERATE_KEY);
+						for (const [key, value] of obj.entries()) {
+							const childPath = self._joinPath(basePath, key);
+							yield self._isWrappable(value) ? self._wrap(value, childPath) : value;
+						}
+					};
+				}
+				if (prop === 'forEach') {
+					return (callback, thisArg) => {
+						self._trackEffect(basePath, obj, MiniX_State.ITERATE_KEY);
+						obj.forEach((value, key) => {
+							const childPath = self._joinPath(basePath, key);
+							const wrapped = self._isWrappable(value) ? self._wrap(value, childPath) : value;
+							callback.call(thisArg, wrapped, key, receiver);
+						});
+					};
 				}
 				if (prop === 'set') {
 					return (key, value) => {
+						value = self._unwrapProxy(value);
 						MiniX_Effect._beginBatch();
 						try {
 							const childPath = self._joinPath(basePath, key);
+							const hadKey = obj.has(key);
 							const oldVal = obj.get(key);
 							const oldSize = obj.size;
 							const wrapped = self._isWrappable(value) ? self._wrap(value, childPath) : value;
+							if (hadKey && Object.is(oldVal, wrapped)) return receiver;
 							obj.set(key, wrapped);
 							self._devCapture('map:set', childPath, oldVal, wrapped, { type: 'map:set' });
 							self._bubbleTargetNotify(obj, key, wrapped, oldVal, { type: 'map:set' });
-							// Only fire SIZE_KEY if the map actually grew (new key inserted)
+							
 							if (obj.size !== oldSize) {
 								self._bubbleTargetNotify(obj, MiniX_State.SIZE_KEY, obj.size, oldSize, { type: 'map:set' });
 							}
@@ -741,20 +841,45 @@ class MiniX_State {
 				if (prop === 'has') {
 					return (value) => {
 						self._trackEffect(basePath, obj, MiniX_State.ITERATE_KEY);
-						return obj.has(value);
+						value = self._unwrapProxy(value);
+						if (obj.has(value)) return true;
+						const wrapped = self._isWrappable(value) ? self._getCachedProxy(value, basePath) : null;
+						return wrapped ? obj.has(wrapped) : false;
 					};
 				}
-				if (prop === Symbol.iterator || prop === 'entries' || prop === 'values' || prop === 'keys' || prop === 'forEach') {
-					self._trackEffect(basePath, obj, MiniX_State.ITERATE_KEY);
-					const value = Reflect.get(obj, prop, obj);
-					return typeof value === 'function' ? value.bind(obj) : value;
+				if (prop === Symbol.iterator || prop === 'values' || prop === 'keys') {
+					return function* () {
+						self._trackEffect(basePath, obj, MiniX_State.ITERATE_KEY);
+						for (const value of obj.values()) {
+							yield self._isWrappable(value) ? self._wrap(value, basePath) : value;
+						}
+					};
+				}
+				if (prop === 'entries') {
+					return function* () {
+						self._trackEffect(basePath, obj, MiniX_State.ITERATE_KEY);
+						for (const value of obj.values()) {
+							const wrapped = self._isWrappable(value) ? self._wrap(value, basePath) : value;
+							yield [wrapped, wrapped];
+						}
+					};
+				}
+				if (prop === 'forEach') {
+					return (callback, thisArg) => {
+						self._trackEffect(basePath, obj, MiniX_State.ITERATE_KEY);
+						obj.forEach((value) => {
+							const wrapped = self._isWrappable(value) ? self._wrap(value, basePath) : value;
+							callback.call(thisArg, wrapped, wrapped, receiver);
+						});
+					};
 				}
 				if (prop === 'add') {
 					return (value) => {
+						value = self._unwrapProxy(value);
 						const wrapped = self._isWrappable(value) ? self._wrap(value, basePath) : value;
-						// Check membership using the (possibly proxied) wrapped identity so that
-						// calling .add(obj) twice doesn't fire change notifications on the second
-						// call — the raw value isn't stored in the Set, the proxy is.
+						
+						
+						
 						const had = obj.has(wrapped);
 						obj.add(wrapped);
 						if (!had) {
@@ -767,10 +892,15 @@ class MiniX_State {
 				}
 				if (prop === 'delete') {
 					return (value) => {
-						const deleted = obj.delete(value);
+						value = self._unwrapProxy(value);
+						const wrapped = self._isWrappable(value) ? self._getCachedProxy(value, basePath) : null;
+						const hasValue = obj.has(value);
+						const hasWrapped = !hasValue && wrapped ? obj.has(wrapped) : false;
+						const storedValue = hasValue ? value : wrapped;
+						const deleted = (hasValue || hasWrapped) && obj.delete(storedValue);
 						if (deleted) {
-							self._devCapture('set:delete', basePath, value, undefined, { type: 'set:delete', value });
-							self._bubbleTargetNotify(obj, MiniX_State.ITERATE_KEY, obj, obj, { type: 'set:delete', value });
+							self._devCapture('set:delete', basePath, storedValue, undefined, { type: 'set:delete', value: storedValue });
+							self._bubbleTargetNotify(obj, MiniX_State.ITERATE_KEY, obj, obj, { type: 'set:delete', value: storedValue });
 							self._bubbleTargetNotify(obj, MiniX_State.SIZE_KEY, obj.size, obj.size + 1, { type: 'set:delete' });
 						}
 						return deleted;
@@ -795,7 +925,7 @@ class MiniX_State {
 
 	_wrap(target, basePath = '', skipWrappableCheck = false) {
 		if (!skipWrappableCheck && !this._isWrappable(target)) return target;
-		// Fast check: if target is already a proxy owned by this instance, return as-is.
+		
 		if (this._proxySet.has(target)) return target;
 
 		const cached = this._getCachedProxy(target, basePath);
@@ -817,12 +947,28 @@ class MiniX_State {
 			get: (obj, prop) => {
 				if (prop === '__raw') return obj;
 
+				if (isArray && (prop === 'includes' || prop === 'indexOf' || prop === 'lastIndexOf')) {
+					return (...args) => {
+						this._trackTargetEffect(obj, MiniX_State.ITERATE_KEY);
+						const result = Array.prototype[prop].apply(proxy, args);
+						if (result === true || (typeof result === 'number' && result !== -1)) return result;
+						const nextArgs = args.length ? [this._unwrapProxy(args[0]), ...args.slice(1)] : args;
+						return Array.prototype[prop].apply(obj, nextArgs);
+					};
+				}
+
 				if (isArray && typeof prop === 'string' && MiniX_State._ARRAY_MUTATORS.has(prop)) {
 					return (...args) => {
 						MiniX_Effect._beginBatch();
 						try {
 							const oldSnapshot = obj.slice();
-							const result = Array.prototype[prop].apply(obj, args);
+							let nextArgs = args;
+							if (prop === 'push' || prop === 'unshift') {
+								nextArgs = args.map((value) => this._unwrapProxy(value));
+							} else if (prop === 'splice' && args.length > 2) {
+								nextArgs = [args[0], args[1], ...args.slice(2).map((value) => this._unwrapProxy(value))];
+							}
+							const result = Array.prototype[prop].apply(obj, nextArgs);
 							this._devCapture(`array:${prop}`, basePath, oldSnapshot, obj.slice(), { type: `array:${prop}` });
 							this._bubbleTargetNotify(obj, MiniX_State.ITERATE_KEY, proxy, oldSnapshot, { type: `array:${prop}` });
 							this._bubbleTargetNotify(obj, 'length', obj.length, oldSnapshot.length, { type: `array:${prop}` });
@@ -834,22 +980,23 @@ class MiniX_State {
 				}
 
 				const value = obj[prop];
-				// Only track and compute child path when there is an active effect or the value needs wrapping.
+				
 				const hasEffect = MiniX_Effect.activeEffect !== null;
 				if (hasEffect && typeof prop === 'string') this._trackTargetEffect(obj, prop);
 				if (!this._isWrappable(value)) return value;
-				// Defer _joinPath to wrap call — avoid string concatenation when value ends up unwrappable
+				
 				return this._wrap(value, this._joinPath(basePath, prop), true);
 			},
 			set: (obj, prop, value) => {
+				value = this._unwrapProxy(value);
 				const oldVal = obj[prop];
 				const isWrap = this._isWrappable(value);
-				// Defer path string construction: only needed for _wrap or dev capture
+				
 				const wrapped = isWrap ? this._wrap(value, this._joinPath(basePath, prop), true) : value;
 				if (Object.is(oldVal, wrapped)) return true;
 				obj[prop] = wrapped;
 				if (this._dev) this._devCapture('set', this._joinPath(basePath, prop), oldVal, wrapped, { type: 'set' });
-				// Bug fix: use _bubbleTargetNotify so parent-path watchers fire on nested writes.
+				
 				this._bubbleTargetNotify(obj, prop, wrapped, oldVal, isArray && prop === 'length'
 					? { type: 'set', affectsLength: true }
 					: MiniX_State._META_SET);
@@ -857,6 +1004,15 @@ class MiniX_State {
 			},
 			deleteProperty: (obj, prop) => {
 				const oldVal = obj[prop];
+				if (isArray && this._isArrayIndex(prop) && prop in obj) {
+					const oldSnapshot = obj.slice();
+					Array.prototype.splice.call(obj, Number(prop), 1);
+					if (this._dev) this._devCapture('array:delete', this._joinPath(basePath, prop), oldVal, undefined, { type: 'array:delete' });
+					this._bubbleTargetNotify(obj, prop, undefined, oldVal, { type: 'array:delete' });
+					this._bubbleTargetNotify(obj, MiniX_State.ITERATE_KEY, proxy, oldSnapshot, { type: 'array:delete' });
+					this._bubbleTargetNotify(obj, 'length', obj.length, oldSnapshot.length, { type: 'array:delete' });
+					return true;
+				}
 				const ok = delete obj[prop];
 				if (ok) {
 					if (this._dev) this._devCapture('delete', this._joinPath(basePath, prop), oldVal, undefined, { type: 'delete' });
@@ -895,8 +1051,8 @@ class MiniX_State {
 		return true;
 	}
 	_invalidateProxyCache(path, segments = null) {
-		// Fast-exit: skip traversal if we know no proxy has been cached yet.
-		// _proxyPathMapDirty is set true the first time _setCachedProxy runs.
+		
+		
 		if (!this._proxyPathMapDirty) return;
 		const prefix = this._pathString(path);
 		if (!prefix) {
@@ -913,11 +1069,12 @@ class MiniX_State {
 		}
 		if (current && typeof current === 'object') {
 			this._proxyPathMap.delete(current);
-			// Also clear the direct-slot fast cache so _getCachedProxy doesn't return stale proxy.
+			
 			try { if (current.__minix_proxy__ !== undefined) current.__minix_proxy__ = undefined; } catch (_) {}
 		}
 	}
 	set(path, value) {
+		value = this._unwrapProxy(value);
 		const rawState = this._state?.__raw || this._state;
 		const compiled = this._compilePath(path);
 		const { raw, segments, isSimple, last } = compiled;
@@ -991,13 +1148,23 @@ class MiniX_State {
 			}
 			return ok;
 		}
-		// Use the raw target (bypass proxy deleteProperty trap) so watchers
-		// fire exactly once — via _bubbleTargetNotify below.  Walking through
-		// this._state already lands on a proxy, so `delete parent[last]` would
-		// trigger the trap (first notify) and then the explicit call below
-		// would fire a second time, double-invoking all subscribers.
+		
+		
+		
+		
+		
 		const rawParent = (parent && typeof parent === 'object' && parent.__raw) ? parent.__raw : parent;
 		if (!rawParent || !(last in rawParent)) return false;
+		if (Array.isArray(rawParent) && this._isArrayIndex(last)) {
+			const oldSnapshot = rawParent.slice();
+			const oldVal = rawParent[last];
+			Array.prototype.splice.call(rawParent, Number(last), 1);
+			this._devCapture('array:delete', raw, oldVal, undefined, { type: 'array:delete', api: 'delete()' });
+			this._bubbleTargetNotify(rawParent, last, undefined, oldVal, { type: 'array:delete' });
+			this._bubbleTargetNotify(rawParent, MiniX_State.ITERATE_KEY, rawParent, oldSnapshot, { type: 'array:delete' });
+			this._bubbleTargetNotify(rawParent, 'length', rawParent.length, oldSnapshot.length, { type: 'array:delete' });
+			return true;
+		}
 		const oldVal = rawParent[last];
 		const ok = delete rawParent[last];
 		if (ok) {
@@ -1022,10 +1189,14 @@ class MiniX_State {
 	push(path, ...items) {
 		const arr = this.get(path, []);
 		if (!Array.isArray(arr)) throw new Error(`Value at ${path} is not an array`);
-		// Use the proxied array so the _ARRAY_MUTATORS interceptor fires reactively
-		// and wraps nested objects. Fall back: set after push for raw arrays.
-		const wrappedItems = items.map((item) => this._isWrappable(item) ? this._wrap(item, path) : item);
-		arr.push(...wrappedItems);
+		
+		
+		if (!items.length) return arr;
+		for (let i = 0; i < items.length; i++) {
+			const item = items[i];
+			items[i] = this._isWrappable(item) ? this._wrap(item, path) : item;
+		}
+		arr.push(...items);
 		return arr;
 	}
 	pop(path) {
@@ -1056,13 +1227,18 @@ class MiniX_State {
 		this._proxyPathMap = new WeakMap();
 		this._proxyPathMapDirty = false;
 		this._targetWatchers = new WeakMap();
+		this._effectTargetRunnerMap = new WeakMap();
 		this._parentLinks = new WeakMap();
-		// Replace the instance proxy set so any proxy from the old state is no longer
-		// recognised as "already wrapped" — if an old proxy leaks into a new _wrap()
-		// call it must be treated as a plain object and re-proxied for the new state.
+		
+		
+		
 		this._proxySet = new WeakSet();
 		this._state = this._wrap(this._clone(nextState), []);
 		this._devCapture('reset', '', oldState, nextState, { type: 'reset', api: 'reset()' });
+		for (const effect of this._trackedEffects) {
+			if (effect && effect.active) effect.schedule();
+			else this._trackedEffects.delete(effect);
+		}
 		this._notify('', this._state, oldState, { type: 'reset' });
 		return this._state;
 	}
@@ -1082,14 +1258,15 @@ class MiniX_State {
 			}
 			return current;
 		};
+		const snapshot = (value) => (value && typeof value === 'object') ? this._clone(value) : value;
 		let initialized = false;
 		let oldVal;
 		const effect = new MiniX_Effect(() => {
 			const newVal = getter();
-			if (!initialized) { initialized = true; oldVal = newVal; return; }
-			if (Object.is(newVal, oldVal)) return;
+			if (!initialized) { initialized = true; oldVal = snapshot(newVal); return; }
+			if ((newVal === null || typeof newVal !== 'object') && Object.is(newVal, oldVal)) return;
 			const prev = oldVal;
-			oldVal = newVal;
+			oldVal = snapshot(newVal);
 			callback(newVal, prev, key, { type: 'watch' });
 		}, { flush: 'post' });
 		return () => effect.stop();
@@ -1097,40 +1274,42 @@ class MiniX_State {
 }
 
 
-// Module-level reusable Set for _notify dedup queue — avoids `new Set()` per call.
+
 MiniX_State._notifyQueue = new Set();
-// Only 'delete' is an exact-match type; 'array:'/'map:'/'set:' are prefix-matched
-// by the startsWith guards in _notifyTarget and never matched by Set.has().
+
+
 MiniX_State._STRUCTURAL_TYPES = new Set(['delete']);
 MiniX_State._proxySet = new WeakSet();
 MiniX_State._ARRAY_MUTATORS = new Set(['push', 'pop', 'shift', 'unshift', 'splice', 'sort', 'reverse']);
 MiniX_State._normalizeCache = new Map();
 MiniX_State._compiledPathCache = new Map();
 MiniX_State._pathArrayCache = new WeakMap();
-// Cache the Node constructor once so _isWrappable doesn't typeof-check every call.
+
 MiniX_State._NodeClass = (typeof Node !== 'undefined') ? Node : null;
-// Pre-interned meta objects for the hottest notify paths — avoids a `{ type: '...' }` allocation
-// on every set() call (called 500–5000 times in the benchmark's tight loops).
+
+
 MiniX_State._META_SET_PATH = Object.freeze({ type: 'set:path' });
 MiniX_State._META_SET      = Object.freeze({ type: 'set' });
-// WeakMap from proxy object → path string for the direct-slot fast cache path verification.
-MiniX_State._proxyDirectPaths = new WeakMap();
-// Monotonic counter for assigning stable IDs to plain watcher callbacks.
-MiniX_State._cbIdCounter = 0;
 
-/**
- * Shared pipe-split utility used by both MiniX_Renderer and MiniX_Compiler.
- * Splits a template expression on top-level `|` characters, respecting
- * string literals (`"`, `'`, `` ` ``) and balanced brackets / parens / braces.
- * Returns an array where [0] is the base expression and [1..n] are pipe names.
- */
+MiniX_State._proxyDirectPaths = new WeakMap();
+MiniX_State._proxyDirectOwners = new WeakMap();
+
+MiniX_State._cbIdCounter = 0;
+MiniX_State._suppressDevCaptureDepth = 0;
+
+
+
+
+
+
+
 function _minix_splitPipes(expr) {
-	// Fast path: no pipe character at all (>95% of expressions)
+	
 	if (expr.indexOf('|') === -1) return [expr];
 	const parts = [];
 	let depth = 0;
 	let inStr = null;
-	let segStart = 0; // start of current segment in expr
+	let segStart = 0; 
 	for (let i = 0; i < expr.length; i++) {
 		const ch = expr[i];
 		if (inStr) {
@@ -1152,15 +1331,29 @@ function _minix_splitPipes(expr) {
 	return parts.length ? parts : [expr];
 }
 
-// Security note: template expressions are evaluated with with(__scope__) where
-// __scope__ is a prototype chain rooted in a null-prototype object (built by
-// _getBaseScope with Object.create(null)). Because the chain terminates at null
-// rather than the global object, expressions cannot reach window, document,
-// eval, fetch, etc. through normal identifier lookup. No additional sandbox
-// wrapper is required or applied in the hot evaluation path.
+const _minix_scopeProxyCache = new WeakMap();
+function _minix_createEvalScope(scope) {
+	if (!scope || typeof scope !== 'object') scope = Object.create(null);
+	let proxy = _minix_scopeProxyCache.get(scope);
+	if (proxy) return proxy;
+	proxy = new Proxy(scope, {
+		has() { return true; },
+		get(target, prop, receiver) {
+			if (prop === Symbol.unscopables) return undefined;
+			return prop in target ? Reflect.get(target, prop, receiver) : undefined;
+		},
+		set(target, prop, value, receiver) {
+			if (prop in target) return Reflect.set(target, prop, value, receiver);
+			target[prop] = value;
+			return true;
+		}
+	});
+	_minix_scopeProxyCache.set(scope, proxy);
+	return proxy;
+}
 
-// Shared memoized camelCase-to-kebab-case converter for CSS property names.
-// Avoids re-running the regex every reactive style update.
+
+
 const _minix_camelToKebab = (() => {
 	const cache = new Map();
 	return (prop) => {
@@ -1191,12 +1384,20 @@ function _minix_shallowEqual(a, b) {
 	if (a === b) return true;
 	if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return false;
 	const keysA = Object.keys(a);
-	if (keysA.length !== Object.keys(b).length) return false;
-	return keysA.every((key) => Object.is(a[key], b[key]));
+	let countB = 0;
+	for (const key in b) {
+		if (Object.prototype.hasOwnProperty.call(b, key)) countB++;
+	}
+	if (keysA.length !== countB) return false;
+	for (let i = 0; i < keysA.length; i++) {
+		const key = keysA[i];
+		if (!Object.is(a[key], b[key])) return false;
+	}
+	return true;
 }
 
-// Shared simple-path regex used by MiniX_Renderer and MiniX_Compiler.
-// Defined once here to avoid the identical pattern being compiled twice.
+
+
 const _minix_SIMPLE_PATH_RE = /^[A-Za-z_$][\w$]*(?:\.(?:[A-Za-z_$][\w$]*|\d+)|\[(?:\d+|["'][^"']+["'])\])*$/u;
 
 class MiniX_Renderer {
@@ -1232,12 +1433,12 @@ class MiniX_Renderer {
 	}
 
 	evaluate(expression, scope = {}, fallback = '') {
-		// Use the same with(__scope__) + sandbox approach as MiniX_Compiler._evaluate
-		// so the prototype chain is walked correctly and no per-call flattening is needed.
+		
+		
 		const cache = MiniX_Renderer._evalCache;
 		let fn = cache.get(expression);
 		if (fn === undefined) {
-			// fn===undefined means cache miss; fn===null means previously failed compile.
+			
 			try {
 				fn = new Function('__scope__', `with(__scope__) { return (${expression}); }`);
 			} catch (_) {
@@ -1247,7 +1448,7 @@ class MiniX_Renderer {
 			cache.set(expression, fn);
 		}
 		try {
-			if (fn) return fn(scope);
+			if (fn) return fn(_minix_createEvalScope(scope));
 			throw new Error('compile failed');
 		} catch (error) {
 			try {
@@ -1261,7 +1462,7 @@ class MiniX_Renderer {
 					if (MiniX_Renderer._evalFallbackCache.size >= 1000) MiniX_Renderer._evalFallbackCache.delete(MiniX_Renderer._evalFallbackCache.keys().next().value);
 					MiniX_Renderer._evalFallbackCache.set(expression, fn2);
 				}
-				if (fn2) return fn2(scope);
+				if (fn2) return fn2(_minix_createEvalScope(scope));
 				throw new Error('fallback compile failed');
 			} catch (innerError) {
 				console.warn(`[MiniX_Renderer] Failed to evaluate: ${expression}`, innerError || error);
@@ -1294,8 +1495,12 @@ class MiniX_Renderer {
 			const rawExpr = match[1].trim();
 			const pipeParts = this._splitPipes(rawExpr);
 			const expr = pipeParts[0].trim();
-			const pipes = pipeParts.slice(1).map((item) => item.trim().toLowerCase());
-			parts.push({ expr, pipes, getter: !pipes.length && _minix_SIMPLE_PATH_RE.test(expr) ? this._compileSimpleGetter(expr) : null });
+			let pipes = null;
+			if (pipeParts.length > 1) {
+				pipes = new Array(pipeParts.length - 1);
+				for (let i = 1; i < pipeParts.length; i++) pipes[i - 1] = pipeParts[i].trim().toLowerCase();
+			}
+			parts.push({ expr, pipes, getter: !pipes && _minix_SIMPLE_PATH_RE.test(expr) ? this._compileSimpleGetter(expr) : null });
 			lastIndex = match.index + match[0].length;
 		}
 		if (lastIndex < key.length) parts.push(key.slice(lastIndex));
@@ -1307,7 +1512,7 @@ class MiniX_Renderer {
 
 	interpolateCompiled(compiled, scope = {}) {
 		if (!Array.isArray(compiled) || (compiled.length === 1 && typeof compiled[0] === 'string')) return String(compiled?.[0] ?? '');
-		// Fast path: single expression part with getter, no pipes (e.g. {{ name }})
+		
 		if (compiled.length === 1) {
 			const p = compiled[0];
 			if (typeof p === 'object' && p.getter && (!p.pipes || !p.pipes.length)) {
@@ -1319,7 +1524,7 @@ class MiniX_Renderer {
 		for (const part of compiled) {
 			if (typeof part === 'string') { out += part; continue; }
 			let value = part.getter ? part.getter(scope, '') : this.evaluate(part.expr, scope, '');
-			if (part.pipes.length && this.modifiers) {
+			if (part.pipes && this.modifiers) {
 				for (const pipeName of part.pipes) {
 					const handler = this.modifiers.get(pipeName);
 					if (handler) { try { value = handler({ value }); } catch (_) { } }
@@ -1418,7 +1623,7 @@ class MiniX_Renderer {
 	}
 }
 
-// Hoist MiniX_Renderer caches to module level — eliminates a lazy-init guard on every hot call.
+
 MiniX_Renderer._simpleGetterCache = new Map();
 MiniX_Renderer._evalCache = new Map();
 MiniX_Renderer._evalFallbackCache = new Map();
@@ -1453,11 +1658,21 @@ class MiniX_Event_Bus {
 	emit(name, payload = null, meta = {}) {
 		const event = { name, payload, meta, timestamp: Date.now() };
 		const set = this._events.get(name);
-		// Snapshot before iterating: a handler may call off() or once() removes itself,
-		// mutating the live Set. Iterating a copy guarantees every registered handler
-		// at the moment of emit fires exactly once, regardless of mid-emit mutations.
-		if (set) for (const cb of [...set]) cb(event);
-		if (this._wildcards.size) for (const cb of [...this._wildcards]) cb(event);
+		
+		
+		
+		if (set) {
+			for (const cb of [...set]) {
+				try { cb(event); }
+				catch (err) { console.error('[MiniX_Event_Bus] Listener threw:', err); }
+			}
+		}
+		if (this._wildcards.size) {
+			for (const cb of [...this._wildcards]) {
+				try { cb(event); }
+				catch (err) { console.error('[MiniX_Event_Bus] Wildcard listener threw:', err); }
+			}
+		}
 		return event;
 	}
 }
@@ -1532,7 +1747,7 @@ class MiniX_Sanitizer {
 	hasDOMPurify() { return typeof window !== 'undefined' && typeof window.DOMPurify !== 'undefined'; }
 
 	_buildAttrLookup(allowedAttributes) {
-		// Memoize: if called with the same object reference, return cached result
+		
 		if (this._attrLookupCache && this._attrLookupRef === allowedAttributes) {
 			return this._attrLookupCache;
 		}
@@ -1610,6 +1825,9 @@ class MiniX_Sanitizer {
 		});
 	}
 	_fallback(html, config = {}) {
+		if (typeof document === 'undefined' || !document.createElement) {
+			return this.escapeHTML(html);
+		}
 		const allowedTags = config.allowedTags || this.options.allowedTags;
 		const allowedAttributes = config.allowedAttributes || this.options.allowedAttributes;
 
@@ -1659,8 +1877,8 @@ class MiniX_Provider {
 		return () => this.registry.delete(key);
 	}
 	inject(key, fallback = undefined) {
-		// Iterative walk instead of recursion — avoids stack overflow in deep
-		// provider trees (deeply nested component hierarchies).
+		
+		
 		let node = this;
 		while (node) {
 			if (node.registry.has(key)) return node.registry.get(key);
@@ -1717,43 +1935,39 @@ class MiniX_Listener {
 	}
 
 	_compileExpression(expression, scope = {}) {
-		const baseKeys = Object.keys(scope);
-		const baseValues = Object.values(scope);
-		const baseKeySig = baseKeys.join(',');
 		return (extraScope = {}) => {
-			const runtimeKeys = Object.keys(extraScope);
-			const runtimeValues = Object.values(extraScope);
-			const cacheKey = `${expression}::${baseKeySig}::${runtimeKeys.join(',')}`;
+			const cacheKey = String(expression);
 			let fn = MiniX_Listener._exprFnCache.get(cacheKey);
 			if (fn === undefined) {
 				try {
-					fn = new Function(...baseKeys, ...runtimeKeys, `return (${expression});`);
+					fn = new Function('__scope__', `with(__scope__) { return (${expression}); }`);
 				} catch (_) {
-					fn = null; // cache the failure so we don't re-throw on every event
+					fn = null; 
 				}
 				if (MiniX_Listener._exprFnCache.size >= 4000) MiniX_Listener._exprFnCache.delete(MiniX_Listener._exprFnCache.keys().next().value);
 				MiniX_Listener._exprFnCache.set(cacheKey, fn);
 			}
 			if (!fn) throw new SyntaxError(`Failed to compile expression: ${expression}`);
-			return fn(...baseValues, ...runtimeValues);
+			const runtimeScope = Object.create(scope && typeof scope === 'object' ? scope : null);
+			Object.assign(runtimeScope, extraScope);
+			return fn(_minix_createEvalScope(runtimeScope));
 		};
 	}
 
 	_runStatement(expression, scope = {}) {
-		const keys = Object.keys(scope);
-		const cacheKey = `${expression}::${keys.join(',')}`;
+		const cacheKey = String(expression);
 		let fn = MiniX_Listener._stmtFnCache.get(cacheKey);
 		if (fn === undefined) {
 			try {
-				fn = new Function(...keys, expression);
+				fn = new Function('__scope__', `with(__scope__) { ${expression} }`);
 			} catch (_) {
-				fn = null; // cache the failure so we don't re-throw on every call
+				fn = null; 
 			}
 			if (MiniX_Listener._stmtFnCache.size >= 2000) MiniX_Listener._stmtFnCache.delete(MiniX_Listener._stmtFnCache.keys().next().value);
 			MiniX_Listener._stmtFnCache.set(cacheKey, fn);
 		}
 		if (!fn) throw new SyntaxError(`Failed to compile statement: ${expression}`);
-		return fn(...Object.values(scope));
+		return fn(_minix_createEvalScope(scope));
 	}
 
 	$watch(state, path, callback) {
@@ -1865,14 +2079,24 @@ class MiniX_Listener {
 			return null;
 		}
 
-		const parts = raw.split('.').filter(Boolean);
-		const event = parts.shift() || '';
+		const firstDot = raw.indexOf('.');
+		const event = firstDot === -1 ? raw : raw.slice(0, firstDot);
+		const modifiers = new Set();
+		if (firstDot !== -1) {
+			let start = firstDot + 1;
+			for (let i = start; i <= raw.length; i++) {
+				if (i === raw.length || raw.charCodeAt(i) === 46) {
+					if (i > start) modifiers.add(raw.slice(start, i));
+					start = i + 1;
+				}
+			}
+		}
 		return {
 			type: 'event',
 			event,
 			raw: attributeName,
 			syntax,
-			modifiers: new Set(parts)
+			modifiers
 		};
 	}
 
@@ -1923,7 +2147,7 @@ class MiniX_Listener {
 	}
 
 	cleanup() {
-		// Snapshot to array first so cleanup() calls that delete from _cleanups are safe
+		
 		for (const fn of Array.from(this._cleanups)) fn();
 		this._cleanups.clear();
 		for (const fn of this._watcherCleanups) fn();
@@ -1967,7 +2191,7 @@ class MiniX_Signal {
 		}
 		const tv = effect._trackVersion;
 		if (keyMap.has(key)) {
-			// Already subscribed — refresh version so _pruneStale keeps it alive
+			
 			const existingDep = keyMap.get(key).__dep;
 			if (existingDep) existingDep._trackedVersion = tv;
 			return;
@@ -1980,6 +2204,7 @@ class MiniX_Signal {
 		const dep = { state: this, key, runner, _trackedVersion: tv };
 		runner.__dep = dep;
 		effect.deps.add(dep);
+		effect._depsDirty = true;
 	}
 
 	get(path, fallback = undefined) {
@@ -2010,8 +2235,8 @@ class MiniX_Signal {
 	_notify(pathKey, newVal, oldVal, meta = {}) {
 		const globalWatchers = this._globalWatchers;
 		const watchers = this._watchers.get(pathKey);
-		// Fast path: no globals, only direct watchers (common for loop signals).
-		// Skip the dedup queue and schedule effects directly.
+		
+		
 		if (!globalWatchers?.size) {
 			if (!watchers) return;
 			for (const cb of watchers) {
@@ -2025,7 +2250,7 @@ class MiniX_Signal {
 			MiniX_State._scheduleCallbackFlush();
 			return;
 		}
-		// Slow path: dedup globals + direct watchers via queue Set.
+		
 		const queue = MiniX_State._notifyQueue;
 		queue.clear();
 		for (const cb of globalWatchers) queue.add(cb);
@@ -2058,12 +2283,12 @@ class MiniX_Effect {
 		this.flush = options.flush || 'pre';
 		this.priority = Number.isFinite(options.priority) ? options.priority : 0;
 		this.active = true;
-		this.deps = null;  // lazily initialized on first dep tracking
+		this.deps = null;  
 		this._running = false;
 		this._scheduled = false;
 		this._seq = 0;
 		this._depsDirty = false;
-		// Pre-compute the queue phase once to avoid string comparisons per schedule call.
+		
 		this._phase = this.flush === 'post' ? 'post' : (this.flush === 'frame' ? 'frame' : 'pre');
 		if (!this.lazy) this.run();
 	}
@@ -2071,7 +2296,7 @@ class MiniX_Effect {
 	run() {
 		if (!this.active || this._running) return;
 		this._scheduled = false;
-		// Vue-style: bump tracking version so stale deps self-identify
+		
 		this._trackVersion = ++MiniX_Effect._globalVersion;
 		const prev = MiniX_Effect.activeEffect;
 		MiniX_Effect.activeEffect = this;
@@ -2082,24 +2307,26 @@ class MiniX_Effect {
 		} finally {
 			this._running = false;
 			MiniX_Effect.activeEffect = prev;
-			// Remove any deps that were NOT accessed this run (version didn't match).
-			// _depsDirty is only set when a dep is first added (new subscription) so for
-			// stable effects that always access the same state keys, _pruneStale is skipped.
-			if (this._depsDirty && this.deps && this.deps.size > 0) this._pruneStale();
+			
+			
+			
+			if (this.deps && this.deps.size > 0) this._pruneStale();
 		}
 	}
 
 	_pruneStale() {
 		if (!this.deps) return;
 		const tv = this._trackVersion;
+		const targetStates = new Set();
 		for (const dep of this.deps) {
 			if (dep._trackedVersion !== tv) {
-				// This dep was not accessed this run — unsubscribe
+				
 				if (dep.depType === 'target') {
+					targetStates.add(dep.state);
 					const propMap = dep.state._targetWatchers?.get(dep.target);
 					const set = propMap?.get(dep.prop);
 					if (set) set.delete(dep.runner);
-					// Use runner's back-reference to avoid a second WeakMap chain lookup
+					
 					const etm = dep.state._effectTargetRunnerMap;
 					if (etm) {
 						const effectTargets = etm.get(this);
@@ -2113,6 +2340,7 @@ class MiniX_Effect {
 				this.deps.delete(dep);
 			}
 		}
+		for (const state of targetStates) state._untrackEffectIfDetached?.(this);
 	}
 
 	schedule() {
@@ -2146,7 +2374,7 @@ class MiniX_Effect {
 	}
 
 	static _enqueue(effect) {
-		// Use pre-computed _phase set at construction to avoid string comparisons per enqueue.
+		
 		MiniX_Effect._queues[effect._phase].add(effect);
 		if (effect._phase === 'frame') {
 			if (!MiniX_Effect._framePending) {
@@ -2161,16 +2389,16 @@ class MiniX_Effect {
 		MiniX_Effect._scheduleFlush();
 	}
 
-	// Reusable sorted buffer — avoids a new array allocation on every flush.
-	// For the tiny queue sizes seen in practice (2-10 items) we push in order
-	// then do a single stable sort, which avoids the O(n²) splice shifts that
-	// insertion-sort produces when the list happens to be reverse-sorted.
+	
+	
+	
+	
 	static _sortedBuffer = [];
 	static _sortQueue(queue) {
 		const buf = MiniX_Effect._sortedBuffer;
 		buf.length = 0;
 		for (const e of queue) buf.push(e);
-		// Stable sort: higher priority first, then lower _seq first (FIFO).
+		
 		buf.sort((a, b) => {
 			const pd = b.priority - a.priority;
 			return pd !== 0 ? pd : a._seq - b._seq;
@@ -2182,7 +2410,7 @@ class MiniX_Effect {
 		const queue = MiniX_Effect._queues[name];
 		if (!queue.size) return;
 		if (queue.size === 1) {
-			// Fast path: avoid array allocation for the overwhelmingly common single-effect case
+			
 			const effect = queue.values().next().value;
 			queue.clear();
 			if (effect.active) {
@@ -2191,9 +2419,9 @@ class MiniX_Effect {
 			}
 			return;
 		}
-		// Snapshot the sorted order into a local copy so a re-entrant _sortQueue call
-		// (from the post phase in the same flush loop) can't truncate the shared
-		// _sortedBuffer while we are still iterating it.
+		
+		
+		
 		const items = MiniX_Effect._sortQueue(queue).slice();
 		queue.clear();
 		for (const effect of items) {
@@ -2223,8 +2451,10 @@ class MiniX_Effect {
 
 	_cleanupDeps() {
 		if (!this.deps) return;
+		const targetStates = new Set();
 		for (const dep of this.deps) {
 			if (dep.depType === 'target') {
+				targetStates.add(dep.state);
 				dep.state._targetWatchers?.get(dep.target)?.get(dep.prop)?.delete(dep.runner);
 				dep.state._effectTargetRunnerMap?.get(this)?.get(dep.target)?.delete(dep.prop);
 			} else if (dep.state._watchers) {
@@ -2233,6 +2463,7 @@ class MiniX_Effect {
 			}
 		}
 		this.deps.clear();
+		for (const state of targetStates) state._trackedEffects?.delete(this);
 	}
 
 	stop() {
@@ -2248,7 +2479,7 @@ class MiniX_Effect {
 
 MiniX_Effect._seqCounter = 0;
 MiniX_Effect._globalVersion = 0;
-// Cache raf once so _enqueue avoids a typeof check on every frame effect schedule.
+
 MiniX_Effect._raf = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : (cb) => setTimeout(cb, 16);
 
 class MiniX_Compiler {
@@ -2264,7 +2495,7 @@ class MiniX_Compiler {
 	}
 
 	_normalizeDirectiveName(name) {
-		// Fast path: already lowercase and trimmed (most attribute names are)
+		
 		if (typeof name === 'string' && name === name.trim() && name === name.toLowerCase()) return name;
 		return String(name || '').trim().toLowerCase();
 	}
@@ -2289,8 +2520,8 @@ class MiniX_Compiler {
 			if (!getter) {
 				const segments = this._parseSimplePathSegments(expr);
 				const len = segments.length;
-				// Specialized fast paths for 1–4 segments — avoids instanceof Map + loop overhead
-				// for the vast majority of template expressions. Scope is never a Map in practice.
+				
+				
 				if (len === 1) {
 					const s0 = segments[0];
 					getter = (scope, fallback = undefined) => {
@@ -2361,7 +2592,7 @@ class MiniX_Compiler {
 
 	_meaningfulSibling(node, direction) {
 		let cursor = direction === 'next' ? node?.nextSibling : node?.previousSibling;
-		// cursor is already null (not undefined) from optional chaining — no || null needed
+		
 		while (cursor) {
 			if (cursor.nodeType === Node.TEXT_NODE && !cursor.textContent.trim()) {
 				cursor = direction === 'next' ? cursor.nextSibling : cursor.previousSibling;
@@ -2408,26 +2639,21 @@ class MiniX_Compiler {
 	_parseAttributeModifiers(name) {
 		const raw = String(name || '').trim();
 		if (!raw) return [];
-
-		if (raw.startsWith('@')) {
-			const parts = raw.slice(1).split('.');
-			return parts.slice(1).filter(Boolean);
+		let start = 0;
+		if (raw.charCodeAt(0) === 64) start = 1;
+		else if (raw.startsWith('x-on:')) start = 5;
+		else if (raw.charCodeAt(0) === 58) start = 1;
+		const firstDot = raw.indexOf('.', start);
+		if (firstDot === -1) return [];
+		const out = [];
+		let segmentStart = firstDot + 1;
+		for (let i = segmentStart; i <= raw.length; i++) {
+			if (i === raw.length || raw.charCodeAt(i) === 46) {
+				if (i > segmentStart) out.push(raw.slice(segmentStart, i));
+				segmentStart = i + 1;
+			}
 		}
-
-		if (raw.startsWith('x-on:')) {
-			const payload = raw.slice(5);
-			const parts = payload.split('.');
-			return parts.slice(1).filter(Boolean);
-		}
-
-		if (raw.startsWith(':')) {
-			const payload = raw.slice(1);
-			const parts = payload.split('.');
-			return parts.slice(1).filter(Boolean);
-		}
-
-		const parts = raw.split('.');
-		return parts.slice(1).filter(Boolean);
+		return out;
 	}
 
 	_applyModifiers(value, modifiers = [], context = {}) {
@@ -2438,10 +2664,10 @@ class MiniX_Compiler {
 			const handler = this.modifiers.get(this._normalizeDirectiveName(modName));
 			if (!handler) continue;
 			try {
-				// Build the handler arg inline without spread — avoids a new object per call.
-				// context fields are enumerated once at the call site and are stable per directive.
+				
+				
 				const arg = { value: current, modifier: modName, compiler };
-				// Copy context fields onto arg without Object.assign overhead for the common small-context case
+				
 				for (const k in context) arg[k] = context[k];
 				current = handler(arg);
 			} catch (error) {
@@ -2474,11 +2700,11 @@ class MiniX_Compiler {
 	}
 
 	createScope(component, extra = {}, el = null) {
-		// Global-scope invalidation hook: lets plugins (like router) request
-		// reevaluation of effects that rely on external scope factories such as
-		// route/params/query without forcing full component rerenders.
-		// Lazy-resolve on first call: the module-level IIFE ran before window.MiniX
-		// was assigned, so it always returned null. Resolve once here instead.
+		
+		
+		
+		
+		
 		if (!MiniX_Compiler._globalMiniXResolved) {
 			MiniX_Compiler._globalMiniXResolved = true;
 			try {
@@ -2493,15 +2719,15 @@ class MiniX_Compiler {
 			try { mx.readGlobalScopeVersion?.(); } catch (_) {}
 		}
 
-		// reliability patch: resolve fresh scope every call to avoid stale effect/provider caches
+		
 		let hasExtra = false;
 		if (extra !== null && extra !== undefined) {
 			for (const _ in extra) { hasExtra = true; break; }
 		}
 		if (!hasExtra) {
-			// Fast path: for the common no-extra case, cache the resolved scope provider
-			// per element so repeated effect re-runs skip the DOM walk entirely.
-			// The cache is keyed by _scopeGen so it auto-invalidates on compile/addScope.
+			
+			
+			
 			if (el) {
 				const gen = MiniX_Compiler._scopeGen;
 				const cached = el.__minix_scope_cache__;
@@ -2522,8 +2748,8 @@ class MiniX_Compiler {
 		return scope;
 	}
 
-	// Internal: walk DOM to find scope provider, fall back to component base scope.
-	// Extracted so the effect-cache path and direct path share the same logic.
+	
+	
 	_resolveScope(component, _hasExtra, gen, el) {
 		let cursor = el;
 		while (cursor) {
@@ -2537,21 +2763,21 @@ class MiniX_Compiler {
 
 	_evaluate(expression, scope = {}, fallback = undefined) {
 
-		// Skip String() coercion when expression is already a string (the common case)
+		
 		const expr = typeof expression === 'string' ? (expression.includes(' ') || expression !== expression.trim() ? expression.trim() : expression) : String(expression || '').trim();
 
-		// Fast-path: check pipe cache first (split is expensive for simple exprs).
-		// fn is stored directly on pipeData so we only do one Map lookup per call
-		// and skip the separate _fnCache lookup, regex test, and String() coercion.
+		
+		
+		
 		let pipeData = MiniX_Compiler._pipeCache.get(expr);
 		if (!pipeData) {
 			const pipes = this._splitPipes(expr);
 			const base = pipes[0];
 			const wrapped = /^\s*\{/.test(base) ? `(${base})` : base;
-			// Wrap new Function in try/catch: a SyntaxError here would propagate
-			// uncaught and skip caching, causing every subsequent call with the same
-			// bad expression to throw again and re-allocate. Store fn=null on failure
-			// so the error path is hit exactly once per unique bad expression.
+			
+			
+			
+			
 			let fn = null;
 			try {
 				fn = new Function('__scope__', `with(__scope__) { return (${wrapped}); }`);
@@ -2565,15 +2791,15 @@ class MiniX_Compiler {
 		const pipeNames = pipeData.pipes;
 		const fn = pipeData.fn;
 
-		// fn is null when the expression had a SyntaxError at compile time.
+		
 		if (!fn) return fallback;
 
-		// Security note: the base scope has a null prototype (Object.create(null)
-		// in _getBaseScope), so the with(__scope__) chain terminates at null and
-		// never reaches the real global object. No sandbox wrapper needed here.
+		
+		
+		
 		let value;
 		try {
-			value = fn(scope);
+			value = fn(_minix_createEvalScope(scope));
 		} catch (error) {
 			if (fallback === undefined) this._warn(`Failed to evaluate expression: ${expr}`, error);
 			return fallback;
@@ -2605,8 +2831,8 @@ class MiniX_Compiler {
 
 	_destroyMountedChildrenInSubtree(component, root) {
 		if (!component || !root || !component._childRecords) return;
-		// Collect entries to remove first, then destroy — mutating a Map during
-		// for...of iteration is implementation-defined and not portable across engines.
+		
+		
 		const toDestroy = [];
 		for (const [el, record] of component._childRecords) {
 			if (!el) continue;
@@ -2641,16 +2867,16 @@ class MiniX_Compiler {
 						node.hasAttribute('x-teleport')
 					)
 				) {
-					// Skip this subtree: advance to next sibling or ancestor's next sibling
+					
 					let jumped = false;
 					let cursor = node;
 					while (cursor && cursor !== root) {
 						const sibling = cursor.nextElementSibling || cursor.nextSibling;
 						if (sibling) {
-							// Use nextNode() from current position rather than assigning
-							// currentNode directly, to avoid double-visiting the sibling.
+							
+							
 							walker.currentNode = sibling;
-							// If sibling is not an element, advance to the next one
+							
 							node = sibling.nodeType === Node.ELEMENT_NODE
 								? sibling
 								: walker.nextNode();
@@ -2768,18 +2994,25 @@ class MiniX_Compiler {
 	}
 
 	_collectDirectives(el) {
-		const attrNames = el.getAttributeNames ? el.getAttributeNames() : Array.from(el.attributes || [], (attr) => attr.name);
-		const signature = attrNames.length ? attrNames.map((name) => name + '=' + el.getAttribute(name)).join('|') : '';
+		const attrs = el.attributes || [];
+		const attrNames = el.getAttributeNames ? el.getAttributeNames() : null;
+		const count = attrNames ? attrNames.length : attrs.length;
+		let signature = '';
+		for (let i = 0; i < count; i++) {
+			const name = attrNames ? attrNames[i] : attrs[i].name;
+			if (i) signature += '|';
+			signature += name + '=' + (attrNames ? el.getAttribute(name) : attrs[i].value);
+		}
 		const cached = el.__minix_directives_cache__;
 		if (cached && cached.signature === signature) return cached.value.slice();
 		const resolved = [];
-		for (let i = 0; i < attrNames.length; i++) {
-			const name = attrNames[i];
-			const attr = { name, value: el.getAttribute(name) };
+		for (let i = 0; i < count; i++) {
+			const name = attrNames ? attrNames[i] : attrs[i].name;
+			const attr = { name, value: attrNames ? el.getAttribute(name) : attrs[i].value };
 			const r = this._resolveDirectiveFromAttr(attr);
 			if (r && r.name !== 'x-props') resolved.push(r);
 		}
-		// insertion-sort: directive lists are tiny (1-4 entries), avoids Array.sort overhead
+		
 		for (let i = 1; i < resolved.length; i++) {
 			const cur = resolved[i];
 			let j = i - 1;
@@ -2862,9 +3095,9 @@ class MiniX_Compiler {
 	}
 
 	_compileShowDirective(el, expression, component) {
-		// Capture the display value we should restore when showing.
-		// Prefer the inline style; fall back to computed so we don't clobber
-		// a value that was never set inline (e.g. '' is correct restore target).
+		
+		
+		
 		const inlineDisplay = el.style.display;
 		const originalDisplay = inlineDisplay === 'none' ? '' : (inlineDisplay || '');
 		const getter = this._compileGetter(expression);
@@ -2900,7 +3133,7 @@ class MiniX_Compiler {
 		});
 	}
 
-	// ✅ Map of modifier name → KeyboardEvent.key values for key-filtering modifiers
+	
 	static _KEY_MAP = {
 		enter:     ['Enter'],
 		escape:    ['Escape', 'Esc'],
@@ -2916,18 +3149,22 @@ class MiniX_Compiler {
 
 	_compileEventDirective(el, attributeName, expression, component, modifiers = []) {
 		const raw = attributeName.startsWith('@') ? attributeName.slice(1) : attributeName.slice(5);
-		const eventName = raw.split('.')[0];
+		const eventDot = raw.indexOf('.');
+		const eventName = eventDot === -1 ? raw : raw.slice(0, eventDot);
 		const mods = new Set(modifiers || []);
 
-		// ✅ Collect key-filter modifiers (enter, escape, tab, space, arrow keys…)
-		const keyFilters = [...mods].filter((m) => MiniX_Compiler._KEY_MAP[m]);
+		
+		const keyFilters = [];
+		for (const mod of mods) {
+			if (MiniX_Compiler._KEY_MAP[mod]) keyFilters.push(mod);
+		}
 		const hasKeyFilter = keyFilters.length > 0;
 
 
 		const listener = (event) => {
 			if (mods.has('self') && event.target !== el) return;
-			// ✅ Key-filter check FIRST — before any preventDefault, so unmatched keys
-			//    (e.g. regular typing on @keydown.enter.prevent) are not swallowed.
+			
+			
 			if (hasKeyFilter) {
 				const pressedKey = event.key;
 				const matched = keyFilters.some((m) =>
@@ -2937,8 +3174,8 @@ class MiniX_Compiler {
 			}
 			if (mods.has('prevent')) event.preventDefault();
 			if (mods.has('stop')) event.stopPropagation();
-			// ✅ Resolve scope live so x-for loop variables (e.g. cart[i], todos[i]) are
-			//    always current — a once-captured baseScope goes stale for loop items.
+			
+			
 			const liveScope = this.createScope(component, {}, el);
 			const fireScope = Object.create(liveScope);
 			fireScope.$event = event;
@@ -2946,8 +3183,8 @@ class MiniX_Compiler {
 			fireScope.$el    = el;
 			fireScope.el     = el;
 			const result = this._evaluate(expression, fireScope);
-			// ✅ If the expression is a bare method reference (e.g. @click="startTimer"),
-			//    _evaluate returns the function without calling it — invoke it now.
+			
+			
 			if (typeof result === 'function') result.call(fireScope, event);
 			if (mods.has('once')) el.removeEventListener(eventName, listener, mods.has('capture'));
 		};
@@ -2991,7 +3228,8 @@ class MiniX_Compiler {
 			while (cursor) {
 				const handlers = entry.handlers.get(cursor);
 				if (handlers && handlers.length) {
-					for (const handler of handlers.slice()) {
+					for (let i = 0; i < handlers.length; i++) {
+						const handler = handlers[i];
 						handler(event);
 						if (event.cancelBubble) return;
 					}
@@ -3008,7 +3246,14 @@ class MiniX_Compiler {
 	_stateHasPath(state, path) {
 		if (!state || !path || typeof path !== 'string') return false;
 		if (typeof state.has === 'function') return state.has(path);
-		const keys = path.split('.').filter(Boolean);
+		const keys = [];
+		let start = 0;
+		for (let i = 0; i <= path.length; i++) {
+			if (i === path.length || path.charCodeAt(i) === 46) {
+				if (i > start) keys.push(path.slice(start, i));
+				start = i + 1;
+			}
+		}
 		let current = state.raw ? (state.raw().__raw || state.raw()) : state;
 		if (!keys.length) return current !== undefined;
 		for (const key of keys) {
@@ -3060,8 +3305,8 @@ class MiniX_Compiler {
 		}
 
 		try {
-			// ✅ Use with(__scope__) so prototype-chained loop variables (e.g. cart, i from x-for)
-			//    are visible — Object.keys() only gets own properties and misses inherited loop scope.
+			
+			
 			const fn = new Function('__scope__', '__minix_value__',
 				`with(__scope__) { ${normalizedExpr} = __minix_value__; return ${normalizedExpr}; }`);
 			return fn(scope, nextValue);
@@ -3074,10 +3319,15 @@ class MiniX_Compiler {
 	_compileModelDirective(el, expression, component, explicitModifiers = null) {
 
 		const rawModifiers = explicitModifiers || (() => {
-			const attr = [...el.attributes].find((item) => item.name === 'x-model' || item.name.startsWith('x-model.'));
-			return attr ? attr.name.split('.').slice(1) : [];
+			const attrs = el.attributes || [];
+			for (let i = 0; i < attrs.length; i++) {
+				const name = attrs[i].name;
+				if (name === 'x-model' || name.startsWith('x-model.')) return this._parseAttributeModifiers(name);
+			}
+			return [];
 		})();
 		const modifiers = new Set(rawModifiers);
+		const valueModifiers = rawModifiers.length ? rawModifiers.filter((mod) => mod !== 'lazy') : [];
 
 		const readStateValue = () => {
 			if (this._isSimplePath(expression) && this._stateHasPath(component.state, expression)) {
@@ -3091,11 +3341,19 @@ class MiniX_Compiler {
 		const sync = () => {
 			const value = readStateValue();
 			if (el.tagName === 'SELECT' && el.multiple) {
-				const selected = Array.isArray(value) ? value.map(String) : [];
-				const json = JSON.stringify(selected);
+				const selected = Array.isArray(value) ? new Array(value.length) : [];
+				for (let i = 0; i < selected.length; i++) selected[i] = String(value[i]);
+				const json = selected.join('\u0001');
 				if (json !== lastSyncedJSON) {
 					lastSyncedJSON = json;
-					[...el.options].forEach((option) => { option.selected = selected.includes(option.value); });
+					for (let i = 0; i < el.options.length; i++) {
+						const option = el.options[i];
+						let selectedOption = false;
+						for (let j = 0; j < selected.length; j++) {
+							if (selected[j] === option.value) { selectedOption = true; break; }
+						}
+						option.selected = selectedOption;
+					}
 				}
 			} else {
 				if (Object.is(value, lastSyncedValue)) return;
@@ -3108,8 +3366,8 @@ class MiniX_Compiler {
 
 		const stopEffect = this._effect(component, sync);
 
-		// For <select multiple>, the initial sync must run after x-for has stamped
-		// the <option> elements. Schedule a deferred re-sync on the next microtask.
+		
+		
 		if (el.tagName === 'SELECT' && el.multiple) {
 			Promise.resolve().then(() => {
 				if (el.isConnected) sync();
@@ -3123,10 +3381,13 @@ class MiniX_Compiler {
 			let nextValue;
 			if (el.type === 'checkbox') nextValue = el.checked;
 			else if (el.type === 'radio') { if (!el.checked) return; nextValue = el.value; }
-			else if (el.tagName === 'SELECT' && el.multiple) nextValue = [...el.selectedOptions].map((option) => option.value);
+			else if (el.tagName === 'SELECT' && el.multiple) {
+				nextValue = new Array(el.selectedOptions.length);
+				for (let i = 0; i < el.selectedOptions.length; i++) nextValue[i] = el.selectedOptions[i].value;
+			}
 			else nextValue = event.target.value;
 
-			nextValue = this._applyModifiers(nextValue, [...modifiers].filter((mod) => mod !== 'lazy'), { el, expression, component, directive: 'x-model' });
+			nextValue = this._applyModifiers(nextValue, valueModifiers, { el, expression, component, directive: 'x-model' });
 			this._setModelValue(expression, component, nextValue, el);
 		});
 
@@ -3285,8 +3546,8 @@ class MiniX_Compiler {
 	_compileInitDirective(el, expression, component) {
 		if (el.hasAttribute('x-ignore') || el.closest?.('[x-ignore]')) return () => { };
 		try {
-			// Use with(__scope__) so prototype-chained loop variables (from x-for) are
-			// visible — Object.keys() only sees own-enumerable properties and misses them.
+			
+			
 			const scope = this.createScope(component, {}, el);
 			scope.$el = el;
 			scope.el = el;
@@ -3396,9 +3657,9 @@ class MiniX_Compiler {
 	}
 
 	_compileOnceDirective(el, expression, component) {
-		// ✅ Render inner mustaches once using current scope, then freeze
-		//    by stamping a DOM attribute checked by _buildInterpolationOpcodes
-		//    and compile() so no reactive effect ever touches this subtree again.
+		
+		
+		
 		const scope = this.createScope(component, {}, el);
 		const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
 		while (walker.nextNode()) {
@@ -3483,10 +3744,10 @@ class MiniX_Compiler {
 		}
 
 		el.__minix_scoped_state__ = scopedState;
-		// Capture the loop/parent scope provider BEFORE we overwrite el's own
-		// provider below. Start from el itself (not el.parentElement) so that
-		// loop blocks — which install the loop scope provider on the content node
-		// itself rather than on a DOM parent — are found correctly.
+		
+		
+		
+		
 		const parentProvider = (() => {
 			let cursor = el;
 			while (cursor) {
@@ -3559,9 +3820,9 @@ class MiniX_Compiler {
 			if (content && content.length) {
 				target.replaceWith(...content.map((node) => copyScopeProviders(node, node.cloneNode(true))));
 			} else if (target.tagName === 'SLOT') {
-				// Snapshot childNodes first — target.childNodes is a live NodeList that
-				// shrinks as nodes are moved out by replaceWith, causing only half the
-				// children to transfer if spread directly from the live list.
+				
+				
+				
 				target.replaceWith(...[...target.childNodes]);
 			}
 		});
@@ -3578,21 +3839,21 @@ class MiniX_Compiler {
 		proto.state = component.state;
 		proto.props = component.props;
 		proto.parent = component;
-		// Use live getters for root and children — the component may remount (replacing
-		// this.root) or gain new children after the proto is cached, so storing the
-		// value at cache time would leave all loop blocks with stale references.
+		
+		
+		
 		Object.defineProperty(proto, 'root', { get: () => component.root, enumerable: true, configurable: true });
 		Object.defineProperty(proto, 'children', { get: () => component.children, enumerable: true, configurable: true });
 		proto.instance = component.instance;
 		proto.localComponents = component.localComponents;
 		proto.eventBus = component.eventBus;
 		proto.sanitizer = component.sanitizer;
-		// Do NOT set _childRecords or _effects on the shared proto — each loop-block
-		// instance must shadow these with its own Set/Map via Object.create(proto).
-		// Writing null here is a land-mine: _effect() guards with `if (!component._effects)`
-		// and would write back a new Set onto this shared proto, corrupting every other
-		// loop block that inherits from it. Per-instance initialisation happens in each
-		// _create*LoopBlock call instead.
+		
+		
+		
+		
+		
+		
 		proto._callHook = () => { };
 		proto._resolveComponentName = (...args) => component._resolveComponentName(...args);
 		proto._syncChildrenArray = () => { };
@@ -3604,7 +3865,7 @@ class MiniX_Compiler {
 
 
 	_isSimpleLoopTemplate(template) {
-		// Avoid NodeList spread: iterate directly and collect
+		
 		const childNodes = template.content.childNodes;
 		const roots = [];
 		for (let i = 0; i < childNodes.length; i++) {
@@ -3671,14 +3932,14 @@ class MiniX_Compiler {
 		return meta;
 	}
 
-	// ─── Lightweight VNode ───────────────────────────────────────────────────────
-	// Used only by the dedicated fast-for path (single-element, static attrs,
-	// single text expression). A vnode is a plain object — no class overhead.
-	// { tag, text, key, el }  — el is null until mounted.
-	// ─────────────────────────────────────────────────────────────────────────────
+	
+	
+	
+	
+	
 
 	_vdomMount(fastMeta, text) {
-		// Create real DOM node and return it. Called only for new vnodes.
+		
 		const el = fastMeta.namespaceURI && fastMeta.namespaceURI !== 'http://www.w3.org/1999/xhtml'
 			? document.createElementNS(fastMeta.namespaceURI, fastMeta.tagName)
 			: document.createElement(fastMeta.tagName.toLowerCase());
@@ -3888,8 +4149,8 @@ class MiniX_Compiler {
 	}
 
 	_getLoopTemplateMeta(template) {
-		// WeakMap keyed by the template element itself — O(1) reference lookup,
-		// no string hashing of innerHTML, and entries are GC'd with the template.
+		
+		
 		let meta = MiniX_Compiler._loopTemplateMetaWeakCache.get(template);
 		if (meta) return meta;
 
@@ -3930,7 +4191,7 @@ class MiniX_Compiler {
 		const expr = String(expression || '').trim();
 		if (!expr) return 0;
 		if (this._isSimplePath(expr)) {
-			// Extract root segment without regex — find first '.' or '[', whichever comes first
+			
 			const dotIdx = expr.indexOf('.');
 			const brackIdx = expr.indexOf('[');
 			const end = dotIdx === -1 ? (brackIdx === -1 ? expr.length : brackIdx) : (brackIdx === -1 ? dotIdx : Math.min(dotIdx, brackIdx));
@@ -4055,7 +4316,7 @@ class MiniX_Compiler {
 		}
 
 		const scopeKeys = Object.keys(loopScope);
-		// Cache bitByKey on blueprint — key NAMES are fixed per loop, only values change.
+		
 		const bitmapCacheKey = scopeKeys.join('\x00');
 		let bitByKey = blueprint?._bitByKeyCache?.get(bitmapCacheKey);
 		if (!bitByKey) {
@@ -4128,15 +4389,20 @@ class MiniX_Compiler {
 				else if (normalized === 'x-ignore') cleanup = this._compileIgnoreDirective(el);
 				else if (normalized === 'x-model') {
 					const getter = this._compileGetter(directive.expression);
-					const modifiers = new Set(directive.modifiers || []);
+					const rawModifiers = directive.modifiers || [];
+					const modifiers = new Set(rawModifiers);
+					const valueModifiers = rawModifiers.length ? rawModifiers.filter((mod) => mod !== 'lazy') : [];
 					const eventName = modifiers.has('lazy') ? 'change' : ((['checkbox', 'radio'].includes(el.type) || el.tagName === 'SELECT') ? 'change' : 'input');
 					const listenCleanup = runtimeComponent.listener.$listen(el, eventName, (event) => {
 						let nextValue;
 						if (el.type === 'checkbox') nextValue = el.checked;
 						else if (el.type === 'radio') { if (!el.checked) return; nextValue = el.value; }
-						else if (el.tagName === 'SELECT' && el.multiple) nextValue = [...el.selectedOptions].map((option) => option.value);
+						else if (el.tagName === 'SELECT' && el.multiple) {
+							nextValue = new Array(el.selectedOptions.length);
+							for (let i = 0; i < el.selectedOptions.length; i++) nextValue[i] = el.selectedOptions[i].value;
+						}
 						else nextValue = event.target.value;
-						nextValue = this._applyModifiers(nextValue, [...modifiers].filter((mod) => mod !== 'lazy'), { el, expression: directive.expression, component: runtimeComponent, directive: 'x-model' });
+						nextValue = this._applyModifiers(nextValue, valueModifiers, { el, expression: directive.expression, component: runtimeComponent, directive: 'x-model' });
 						this._setModelValue(directive.expression, runtimeComponent, nextValue, el);
 					});
 					runtime.updates.push({ type: 'model', el, getter, expression: directive.expression, modifiers: directive.modifiers || [], depMask: this._extractBindingDepMask(directive.expression, bitByKey, fullMask), lastModelValue: Symbol('unset'), lastModelJSON: undefined });
@@ -4253,11 +4519,19 @@ class MiniX_Compiler {
 					}
 					case 'model': {
 						if (el.tagName === 'SELECT' && el.multiple) {
-							const selected = Array.isArray(value) ? value.map(String) : [];
-							const json = JSON.stringify(selected);
+							const selected = Array.isArray(value) ? new Array(value.length) : [];
+							for (let i = 0; i < selected.length; i++) selected[i] = String(value[i]);
+							const json = selected.join('\u0001');
 							if (json !== binding.lastModelJSON) {
 								binding.lastModelJSON = json;
-								[...el.options].forEach((option) => { option.selected = selected.includes(option.value); });
+								for (let i = 0; i < el.options.length; i++) {
+									const option = el.options[i];
+									let selectedOption = false;
+									for (let j = 0; j < selected.length; j++) {
+										if (selected[j] === option.value) { selectedOption = true; break; }
+									}
+									option.selected = selectedOption;
+								}
 							}
 						} else {
 							if (Object.is(value, binding.lastModelValue)) break;
@@ -4336,7 +4610,7 @@ class MiniX_Compiler {
 			? component._createRenderScope()
 			: this.createScope(component, {}, hostEl || component.root);
 		const localComponent = Object.create(this._createLoopBlockHost(component));
-		// Initialise per-instance fields on the instance itself, not the shared proto.
+		
 		localComponent._effects = new Set();
 		localComponent._childRecords = new Map();
 		const renderScope = Object.create(parentScope);
@@ -4417,30 +4691,30 @@ class MiniX_Compiler {
 	}
 
 	_createLoopBlock(template, component, extra, key, hostEl = null) {
-		// Direct case: <template x-for x-component="...">
+		
 		let isTemplateComponentLoop =
 			template &&
 			template.tagName === 'TEMPLATE' &&
 			template.hasAttribute('x-component');
 
-		// Nested case: <template x-for><template x-component="..."></template></template>
-		// or:          <template x-for><div x-component="..."></div></template>
-		// When x-component is on a child element inside the x-for template, unwrap it
-		// so _createTemplateComponentLoopBlock receives the component host directly.
+		
+		
+		
+		
 		if (!isTemplateComponentLoop && template && template.tagName === 'TEMPLATE') {
 			const contentChildren = template.content ? [...template.content.children] : [];
 			const onlyChild = contentChildren.length === 1 ? contentChildren[0] : null;
 			if (onlyChild && onlyChild.hasAttribute('x-component')) {
-				// Promote the inner element to a standalone template so the existing
-				// component-loop path can handle it without modification.
+				
+				
 				if (onlyChild.tagName === 'TEMPLATE') {
-					// Already a <template x-component>: use it directly.
+					
 					isTemplateComponentLoop = true;
 					template = onlyChild;
 				} else {
-					// A plain element (e.g. <div x-component>): wrap it in a <template>.
+					
 					const wrappedTpl = document.createElement('template');
-					// Copy component-host attrs onto the wrapper so _createTemplateComponentLoopBlock picks them up.
+					
 					[...onlyChild.attributes].forEach((attr) => {
 						if (
 							attr.name === 'x-component' ||
@@ -4633,7 +4907,7 @@ class MiniX_Compiler {
 			? component._createRenderScope()
 			: this.createScope(component, {}, hostEl || component.root);
 		const localComponent = Object.create(this._createLoopBlockHost(component));
-		// Initialise per-instance fields on the instance itself, not the shared proto.
+		
 		localComponent._effects = new Set();
 		localComponent._childRecords = new Map();
 		const renderScope = Object.create(parentScope);
@@ -4754,8 +5028,8 @@ class MiniX_Compiler {
 		};
 	}
 
-	// Build a positional directive plan from a set of compiled content nodes.
-	// Each entry records the XPath-like index path to an element + its directive specs.
+	
+	
 	_buildLoopBlockPlan(contentNodes, _template) {
 		const plan = [];
 		const visit = (node, path) => {
@@ -4773,7 +5047,7 @@ class MiniX_Compiler {
 		return plan;
 	}
 
-	// Replay a directive plan on a freshly cloned set of content nodes.
+	
 	_computeLIS(sequence = []) {
 		const length = sequence.length;
 		if (!length) return [];
@@ -4804,7 +5078,7 @@ class MiniX_Compiler {
 	_replayLoopBlockPlan(plan, rootNode, localComponent) {
 		const cleanups = [];
 		const getEl = (path) => {
-			// path[0] is always 0 since rootNode IS the content node at that index
+			
 			let el = rootNode;
 			for (let i = 1; i < path.length; i++) {
 				el = el.children[path[i]];
@@ -4812,10 +5086,10 @@ class MiniX_Compiler {
 			}
 			return el;
 		};
-		// Install the loop scope provider only on the block root. Child elements
-		// must NOT get their own provider here — they inherit via the DOM walk in
-		// _resolveScope. Setting it on children would let them bypass a scoped
-		// x-data provider that a parent directive installs during this same pass.
+		
+		
+		
+		
 		rootNode.__minix_scope_provider__ = () => localComponent._createRenderScope();
 		for (const entry of plan) {
 			const el = getEl(entry.path);
@@ -4913,9 +5187,9 @@ class MiniX_Compiler {
 			node.removeAttribute('key');
 		};
 		if (template.tagName === 'TEMPLATE') {
-			// Strip loop attrs from every top-level element child of the template —
-			// not just firstElementChild — so multi-root templates don't retain
-			// stale :key / x-bind:key attributes on subsequent children.
+			
+			
+			
 			[...template.content.children].forEach(stripLoopAttrs);
 		} else {
 			stripLoopAttrs(template);
@@ -4926,17 +5200,17 @@ class MiniX_Compiler {
 		const dedicatedFastCleanup = this._compileDedicatedFastForDirective(marker, template, expression, vars, sourceExpr, keyAttr, component, connectedScopeAnchor, el);
 		if (dedicatedFastCleanup) return dedicatedFastCleanup;
 
-		// ─── Hoist per-tick allocations ──────────────────────────────────────────
-		// _isSimplePath is pure/stateless — compute once at setup time.
+		
+		
 		const sourceIsSimplePath = this._isSimplePath(sourceExpr);
 		const sourceGetter = this._compileGetter(sourceExpr);
 		const keyGetter = keyAttr ? this._compileGetter(keyAttr) : null;
-		// Reusable collections — .clear() each tick instead of allocating new ones.
+		
 		const seenKeys = new Set();
 		let nextBlocks = [];
 		let renderCycle = 0;
-		// Shared mutable loopMeta object — updated in-place each iteration so no
-		// new object is allocated per item per tick.
+		
+		
 		const loopMeta = {
 			sourceExpr,
 			sourcePath: sourceIsSimplePath ? sourceExpr : null,
@@ -4947,13 +5221,13 @@ class MiniX_Compiler {
 			iterationKind: 'array',
 			entryKey: undefined
 		};
-		// ─────────────────────────────────────────────────────────────────────────
+		
 
 		let blocks = [];
 		const keyed = new Map();
 
-		// Resolve the scope anchor once — it only changes if the marker is moved,
-		// which doesn't happen during normal reactive updates.
+		
+		
 		const scopeAnchor = resolveScopeAnchor();
 		const keyScope = Object.create(null);
 
@@ -4963,13 +5237,13 @@ class MiniX_Compiler {
 			let normalizedList = null;
 			let iterate = null;
 			if (typeof list === 'number' && Number.isFinite(list) && list > 0) {
-				// Use iterate fn instead of Array.from to avoid allocating N entry objects.
+				
 				const len = Math.floor(list);
 				iterate = (visit) => {
 					for (let i = 0; i < len; i++) visit({ value: i + 1, key: i, index: i, kind: 'array' }, i);
 				};
 			} else if (Array.isArray(list)) {
-				// Reuse a single mutable entry object to avoid per-item allocation.
+				
 				const arrayEntry = { value: undefined, key: 0, index: 0, kind: 'array' };
 				iterate = (visit) => {
 					for (let index = 0; index < list.length; index++) {
@@ -4980,22 +5254,22 @@ class MiniX_Compiler {
 					}
 				};
 			} else if (list instanceof Map) {
-				// Single-pass: avoid [...list.entries()].map() which creates two arrays.
+				
 				normalizedList = [];
 				let _mi = 0;
 				list.forEach((value, entryKey) => { normalizedList.push({ value, key: entryKey, index: _mi, kind: 'map' }); _mi++; });
 			} else if (list instanceof Set) {
-				// Single-pass: avoid [...list.values()].map() which creates two arrays.
+				
 				normalizedList = [];
 				let _si = 0;
 				list.forEach((value) => { normalizedList.push({ value, key: _si, index: _si, kind: 'set' }); _si++; });
 			} else if (list && typeof list[Symbol.iterator] === 'function' && typeof list !== 'string') {
-				// Single-pass: avoid [...list].map() which creates two arrays.
+				
 				normalizedList = [];
 				let _ii = 0;
 				for (const value of list) { normalizedList.push({ value, key: _ii, index: _ii, kind: 'iterable' }); _ii++; }
 			} else if (list && typeof list === 'object') {
-				// Single-pass: avoid Object.entries(list).map() which creates two arrays.
+				
 				normalizedList = [];
 				let _oi = 0;
 				for (const entryKey in list) {
@@ -5006,8 +5280,8 @@ class MiniX_Compiler {
 				}
 			} else normalizedList = [];
 
-			// For numeric iteration, list itself is the length; for array iteration, list.length.
-			// Previously this was always 0 for numeric x-for because Array.isArray(number)=false.
+			
+			
 			const normalizedLength = iterate
 				? (typeof list === 'number' ? Math.floor(list) : list.length)
 				: normalizedList.length;
@@ -5040,8 +5314,8 @@ class MiniX_Compiler {
 				let key;
 				if (keyAttr) {
 					Object.setPrototypeOf(keyScope, runBaseScope);
-					// Use Object.keys (own properties only) rather than for...in which
-					// walks the prototype chain unnecessarily, even with hasOwnProperty guard.
+					
+					
 					const ks = Object.keys(keyScope);
 					for (let ki = 0; ki < ks.length; ki++) delete keyScope[ks[ki]];
 					for (const prop in entryScope) keyScope[prop] = entryScope[prop];
@@ -5105,7 +5379,7 @@ class MiniX_Compiler {
 
 					for (const block of nextBlocks) {
 						if (block.start === referenceNode) {
-							// Block already in correct position — ensure mounted then advance
+							
 							block.ensureMounted?.();
 							flushBatch();
 							referenceNode = block.end.nextSibling;
@@ -5157,8 +5431,8 @@ class MiniX_Compiler {
 				block._isNew = false;
 				block._nextOldIndex = -1;
 			}
-			// Swap instead of slice() — nextBlocks becomes the new blocks reference,
-			// old blocks array is reused as nextBlocks next tick (cleared at top).
+			
+			
 			const tmp = blocks;
 			blocks = nextBlocks;
 			nextBlocks = tmp;
@@ -5220,10 +5494,10 @@ class MiniX_Compiler {
 		};
 
 		const stopEffect = this._effect(component, () => {
-			// Use el.parentNode as scope anchor so the DOM walk doesn't land on
-			// el itself — the child's compile() sets a __minix_scope_provider__ on
-			// el, which would shadow the parent component's scope and cause x-props
-			// expressions to lose access to parent state on re-runs.
+			
+			
+			
+			
 			const scope = this.createScope(component, {}, el.parentNode || el);
 			const rawName = this._evaluate(expression, scope, expression);
 			const componentName = component._resolveComponentName(typeof rawName === 'string' ? rawName : expression);
@@ -5256,8 +5530,9 @@ class MiniX_Compiler {
 		const propsExpr = el.getAttribute('x-props');
 		const props = propsExpr ? { ...(this._evaluate(propsExpr, scope, {}) || {}) } : {};
 
-		const attrs = Array.from(el.attributes || []);
-		for (const attr of attrs) {
+		const attrs = el.attributes || [];
+		for (let i = 0; i < attrs.length; i++) {
+			const attr = attrs[i];
 			const name = attr.name;
 			if (name === 'x-bind') {
 				const value = this._evaluate(attr.value, scope, {});
@@ -5266,7 +5541,8 @@ class MiniX_Compiler {
 			}
 			if (name.startsWith('x-bind:') || name.startsWith(':')) {
 				const raw = name.startsWith(':') ? name.slice(1) : name.slice(7);
-				const propName = this._normalizeComponentPropName(raw.split('.')[0]);
+				const dot = raw.indexOf('.');
+				const propName = this._normalizeComponentPropName(dot === -1 ? raw : raw.slice(0, dot));
 				if (!propName || propName === 'key') continue;
 				props[propName] = this._evaluate(attr.value, scope);
 			}
@@ -5280,19 +5556,28 @@ class MiniX_Compiler {
 	}
 
 	_getComponentHostEventAttrs(el) {
-		return Array.from(el.attributes || []).filter((attr) => attr.name.startsWith('@') || attr.name.startsWith('x-on:'));
+		const attrs = el.attributes || [];
+		const out = [];
+		for (let i = 0; i < attrs.length; i++) {
+			const attr = attrs[i];
+			if (attr.name.startsWith('@') || attr.name.startsWith('x-on:')) out.push(attr);
+		}
+		return out;
 	}
 
 	_bindComponentHostEvents(el, parentComponent, childComponent) {
 		if (!childComponent || childComponent.isDestroyed) return null;
 		const eventAttrs = this._getComponentHostEventAttrs(el);
 		if (!eventAttrs.length) return null;
-		const cleanups = eventAttrs.map((attr) => {
+		const cleanups = [];
+		for (let i = 0; i < eventAttrs.length; i++) {
+			const attr = eventAttrs[i];
 			const raw = attr.name.startsWith('@') ? attr.name.slice(1) : attr.name.slice(5);
-			const eventName = raw.split('.')[0];
-			const modifiers = raw.split('.').slice(1);
+			const dot = raw.indexOf('.');
+			const eventName = dot === -1 ? raw : raw.slice(0, dot);
+			const modifiers = this._parseAttributeModifiers(attr.name);
 			const expression = attr.value;
-			if (!eventName) return null;
+			if (!eventName) continue;
 			let cleanup = null;
 			const handler = (event) => {
 				if (event.meta?.componentInstance && event.meta.componentInstance !== childComponent.instance) return;
@@ -5308,9 +5593,11 @@ class MiniX_Compiler {
 				if (modifiers.includes('once')) cleanup?.();
 			};
 			cleanup = childComponent.eventBus.on(eventName, handler);
-			return cleanup;
-		}).filter(Boolean);
-		return () => cleanups.forEach((cleanup) => cleanup?.());
+			if (cleanup) cleanups.push(cleanup);
+		}
+		return () => {
+			for (let i = 0; i < cleanups.length; i++) cleanups[i]?.();
+		};
 	}
 
 	_createInlineChildComponent(parentComponent, componentName, props, start, end) {
@@ -5401,8 +5688,8 @@ class MiniX_Compiler {
 			while (cursor && cursor !== base) {
 				const parent = cursor.parentNode;
 				if (!parent) return null;
-				// Count preceding siblings directly — avoids NodeList-to-Array coercion
-				// that Array.prototype.indexOf.call requires for every ancestor level.
+				
+				
 				let index = 0;
 				let sibling = cursor.previousSibling;
 				while (sibling) { index++; sibling = sibling.previousSibling; }
@@ -5523,13 +5810,13 @@ class MiniX_Compiler {
 }
 
 
-// Shared class-value normalizer — hoisted out of _compileClassDirective and
-// _createBlueprintLoopBlock so it is allocated once instead of per-directive-instance.
+
+
 MiniX_Compiler._normalizeClassValue = (value) => {
 	const next = new Set();
 	if (typeof value === 'string') {
-		// Fast-path: avoid split/filter/forEach allocation chain.
-		// Walk the string once, adding each whitespace-delimited token directly.
+		
+		
 		let start = -1;
 		for (let i = 0; i <= value.length; i++) {
 			const ch = i < value.length ? value.charCodeAt(i) : 32;
@@ -5566,8 +5853,8 @@ MiniX_Compiler._patchAttrValue = (el, attr, value) => {
 };
 MiniX_Compiler._patchAttrMap = (el, attrs) => {
 	const cache = el.__minix_attr_cache__ || (el.__minix_attr_cache__ = Object.create(null));
-	// Track next keys in a plain null-proto object (O(1) `in` check) instead of a Set,
-	// avoiding the Set allocation on every reactive attr update.
+	
+	
 	const seen = Object.create(null);
 	if (attrs && typeof attrs === 'object' && !Array.isArray(attrs)) {
 		for (const attr in attrs) {
@@ -5600,8 +5887,8 @@ MiniX_Compiler._patchClassValue = (el, value) => {
 MiniX_Compiler._patchStyleValue = (el, styles) => {
 	let cache = el.__minix_style_cache__;
 	if (!cache) cache = el.__minix_style_cache__ = Object.create(null);
-	// Use a plain object for seen-key tracking instead of a Set to avoid the
-	// Set constructor call on every reactive style update.
+	
+	
 	const seen = Object.create(null);
 	if (styles && typeof styles === 'object' && !Array.isArray(styles)) {
 		for (const prop in styles) {
@@ -5622,17 +5909,17 @@ MiniX_Compiler._patchStyleValue = (el, styles) => {
 		el.style.removeProperty(prop);
 	}
 };
-// Hoist _getterCache to module level to eliminate the lazy-init guard on each compile call.
+
 MiniX_Compiler._getterCache = new Map();
-// Cache the global MiniX reference once so createScope avoids repeated typeof/window lookups.
-// Initialized to undefined (not yet resolved); null means "checked and not found".
-// _globalMiniX must be resolved lazily (on first createScope call) rather than at
-// module parse time. The IIFE below runs before window.MiniX = MiniX on line ~6538,
-// so it always returned null. We keep the property but set it to a sentinel that
-// triggers a one-time lookup on the first createScope() call instead.
+
+
+
+
+
+
 MiniX_Compiler._globalMiniX = null;
 MiniX_Compiler._globalMiniXResolved = false;
-// Promote lazy-init WeakMaps to module-level statics to eliminate per-call guard checks.
+
 MiniX_Compiler._loopComponentProtoCache = new WeakMap();
 MiniX_Compiler._loopTemplateMetaWeakCache = new WeakMap();
 
@@ -5760,8 +6047,8 @@ class MiniX_Component {
 	}
 
 	_applyScopeFactories(scope, el = null) {
-		// Iterate both arrays directly to avoid allocating a merged array on every
-		// reactive update. Factories change rarely (only on addScope).
+		
+		
 		const applyOne = (factory) => {
 			if (!factory) return;
 			let layer = null;
@@ -5790,40 +6077,49 @@ class MiniX_Component {
 		return this.instance;
 	}
 
-	/**
-	 * Register a factory that runs inside _bindCoreAPIs(), before created().
-	 * The factory receives (component, instance) and should return a plain object
-	 * whose keys are assigned directly onto the component instance, making them
-	 * available as `this.$xxx` in created() and every lifecycle hook after.
-	 *
-	 * This is the official extension point for plugins that need to inject
-	 * instance properties earlier than addScope() (which runs during rendering).
-	 *
-	 * @param {function} factory  (component: MiniX_Component, instance: object) => object
-	 */
+	
+
+
+
+
+
+
+
+
+
+
 	addInstanceAPI(factory) {
 		if (typeof factory !== 'function') return this.instance;
 		if (!Array.isArray(this._instanceAPIFactories)) this._instanceAPIFactories = [];
 		this._instanceAPIFactories.push(factory);
+		try {
+			const apis = factory(this, this.instance);
+			if (apis && typeof apis === 'object') {
+				Object.assign(this.instance, apis);
+				this._baseScopeCache = null;
+			}
+		} catch (err) {
+			if (this.options.dev) console.warn('[MiniX] instanceAPI factory failed.', err);
+		}
 		return this.instance;
 	}
 
 	_getBaseScope() {
-		// Fast path: return cached scope if still valid.
-		// The scope uses live getters for all state keys (no stale values), so it's safe
-		// to reuse across re-renders. It is invalidated whenever state keys change
-		// (addScope, reset, destroy) or new instance APIs are registered.
+		
+		
+		
+		
 		if (this._baseScopeCache) return this._baseScopeCache;
 
 		const scope = Object.create(null);
 		const instance = this.instance;
 		const stateProxy = this.state.raw();
-		// Use the raw (un-proxied) object for key enumeration — iterating the proxy
-		// would register tracking subscriptions for every key during scope build.
+		
+		
 		const stateRaw = stateProxy?.__raw || stateProxy;
 		const propsProxy = this._propsSource;
 	
-		// STATE
+		
 		for (const key in stateRaw) {
 			if (!Object.prototype.hasOwnProperty.call(stateRaw, key)) continue;
 			Object.defineProperty(scope, key, {
@@ -5833,7 +6129,7 @@ class MiniX_Component {
 			});
 		}
 	
-		// METHODS
+		
 		if (instance.methods) {
 			Object.keys(instance.methods).forEach((key) => {
 				if (key in scope) return;
@@ -5845,9 +6141,9 @@ class MiniX_Component {
 			});
 		}
 	
-		// INSTANCE FUNCTIONS — walk the full prototype chain so inherited methods
-		// from base classes are visible in templates. Stop before Object.prototype
-		// to avoid exposing built-ins like toString, hasOwnProperty, etc.
+		
+		
+		
 		{
 			let proto = Object.getPrototypeOf(instance);
 			const objectProto = Object.prototype;
@@ -5864,13 +6160,13 @@ class MiniX_Component {
 			}
 		}
 	
-		// COMPUTED
+		
 		if (instance.computed) {
 			Object.keys(instance.computed).forEach((key) => {
 				if (key in scope) return;
 	
-				// Use instance[key] (the memoized $computed getter installed by _setupComputed)
-				// rather than calling the raw function directly on every template access.
+				
+				
 				Object.defineProperty(scope, key, {
 					get: () => instance[key],
 					enumerable: true,
@@ -5879,7 +6175,7 @@ class MiniX_Component {
 			});
 		}
 	
-		// PROPS (reactive readonly)
+		
 		Object.keys(propsProxy || {}).forEach((key) => {
 			if (key in scope) return;
 	
@@ -5931,7 +6227,7 @@ class MiniX_Component {
 			configurable: true
 		});
 
-		// INSTANCE OWN GETTERS / FIELDS (live, e.g. plugin-added $errors)
+		
 		try {
 			const instanceDescriptors = Object.getOwnPropertyDescriptors(instance || {});
 			for (const key of Reflect.ownKeys(instanceDescriptors)) {
@@ -6173,9 +6469,9 @@ class MiniX_Component {
 			target.$clearHistory = () => this.state.clearHistory();
 		}
 
-		// Run any instanceAPI factories registered by plugins via app.addInstanceAPI().
-		// These run at the same point as all built-in $ assignments, so the returned
-		// properties are available in created() and every lifecycle hook after it.
+		
+		
+		
 		if (Array.isArray(this._instanceAPIFactories)) {
 			for (const factory of this._instanceAPIFactories) {
 				if (typeof factory !== 'function') continue;
@@ -6202,7 +6498,7 @@ class MiniX_Component {
 		this.state = new MiniX_State(initialData, stateOptions);
 		const snapshot = this.state.raw();
 
-		// Wire up getters/setters for all keys declared in data() upfront.
+		
 		Object.keys(snapshot).forEach((key) => {
 			Object.defineProperty(this.instance, key, {
 				get: () => this.state.get(key),
@@ -6212,35 +6508,35 @@ class MiniX_Component {
 			});
 		});
 
-		// Wrap the instance in a Proxy so that state keys added dynamically via
-		// state.set('newKey', val) are also accessible directly as instance.newKey
-		// without requiring upfront declaration in data(). The Proxy intercepts any
-		// property access that isn't already defined on the instance and delegates
-		// it to the MiniX_State store, making dynamic keys as reactive as static ones.
+		
+		
+		
+		
+		
 		const stateRef = this.state;
 		const rawInstance = this.instance;
 		this.instance = new Proxy(rawInstance, {
 			get(target, prop, receiver) {
-				// Use the instance's own property/getter if present (covers $-APIs,
-				// methods, computed, and all upfront state keys defined above).
+				
+				
 				if (prop in target) return Reflect.get(target, prop, receiver);
-				// Fall back to state for any key the state store knows about.
+				
 				if (typeof prop === 'string' && !prop.startsWith('__') && stateRef.raw() && prop in stateRef.raw()) {
 					return stateRef.get(prop);
 				}
 				return Reflect.get(target, prop, receiver);
 			},
 			set(target, prop, value, receiver) {
-				// If the property is already defined as a configurable own property
-				// (e.g. an upfront state getter/setter), use the normal setter path.
+				
+				
 				const desc = Object.getOwnPropertyDescriptor(target, prop);
 				if (desc) return Reflect.set(target, prop, value, receiver);
-				// For new string keys that look like state paths, route through state
-				// so watchers and effects are notified.
+				
+				
 				if (typeof prop === 'string' && !prop.startsWith('$') && !prop.startsWith('__')) {
 					stateRef.set(prop, value);
-					// Also install a proper getter/setter on the raw instance so future
-					// access is efficient and enumerable (avoids Proxy hit every time).
+					
+					
 					Object.defineProperty(target, prop, {
 						get: () => stateRef.get(prop),
 						set: (v) => stateRef.set(prop, v),
@@ -6268,7 +6564,12 @@ class MiniX_Component {
 		Object.keys(methods).forEach((key) => {
 			if (typeof methods[key] === 'function') {
 				const bound = methods[key].bind(this.instance);
-				this.instance[key] = bound;
+				Object.defineProperty(this.instance, key, {
+					value: bound,
+					writable: true,
+					configurable: true,
+					enumerable: true
+				});
 				this._boundMethods[key] = bound;
 			}
 		});
@@ -6679,19 +6980,19 @@ class MiniX_Component {
 
 		if (!this.root) return;
 
-		// Preserve any scope provider the parent installed on this host element
-		// (via the x-component directive effect). compile() will overwrite it with
-		// the child's own scope, breaking x-props evaluation in the parent effect
-		// on every subsequent re-run. We restore it after compile() finishes.
+		
+		
+		
+		
 		const savedScopeProvider = this.root.__minix_scope_provider__;
 
 		this._destroyChildren();
 		delete this.root.__minix_interp_hoist__;
-		// Root components (no parent, no template fn) have their HTML authored
-		// directly in the page. Running it through renderer.render() would eagerly
-		// bake {{ }} expressions into plain static text before compile() can set up
-		// reactive bindings — so mustaches would never update. Use the raw captured
-		// HTML directly; compile() will handle interpolation reactively.
+		
+		
+		
+		
+		
 		if (!this.parent && typeof this.instance.template !== 'function') {
 			this.root.innerHTML = template;
 		} else {
@@ -6758,22 +7059,22 @@ class MiniX_Component {
 			return this;
 		}
 	
-		const prevKeys = Object.keys(previous);
-		const nextKeys = Object.keys(next);
-	
-		// remove deleted props
-		prevKeys.forEach((key) => {
+		
+		for (const key in previous) {
+			if (!Object.prototype.hasOwnProperty.call(previous, key)) continue;
 			if (!Object.prototype.hasOwnProperty.call(next, key)) {
 				this.propsState.delete(key);
 			}
-		});
+		}
 	
-		// set new props
-		nextKeys.forEach((key) => {
+		
+		for (const key in next) {
+			if (!Object.prototype.hasOwnProperty.call(next, key)) continue;
 			this.propsState.set(key, next[key]);
-		});
+		}
+		this._syncPropsToState(next);
 	
-		// new keys need fresh scope getters
+		
 		this._baseScopeCache = null;
 	
 		if (!this.isMounted || this.isDestroyed) {
@@ -6917,7 +7218,7 @@ class MiniX {
 		return new MiniX(rootComponent, options);
 	}
 
-	/** Enable devMode for all component states in this app. */
+	
 	dev(enabled = true) {
 		this.options.dev = Boolean(enabled);
 		return this;
@@ -6956,14 +7257,14 @@ class MiniX {
 		return this;
 	}
 
-	/**
-	 * Register a factory that will run inside _bindCoreAPIs() for every
-	 * component, before created() is called.  The factory receives
-	 * (component, instance) and returns a plain object whose keys are assigned
-	 * onto the instance — making them available as `this.$xxx` in created().
-	 *
-	 * @param {function} factory
-	 */
+	
+
+
+
+
+
+
+
 	addInstanceAPI(factory) {
 		if (!factory) return this;
 		if (!Array.isArray(this.options.instanceAPIs)) this.options.instanceAPIs = [];
@@ -7027,7 +7328,8 @@ MiniX.invalidateGlobalScopes = function() {
 	return MiniX._globalScopeState.increment('version');
 };
 
-window.MiniX = MiniX;
+const MiniX_Global = typeof window !== 'undefined' ? window : globalThis;
+MiniX_Global.MiniX = MiniX;
 
 class MiniX_Request {
 
@@ -7087,7 +7389,12 @@ class MiniX_Request {
 
 		let body = undefined;
 		let opts = options;
-		if (bodyOrOptions !== undefined && typeof bodyOrOptions === 'object' && !this._isBodyValue(bodyOrOptions)) {
+		const normalizedMethod = String(method || '').toUpperCase();
+		const canInferOptions = normalizedMethod === 'GET'
+			|| normalizedMethod === 'HEAD'
+			|| normalizedMethod === 'DELETE'
+			|| normalizedMethod === 'OPTIONS';
+		if (canInferOptions && bodyOrOptions !== undefined && typeof bodyOrOptions === 'object' && !this._isBodyValue(bodyOrOptions)) {
 			let isOpts = false;
 			for (const k in bodyOrOptions) { if (MiniX_Request._optionKeys.has(k)) { isOpts = true; break; } }
 			if (isOpts) { opts = bodyOrOptions; }
@@ -7097,7 +7404,7 @@ class MiniX_Request {
 		}
 
 		const desc = Object.create(MiniX_Request._descriptorProto);
-		desc._method = method.toUpperCase();
+		desc._method = normalizedMethod;
 		desc._url = url;
 		desc._body = body;
 		desc._headers = { ...this._defaults.headers, ...(opts.headers || {}) };
@@ -7123,11 +7430,10 @@ class MiniX_Request {
 	}
 
 	_isBodyValue(v) {
-		return v instanceof FormData
-			|| v instanceof URLSearchParams
-			|| v instanceof Blob
-			|| v instanceof ArrayBuffer
-			|| ArrayBuffer.isView(v)
+		return (typeof FormData !== 'undefined' && v instanceof FormData)
+			|| (typeof URLSearchParams !== 'undefined' && v instanceof URLSearchParams)
+			|| (typeof Blob !== 'undefined' && v instanceof Blob)
+			|| (typeof ArrayBuffer !== 'undefined' && (v instanceof ArrayBuffer || ArrayBuffer.isView(v)))
 			|| typeof v === 'string'
 			|| typeof v === 'number'
 			|| typeof v === 'boolean';
@@ -7137,33 +7443,23 @@ class MiniX_Request {
 		const id = ++this._idCounter;
 		this._lastFiredId = id;
 
-		const isCacheable = desc._cacheTime > 0 && (desc._method === 'GET' || desc._method === 'HEAD');
-		const cacheKey = isCacheable ? this._cacheKey(desc) : null;
-		if (cacheKey) {
-			const hit = this._cache.get(cacheKey);
-			if (hit) {
-				if (Date.now() < hit.expires) return hit.data;
-				// Entry expired — evict immediately rather than leaving it to accumulate.
-				this._cache.delete(cacheKey);
-			}
-		}
-
+		const canUseCache = desc._cacheTime > 0;
+		let cacheKey = null;
 		const url = this._resolveURL(desc._url, desc._params);
 
 		let fetchBody = undefined;
 		let headers = { ...desc._headers };
 
 		if (desc._body !== undefined && desc._body !== null) {
-			if (desc._body instanceof FormData) {
+			if (typeof FormData !== 'undefined' && desc._body instanceof FormData) {
 				fetchBody = desc._body;
 				delete headers['Content-Type'];
-			} else if (desc._body instanceof URLSearchParams) {
+			} else if (typeof URLSearchParams !== 'undefined' && desc._body instanceof URLSearchParams) {
 				fetchBody = desc._body;
 				headers['Content-Type'] = 'application/x-www-form-urlencoded';
 			} else if (
-				desc._body instanceof Blob ||
-				desc._body instanceof ArrayBuffer ||
-				ArrayBuffer.isView(desc._body) ||
+				(typeof Blob !== 'undefined' && desc._body instanceof Blob) ||
+				(typeof ArrayBuffer !== 'undefined' && (desc._body instanceof ArrayBuffer || ArrayBuffer.isView(desc._body))) ||
 				typeof desc._body === 'string'
 			) {
 				fetchBody = desc._body;
@@ -7177,6 +7473,17 @@ class MiniX_Request {
 		for (const interceptor of this._interceptors.request) {
 			try { reqContext = (await interceptor(reqContext)) || reqContext; } catch (_) { }
 		}
+		const requestUrl = reqContext.url || url;
+		const requestMethod = String(reqContext.method || '').toUpperCase();
+		reqContext.method = requestMethod;
+		cacheKey = canUseCache && (requestMethod === 'GET' || requestMethod === 'HEAD') ? `${requestMethod}:${requestUrl}` : null;
+		if (cacheKey) {
+			const hit = this._cache.get(cacheKey);
+			if (hit) {
+				if (Date.now() < hit.expires) return hit.data;
+				this._cache.delete(cacheKey);
+			}
+		}
 
 		const controller = new AbortController();
 		this._abortControllers.set(id, controller);
@@ -7187,7 +7494,7 @@ class MiniX_Request {
 		if (desc._timeout > 0) {
 			timeoutId = setTimeout(() => {
 				controller.abort('timeout');
-				this._emit('timeout', { url, timeout: desc._timeout, descriptor: desc });
+				this._emit('timeout', { url: requestUrl, timeout: desc._timeout, descriptor: desc });
 			}, desc._timeout);
 		}
 
@@ -7201,13 +7508,13 @@ class MiniX_Request {
 			anySignalCleanup = null;
 		}
 
-		this._emit('before', { id, url, method: desc._method, descriptor: desc });
+		this._emit('before', { id, url: requestUrl, method: reqContext.method, descriptor: desc });
 
 		let response;
 		try {
 
 			if (desc._onUploadProgress && typeof XMLHttpRequest !== 'undefined') {
-				response = await this._xhrFetch(url, {
+				response = await this._xhrFetch(requestUrl, {
 					method: reqContext.method,
 					headers: reqContext.headers,
 					body: reqContext.body,
@@ -7217,7 +7524,7 @@ class MiniX_Request {
 					onDownloadProgress: desc._onDownloadProgress,
 				});
 			} else {
-				response = await fetch(url, {
+				response = await fetch(requestUrl, {
 					method: reqContext.method,
 					headers: reqContext.headers,
 					body: reqContext.body,
@@ -7240,7 +7547,7 @@ class MiniX_Request {
 				const errBody = await this._safeRead(response, desc._responseType);
 				const err = this._makeError(
 					`HTTP ${response.status} ${response.statusText}`,
-					response.status, url, desc._method, errBody, response
+					response.status, requestUrl, reqContext.method, errBody, response
 				);
 				throw err;
 			}
@@ -7256,19 +7563,19 @@ class MiniX_Request {
 				this._cache.set(cacheKey, { data, expires: Date.now() + desc._cacheTime });
 			}
 
-			this._emit('after', { id, url, method: desc._method, data, response: resContext.response, descriptor: desc });
+			this._emit('after', { id, url: requestUrl, method: reqContext.method, data, response: resContext.response, descriptor: desc });
 			return data;
 
 		} catch (err) {
 			const isAbort = err?.name === 'AbortError' || err?.name === 'abort';
 			if (isAbort) {
-				this._emit('abort', { id, url, method: desc._method, descriptor: desc });
+				this._emit('abort', { id, url: requestUrl, method: reqContext.method, descriptor: desc });
 				throw err;
 			}
 
 			if (attempt < desc._retry) {
 				const delay = desc._retryDelay * Math.pow(desc._retryFactor, attempt);
-				this._emit('retry', { id, url, attempt: attempt + 1, delay, error: err, descriptor: desc });
+				this._emit('retry', { id, url: requestUrl, attempt: attempt + 1, delay, error: err, descriptor: desc });
 				await this._sleep(delay, composedSignal);
 				return this._fire(desc, attempt + 1);
 			}
@@ -7281,10 +7588,10 @@ class MiniX_Request {
 				} catch (e) { throwErr = e; }
 			}
 
-			this._emit('error', { id, url, method: desc._method, error: throwErr, descriptor: desc });
+			this._emit('error', { id, url: requestUrl, method: reqContext.method, error: throwErr, descriptor: desc });
 			throw throwErr;
 		} finally {
-			// Always clean up — even on unexpected throws, retries, or abort paths.
+			
 			clearTimeout(timeoutId);
 			this._abortControllers.delete(id);
 			anySignalCleanup?.();
@@ -7437,6 +7744,7 @@ class MiniX_Request {
 	static async pool(requests, limit = 4) {
 		const results = new Array(requests.length);
 		let index = 0;
+		const workerCount = Math.max(1, Math.min(Number.isFinite(limit) ? Math.floor(limit) : 4, requests.length));
 		const run = async () => {
 			while (index < requests.length) {
 				const i = index++;
@@ -7448,7 +7756,7 @@ class MiniX_Request {
 				}
 			}
 		};
-		await Promise.all(Array.from({ length: Math.min(limit, requests.length) }, run));
+		await Promise.all(Array.from({ length: workerCount }, run));
 		return results;
 	}
 
@@ -7489,7 +7797,7 @@ class MiniX_Request {
 			for (const k in params) {
 				const v = params[k];
 				if (v === undefined || v === null) continue;
-				// Arrays → repeated key: ?ids=1&ids=2 (not ?ids=1%2C2 from String([1,2]))
+				
 				if (Array.isArray(v)) {
 					for (const item of v) {
 						if (item !== undefined && item !== null) { qs.append(k, String(item)); hasAny = true; }
@@ -7598,10 +7906,10 @@ class MiniX_Request {
 		const lines = (raw || '').trim().split(/[\r\n]+/);
 		for (let i = 0; i < lines.length; i++) {
 			const line = lines[i];
-			const idx = line.indexOf(': ');
+			const idx = line.indexOf(':');
 			if (idx < 1) continue;
 			const name = line.slice(0, idx).trim();
-			const value = line.slice(idx + 2).trim();
+			const value = line.slice(idx + 1).trim();
 			if (name) try { headers.set(name, value); } catch (_) { }
 		}
 		return headers;
@@ -7629,13 +7937,50 @@ class MiniX_Request {
 
 	_sleep(ms, signal) {
 		return new Promise((resolve, reject) => {
-			const id = setTimeout(resolve, ms);
-			// If an abort signal is provided, reject immediately when fired so the
-			// retry delay doesn't block cancellation of an in-flight request.
+			let id;
+			let onAbort;
+			const cleanup = () => {
+				if (signal && onAbort) signal.removeEventListener('abort', onAbort);
+			};
+			id = setTimeout(() => { cleanup(); resolve(); }, ms);
+			
+			
 			if (signal) {
 				if (signal.aborted) { clearTimeout(id); return reject(new DOMException('Aborted', 'AbortError')); }
-				signal.addEventListener('abort', () => { clearTimeout(id); reject(new DOMException('Aborted', 'AbortError')); }, { once: true });
+				onAbort = () => { clearTimeout(id); cleanup(); reject(new DOMException('Aborted', 'AbortError')); };
+				signal.addEventListener('abort', onAbort, { once: true });
 			}
 		});
 	}
+}
+
+Object.assign(MiniX, {
+	State: MiniX_State,
+	Effect: MiniX_Effect,
+	Compiler: MiniX_Compiler,
+	Component: MiniX_Component,
+	Plugin: MiniX_Plugin,
+	Request: MiniX_Request,
+	Provider: MiniX_Provider,
+	EventBus: MiniX_Event_Bus,
+	Renderer: MiniX_Renderer,
+	Sanitizer: MiniX_Sanitizer,
+});
+
+Object.assign(MiniX_Global, {
+	MiniX,
+	MiniX_State,
+	MiniX_Effect,
+	MiniX_Compiler,
+	MiniX_Component,
+	MiniX_Plugin,
+	MiniX_Request,
+	MiniX_Provider,
+	MiniX_Event_Bus,
+	MiniX_Renderer,
+	MiniX_Sanitizer,
+});
+
+if (typeof module !== 'undefined' && module.exports) {
+	module.exports = MiniX;
 }

@@ -37,7 +37,7 @@
 <body>
     <div id="app">
         <div id="feed-scroll">
-            <div class="feed" x-scroll="loadMore" x-scroll-direction="bottom" x-scroll-threshold="20">
+            <div class="feed" x-scroll="loadMore" x-scroll-dir="bottom" x-scroll-threshold="20">
                 <div class="feed-item" x-for="item in items" :key="item">{{ item }}</div>
                 <div class="loading" x-show="isLoading">Loading more items...</div>
             </div>

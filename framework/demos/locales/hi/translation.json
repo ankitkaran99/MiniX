@@ -1,0 +1,45 @@
+{
+  "app": {
+    "eyebrow": "MiniX i18n plugin",
+    "title": "MiniX booking desk, Hindi copy",
+    "subtitle": "This Hindi locale proves the backend can switch languages while the same x-i18n directives and this.$t calls stay reactive."
+  },
+  "hero": {
+    "heading": "Namaste, {{name}}.",
+    "copy": "Your itinerary is ready for {{count}} guest.",
+    "copy_one": "Your itinerary is ready for {{count}} guest.",
+    "copy_other": "Your itinerary is ready for {{count}} guests.",
+    "primaryAction": "Confirm booking",
+    "secondaryAction": "Review itinerary"
+  },
+  "booking": {
+    "title": "Booking details",
+    "summary": "{{name}} has {{count}} reserved seat.",
+    "summary_one": "{{name}} has {{count}} reserved seat.",
+    "summary_other": "{{name}} has {{count}} reserved seats.",
+    "nameLabel": "Guest name",
+    "namePlaceholder": "Enter a guest name",
+    "seatsLabel": "Reserved seats",
+    "seatsValue": "{{count}} seat",
+    "seatsValue_one": "{{count}} seat",
+    "seatsValue_other": "{{count}} seats"
+  },
+  "stats": {
+    "language": "Active language",
+    "seats": "Reserved seats",
+    "events": "Itinerary items"
+  },
+  "itinerary": {
+    "title": "Itinerary",
+    "subtitle": "These rows are translated inside an x-for loop with $t.",
+    "arrival": "Arrival check-in",
+    "workshop": "Design workshop",
+    "dinner": "Team dinner",
+    "statusConfirmed": "Confirmed",
+    "statusOpen": "Open",
+    "statusWaitlist": "Waitlist"
+  },
+  "debug": {
+    "title": "Component API output"
+  }
+}

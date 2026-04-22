@@ -1,0 +1,45 @@
+{
+  "app": {
+    "eyebrow": "MiniX i18n plugin",
+    "title": "A localized MiniX booking desk",
+    "subtitle": "This demo uses i18next, i18next-fetch-backend, x-i18n directives, and the component instance APIs this.$t and this.$i18n."
+  },
+  "hero": {
+    "heading": "Welcome, {{name}}.",
+    "copy": "Your itinerary is prepared for {{count}} guest.",
+    "copy_one": "Your itinerary is prepared for {{count}} guest.",
+    "copy_other": "Your itinerary is prepared for {{count}} guests.",
+    "primaryAction": "Confirm booking",
+    "secondaryAction": "Review itinerary"
+  },
+  "booking": {
+    "title": "Booking details",
+    "summary": "{{name}} has {{count}} reserved seat.",
+    "summary_one": "{{name}} has {{count}} reserved seat.",
+    "summary_other": "{{name}} has {{count}} reserved seats.",
+    "nameLabel": "Guest name",
+    "namePlaceholder": "Enter a guest name",
+    "seatsLabel": "Reserved seats",
+    "seatsValue": "{{count}} seat",
+    "seatsValue_one": "{{count}} seat",
+    "seatsValue_other": "{{count}} seats"
+  },
+  "stats": {
+    "language": "Active language",
+    "seats": "Reserved seats",
+    "events": "Itinerary items"
+  },
+  "itinerary": {
+    "title": "Itinerary",
+    "subtitle": "These rows are translated inside an x-for loop with $t.",
+    "arrival": "Arrival check-in",
+    "workshop": "Design workshop",
+    "dinner": "Team dinner",
+    "statusConfirmed": "Confirmed",
+    "statusOpen": "Open",
+    "statusWaitlist": "Waitlist"
+  },
+  "debug": {
+    "title": "Component API output"
+  }
+}

@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MiniX Debug Plugin — README</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #121936;
+      --panel-2: #0f1530;
+      --text: #eef2ff;
+      --muted: #aab4d6;
+      --line: #2a3563;
+      --accent: #8b5cf6;
+      --accent-2: #22c55e;
+      --warn: #f59e0b;
+      --danger: #ef4444;
+      --code: #0a0f22;
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: linear-gradient(180deg, #0a0f1d 0%, #0b1020 100%);
+      color: var(--text);
+      line-height: 1.65;
+    }
+    .wrap {
+      width: min(1100px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 28px 0 60px;
+    }
+    .hero {
+      background: radial-gradient(circle at top right, rgba(139,92,246,.22), transparent 30%), var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 28px;
+      box-shadow: var(--shadow);
+    }
+    .eyebrow {
+      display: inline-block;
+      padding: 6px 10px;
+      border: 1px solid rgba(139,92,246,.35);
+      border-radius: 999px;
+      color: #d8c7ff;
+      background: rgba(139,92,246,.12);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    h1 {
+      font-size: clamp(32px, 5vw, 52px);
+      line-height: 1.05;
+      margin: 14px 0 12px;
+    }
+    h2 {
+      margin: 0 0 14px;
+      font-size: 24px;
+    }
+    h3 {
+      margin: 22px 0 10px;
+      font-size: 18px;
+    }
+    p, li { color: var(--muted); }
+    strong { color: var(--text); }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 16px;
+      margin-top: 18px;
+    }
+    .card {
+      grid-column: span 12;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 22px;
+      box-shadow: var(--shadow);
+    }
+    .card.half { grid-column: span 6; }
+    .card.third { grid-column: span 4; }
+    .muted { color: var(--muted); }
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+    }
+    .chip {
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      color: var(--text);
+      font-size: 14px;
+    }
+    pre {
+      margin: 14px 0 0;
+      padding: 16px;
+      overflow: auto;
+      background: var(--code);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      color: #dbe5ff;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    .table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 14px;
+    }
+    .table th,
+    .table td {
+      text-align: left;
+      padding: 12px 10px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+    }
+    .table th { color: var(--text); }
+    .kpi {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-top: 18px;
+    }
+    .kpi > div {
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px;
+    }
+    .kpi strong {
+      display: block;
+      font-size: 24px;
+      margin-bottom: 6px;
+    }
+    .note, .warn, .danger {
+      padding: 14px 16px;
+      border-radius: 14px;
+      margin-top: 14px;
+      border: 1px solid var(--line);
+      background: var(--panel-2);
+    }
+    .warn { border-color: rgba(245,158,11,.35); color: #ffe0a3; }
+    .danger { border-color: rgba(239,68,68,.35); color: #ffc0c0; }
+    a { color: #c4b5fd; }
+    ul { margin: 0; padding-left: 20px; }
+    .footer {
+      text-align: center;
+      margin-top: 20px;
+      color: #7f89ab;
+      font-size: 13px;
+    }
+    @media (max-width: 900px) {
+      .card.half, .card.third { grid-column: span 12; }
+      .kpi { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 640px) {
+      .wrap { width: min(100% - 20px, 1100px); }
+      .hero, .card { padding: 18px; border-radius: 16px; }
+      .kpi { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <div class="eyebrow">README / Documentation</div>
+      <h1>MiniX Debug Plugin</h1>
+      <p>
+        A developer-mode debugging plugin for <strong>MiniX</strong> that traces component lifecycle,
+        watcher activity, directive compilation, prop changes, x-for loop issues, store updates,
+        and router navigation — while also exposing a live in-page debug panel and a console bridge through
+        <code>window.MxDB</code>.
+      </p>
+      <div class="chips">
+        <div class="chip">Lifecycle tracing</div>
+        <div class="chip">Watcher logging</div>
+        <div class="chip">Directive logging</div>
+        <div class="chip">Prop diffs</div>
+        <div class="chip">x-for key warnings</div>
+        <div class="chip">Store snapshots</div>
+        <div class="chip">Router snapshots</div>
+        <div class="chip">Floating debug panel</div>
+      </div>
+      <div class="kpi">
+        <div><strong>v1.0.0</strong><span class="muted">Plugin version in source</span></div>
+        <div><strong>500</strong><span class="muted">Max event ring-buffer size</span></div>
+        <div><strong>8</strong><span class="muted">Runtime flags available</span></div>
+        <div><strong>MxDB</strong><span class="muted">Browser console bridge</span></div>
+      </div>
+    </section>
+
+    <div class="grid">
+      <section class="card half">
+        <h2>What it does</h2>
+        <ul>
+          <li>Logs human-readable component activity with component names.</li>
+          <li>Records lifecycle hooks like <code>created</code>, <code>mounted</code>, <code>updated</code>, and <code>unmounted</code>.</li>
+          <li>Wraps state watchers so path changes can be inspected as old value → new value.</li>
+          <li>Logs directive usage such as <code>x-if</code>, <code>x-for</code>, <code>x-model</code>, and bindings handled by the compiler.</li>
+          <li>Diffs incoming props on child updates.</li>
+          <li>Warns about risky <code>x-for</code> keys like missing keys, duplicate keys, or unstable index-style keys.</li>
+          <li>Hooks MiniXStore and MiniXRouter when present, then exposes snapshots in both the panel and console bridge.</li>
+          <li>Shows a draggable, collapsible debug panel inside the page.</li>
+        </ul>
+      </section>
+
+      <section class="card half">
+        <h2>Best fit</h2>
+        <p>
+          Use this plugin during local development, integration testing, and framework debugging.
+          It is especially handy when a component updates “for no reason”, a child prop is drifting,
+          or your list rendering is doing tiny acts of DOM violence.
+        </p>
+        <div class="warn">
+          This is a development tool. It patches MiniX internals and compiler methods globally for the current page,
+          so it should not be treated like a lightweight production analytics plugin.
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Installation</h2>
+        <p>Load MiniX first, then the debug plugin. If you also use the store or router plugins, load them before your app mounts.</p>
+<pre><code>&lt;script src="../mini-x.js"&gt;&lt;/script&gt;
+&lt;script src="../plugin-store.js"&gt;&lt;/script&gt;
+&lt;script src="../plugin-router.js"&gt;&lt;/script&gt;
+&lt;script src="../plugin-debug.js"&gt;&lt;/script&gt;</code></pre>
+
+        <h3>Basic app usage</h3>
+<pre><code>MiniX.createApp(App)
+  .use(MiniX_Debug.plugin())
+  .mount('#app');</code></pre>
+
+        <h3>With explicit flags</h3>
+<pre><code>MiniX.createApp(App)
+  .use(MiniX_Debug.plugin({
+    lifecycle: true,
+    watchers: true,
+    directives: true,
+    props: true,
+    loops: true,
+    effects: false,
+    panel: true,
+    verbose: false
+  }))
+  .mount('#app');</code></pre>
+      </section>
+
+      <section class="card">
+        <h2>Real integration pattern</h2>
+        <p>This matches the uploaded demo structure: MiniX app + store plugin + router plugin + debug plugin, all wired end to end.</p>
+<pre><code>const debugStore = MiniXStore.define('debug', {
+  state: () =&gt; ({ count: 10, user: 'Store Ada', notes: [] }),
+  actions: {
+    increment() { this.count += 1; },
+    rename() { this.user = 'Store Grace'; }
+  }
+});
+
+const router = MiniXRouter.createRouter({
+  history: MiniXRouter.createWebHashHistory(),
+  debug: true,
+  routes: [
+    { path: '/', name: 'home', component: HomeRoute },
+    { path: '/details', name: 'details', component: DetailsRoute }
+  ]
+});
+
+MiniX.createApp(DebugDemoApp)
+  .dev(true)
+  .use(MiniXStore.plugin())
+  .use(router)
+  .use(MiniX_Debug.plugin({
+    lifecycle: true,
+    watchers: true,
+    directives: true,
+    props: true,
+    loops: true,
+    effects: false,
+    panel: true,
+    verbose: false
+  }))
+  .mount('#debug-demo');</code></pre>
+      </section>
+
+      <section class="card">
+        <h2>Plugin options</h2>
+        <table class="table">
+          <thead>
+            <tr><th>Option</th><th>Default</th><th>What it controls</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>lifecycle</code></td><td><code>true</code></td><td>Logs component lifecycle hooks such as <code>created</code>, <code>mounted</code>, <code>updated</code>, and <code>unmounted</code>.</td></tr>
+            <tr><td><code>watchers</code></td><td><code>true</code></td><td>Wraps state watchers and logs watcher path changes.</td></tr>
+            <tr><td><code>directives</code></td><td><code>true</code></td><td>Logs compiler directive bindings and expressions.</td></tr>
+            <tr><td><code>props</code></td><td><code>true</code></td><td>Diffs previous and next props when <code>updateProps</code> runs on a component.</td></tr>
+            <tr><td><code>loops</code></td><td><code>true</code></td><td>Warns about missing, duplicate, or unstable <code>x-for</code> keys.</td></tr>
+            <tr><td><code>effects</code></td><td><code>false</code></td><td>Reserved for verbose effect flush tracing. Keep this off unless you want more noise.</td></tr>
+            <tr><td><code>panel</code></td><td><code>true</code></td><td>Creates the floating in-page debug panel.</td></tr>
+            <tr><td><code>verbose</code></td><td><code>false</code></td><td>Includes richer value dumps and grouped console output.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="card half">
+        <h2>Console bridge: <code>window.MxDB</code></h2>
+        <p>Once installed in a browser, the plugin exposes a helper object on <code>window</code>.</p>
+<pre><code>MxDB.components()     // list live components
+MxDB.inspect(name)    // inspect one component by name or index
+MxDB.events(50)       // get last N events
+MxDB.clearEvents()    // clear log
+MxDB.stores()         // list MiniXStore snapshots
+MxDB.store('debug')   // inspect one store
+MxDB.router()         // inspect current router snapshot
+MxDB.showPanel()      // reopen the floating panel
+MxDB.log              // raw event array getter
+MxDB.registry         // raw component registry getter
+MxDB.routers          // raw tracked routers getter</code></pre>
+      </section>
+
+      <section class="card half">
+        <h2>Runtime flag changes</h2>
+        <p>You can call <code>MxDB.enable(...)</code> at runtime.</p>
+<pre><code>MxDB.enable({ verbose: true, panel: true });</code></pre>
+        <div class="note">
+          Passing an object updates the internal default flags for future behavior. Passing a single string key only prints a console note;
+          it does not immediately flip that flag by itself.
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Event types you will see</h2>
+        <table class="table">
+          <thead>
+            <tr><th>Type</th><th>Example payload idea</th><th>Why it matters</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>lifecycle</code></td><td><code>{ phase: 'mounted' }</code></td><td>Shows component hook flow.</td></tr>
+            <tr><td><code>watcher</code></td><td><code>{ path: 'user.name', old: 'Ada', new: 'Grace' }</code></td><td>Helps explain reactive updates.</td></tr>
+            <tr><td><code>directive</code></td><td><code>{ directive: 'x-model', expression: 'user.name' }</code></td><td>Confirms compiler directive binding.</td></tr>
+            <tr><td><code>props</code></td><td><code>{ changes: [...] }</code></td><td>Shows what changed in child inputs.</td></tr>
+            <tr><td><code>loop</code></td><td><code>{ kind: 'missing-key' }</code></td><td>Points out brittle list rendering.</td></tr>
+            <tr><td><code>store</code></td><td><code>{ name: 'debug', path: 'count', old: 1, new: 2 }</code></td><td>Tracks store state and debug events.</td></tr>
+            <tr><td><code>router</code></td><td><code>{ type: 'afterEach', ... }</code></td><td>Shows route navigation snapshots.</td></tr>
+          </tbody>
+        </table>
+        <div class="note">
+          The plugin stores events in a ring buffer capped at <strong>500</strong> entries. When the cap is reached,
+          older entries are discarded first.
+        </div>
+      </section>
+
+      <section class="card half">
+        <h2>Floating debug panel</h2>
+        <p>The panel is browser-only and includes tabs for:</p>
+        <ul>
+          <li><strong>Events</strong> — recent event stream</li>
+          <li><strong>Components</strong> — live component registry snapshots</li>
+          <li><strong>Stores</strong> — MiniXStore snapshots</li>
+          <li><strong>Router</strong> — tracked router snapshots</li>
+        </ul>
+        <p>You can drag it, collapse it, close it, clear logs, and copy the event log to the clipboard.</p>
+      </section>
+
+      <section class="card half">
+        <h2>Store and router support</h2>
+        <ul>
+          <li>If <code>window.MiniXStore</code> is present, the plugin hooks store creation and store watch events.</li>
+          <li>If <code>window.MiniXRouter</code> is present, the plugin tracks router snapshots and route changes.</li>
+          <li>The console bridge exposes both through <code>MxDB.stores()</code>, <code>MxDB.store(name)</code>, and <code>MxDB.router()</code>.</li>
+        </ul>
+      </section>
+
+      <section class="card">
+        <h2>Example component patterns the plugin can observe</h2>
+<pre><code>class DebugChild {
+  static props = {
+    label: { type: String, default: 'Anonymous' },
+    version: { type: Number, fallback: 1 },
+    count: { type: Number, fallback: 0 }
+  };
+
+  data() {
+    return { localClicks: 0 };
+  }
+
+  template() {
+    return `
+      &lt;div&gt;
+        &lt;h3 x-text="'DebugChild v' + $props.version"&gt;&lt;/h3&gt;
+        &lt;p&gt;&lt;span x-text="$props.label"&gt;&lt;/span&gt;&lt;/p&gt;
+        &lt;button @click="localClicks++"&gt;Click&lt;/button&gt;
+      &lt;/div&gt;
+    `;
+  }
+
+  mounted() {}
+  updated() {}
+  beforeUnmount() {}
+  unmounted() {}
+}</code></pre>
+        <p>
+          In this style of component, the plugin can observe lifecycle hooks, prop diffs, local state updates,
+          directive bindings in the template, and child mount/unmount behavior.
+        </p>
+      </section>
+
+      <section class="card">
+        <h2>How to use it in DevTools</h2>
+        <ol>
+          <li>Load the page with the plugin installed.</li>
+          <li>Trigger real interactions: update state, toggle <code>x-if</code>, reorder <code>x-for</code>, change child props, navigate routes, or mutate stores.</li>
+          <li>Open the browser console.</li>
+          <li>Run <code>MxDB.components()</code> to list live components.</li>
+          <li>Run <code>MxDB.inspect('DebugDemoApp')</code> or inspect by numeric index.</li>
+          <li>Run <code>MiniX_Debug.getEvents()</code> or <code>MxDB.events()</code> to inspect recent activity.</li>
+        </ol>
+      </section>
+
+      <section class="card">
+        <h2>Important behavior notes</h2>
+        <div class="note">
+          <strong>Double-install protection:</strong> the plugin guards against installing itself twice on the same app instance using an internal flag.
+        </div>
+        <div class="note">
+          <strong>Global patching:</strong> compiler patches are applied once per page and restored by <code>MiniX_Debug.uninstall()</code>.
+        </div>
+        <div class="note">
+          <strong>Browser-only bridge:</strong> <code>window.MxDB</code> and the panel exist only when <code>window</code>/<code>document</code> are available.
+        </div>
+        <div class="danger">
+          <strong>Uninstall is global-ish:</strong> uninstalling restores patched methods, removes the panel, clears tracked registries, detaches listeners, and deletes <code>window.MxDB</code>.
+          That is great for teardown, but not something to fling around casually in a shared dev page unless you mean it.
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Public API</h2>
+<pre><code>MiniX_Debug.plugin(options)  // returns a MiniX plugin instance
+MiniX_Debug.uninstall()      // restores patches and removes bridge/panel
+MiniX_Debug.getEvents(n)     // returns a copy of the recorded events</code></pre>
+      </section>
+    </div>
+
+    <div class="footer">
+      Generated from the uploaded MiniX debug plugin source and demo integration.
+    </div>
+  </div>
+</body>
+</html>
