@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MiniX Mask Plugin Demo</title>
+  <style>
+    :root { font-family: system-ui, sans-serif; }
+    body { margin: 24px; line-height: 1.45; }
+    .wrap { max-width: 900px; margin: 0 auto; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+    .card { border: 1px solid #ddd; border-radius: 14px; padding: 16px; }
+    label { display: block; font-weight: 600; margin-bottom: 8px; }
+    input, select { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid #bbb; border-radius: 10px; }
+    code, pre { background: #f6f6f6; border-radius: 8px; }
+    code { padding: 2px 6px; }
+    pre { padding: 12px; overflow: auto; }
+    .muted { color: #555; font-size: 14px; }
+    .value { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <script src="../mini-x.js"></script>
+  <script src="../../input-mask-engine/input-mask-engine.js"></script>
+  <script src="../plugin-mask.js"></script>
+  <script>
+    class App {
+      data(){
+        return {
+          phone: '',
+          otp: '',
+          coupon: '',
+          dynamicToken: '9',
+          dynamicMax: 8,
+        };
+      }
+
+      template(){
+        
+        return `
+        <div class="wrap">
+          <h1>MiniX Mask Plugin Demo</h1>
+          <p class="muted">
+            <code>x-mask</code> formats with a literal mask. <code>x-mask-free</code> uses a free definition object.
+          </p>
+
+          <div class="grid">
+            <div class="card">
+              <label>Phone (eager)</label>
+              <input x-model="phone" x-mask="(999) 999 - 9999" placeholder="Type digits" />
+              <p class="value">model: {{ phone }}</p>
+              <p class="muted">Formats as you type.</p>
+            </div>
+            <div class="card">
+              <label>OTP free mask</label>
+              <input x-model="otp" x-mask-free="{ token: '9', max: 6 }" placeholder="6 digits" />
+              <p class="value">model: {{ otp }}</p>
+              <p class="muted">Only digits, up to 6 chars.</p>
+            </div>
+
+            <div class="card">
+              <label>Coupon free mask with custom token Z</label>
+              <input x-model="coupon" x-mask-free="{ token: 'Z', max: 8 }" placeholder="hex chars only" />
+              <p class="value">model: {{ coupon }}</p>
+              <p class="muted">Accepts hex characters and uppercases them.</p>
+            </div>
+          </div>
+
+          <div class="grid" style="margin-top:16px;">
+            <div class="card">
+              <label>Dynamic token</label>
+              <select x-model="dynamicToken">
+                <option value="9">9 (digits)</option>
+                <option value="A">A (letters upper)</option>
+                <option value="a">a (letters lower)</option>
+                <option value="X">X (alphanumeric)</option>
+                <option value="Z">Z (hex upper)</option>
+              </select>
+            </div>
+
+            <div class="card">
+              <label>Dynamic max</label>
+              <input type="number" min="1" max="20" x-model.number="dynamicMax" />
+            </div>
+
+            <div class="card" style="grid-column: 1 / -1;">
+              <label>Dynamic free mask</label>
+              <input x-mask-free="{ token: dynamicToken, max: dynamicMax }" placeholder="Changes reactively" />
+              <p class="value">definition: {{ JSON.stringify({ token: dynamicToken, max: dynamicMax }) }}</p>
+            </div>
+          </div>
+
+          <h2>Use</h2>
+          <pre><code>MiniX.createApp()
+            .use(MiniX_Mask_Plugin({
+              Z: {
+                test: ch => /[A-Fa-f0-9]/.test(ch),
+                transform: ch => ch.toUpperCase(),
+              }
+            }))
+            .mount('#app');</code></pre>
+        </div>
+      `;
+    }
+    }
+
+    MiniX.createApp(App)
+    .use(MiniX_Mask_Plugin({
+      Z: {
+        test: ch => /[A-Fa-f0-9]/.test(ch),
+        transform: ch => ch.toUpperCase(),
+      }
+    }))
+    .mount('#app');
+  </script>
+</body>
+</html>

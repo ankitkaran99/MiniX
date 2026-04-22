@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Mini-X Router · documentation</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --doc-bg: #f8fafc;
+      --doc-surface: #ffffff;
+      --doc-border: #e2e8f0;
+      --doc-text: #0f172a;
+      --doc-muted: #475569;
+      --doc-accent: #3b82f6;
+      --doc-accent-dark: #2563eb;
+      --doc-code-bg: #f1f5f9;
+      --doc-code-border: #e2e8f0;
+      --doc-sidebar-bg: #ffffff;
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --radius-md: 0.75rem;
+      --radius-sm: 0.5rem;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --doc-bg: #0f172a;
+        --doc-surface: #1e293b;
+        --doc-border: #334155;
+        --doc-text: #f1f5f9;
+        --doc-muted: #94a3b8;
+        --doc-code-bg: #0f172a;
+        --doc-code-border: #334155;
+        --doc-sidebar-bg: #1e293b;
+      }
+    }
+
+    body {
+      font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+      background: var(--doc-bg);
+      color: var(--doc-text);
+      line-height: 1.5;
+    }
+
+    .doc-wrapper {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: flex;
+      gap: 2rem;
+      padding: 2rem 1.5rem;
+    }
+
+    /* SIDEBAR (TOC) */
+    .doc-sidebar {
+      flex: 0 0 280px;
+      position: sticky;
+      top: 2rem;
+      height: calc(100vh - 4rem);
+      overflow-y: auto;
+      background: var(--doc-sidebar-bg);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--doc-border);
+      padding: 1.5rem 1rem;
+    }
+
+    .doc-sidebar h3 {
+      font-size: 0.9rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--doc-muted);
+      margin-bottom: 1rem;
+    }
+
+    .doc-sidebar nav ul {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    .doc-sidebar li {
+      margin-bottom: 0.5rem;
+    }
+
+    .doc-sidebar a {
+      display: block;
+      padding: 0.4rem 0.75rem;
+      font-size: 0.875rem;
+      color: var(--doc-text);
+      text-decoration: none;
+      border-radius: var(--radius-sm);
+      transition: all 0.1s ease;
+    }
+
+    .doc-sidebar a:hover {
+      background: rgba(59, 130, 246, 0.1);
+      color: var(--doc-accent);
+    }
+
+    /* MAIN CONTENT */
+    .doc-content {
+      flex: 1;
+      min-width: 0;
+      background: var(--doc-surface);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--doc-border);
+      padding: 2rem 2rem 3rem;
+    }
+
+    .doc-content h1 {
+      font-size: 2.25rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      margin-bottom: 1rem;
+      border-bottom: 2px solid var(--doc-border);
+      padding-bottom: 0.75rem;
+    }
+
+    .doc-content h2 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin: 1.8rem 0 1rem;
+      padding-top: 0.5rem;
+      border-bottom: 1px solid var(--doc-border);
+    }
+
+    .doc-content h3 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin: 1.5rem 0 0.75rem;
+    }
+
+    .doc-content p {
+      margin: 1rem 0;
+      color: var(--doc-text);
+    }
+
+    .doc-content a {
+      color: var(--doc-accent);
+      text-decoration: none;
+      border-bottom: 1px dotted transparent;
+      transition: border 0.1s;
+    }
+
+    .doc-content a:hover {
+      border-bottom-color: var(--doc-accent);
+    }
+
+    .doc-content code {
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      background: var(--doc-code-bg);
+      padding: 0.2rem 0.4rem;
+      border-radius: 6px;
+      font-size: 0.85em;
+      border: 1px solid var(--doc-code-border);
+    }
+
+    pre {
+      background: var(--doc-code-bg);
+      border: 1px solid var(--doc-code-border);
+      border-radius: var(--radius-sm);
+      padding: 1rem;
+      overflow-x: auto;
+      margin: 1.25rem 0;
+    }
+
+    pre code {
+      background: none;
+      padding: 0;
+      border: none;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      color: var(--doc-text);
+    }
+
+    .badge {
+      display: inline-block;
+      background: var(--doc-accent);
+      color: white;
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 0.2rem 0.6rem;
+      border-radius: 20px;
+      margin-right: 0.5rem;
+      vertical-align: middle;
+    }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 1rem;
+      margin: 1.5rem 0;
+    }
+
+    .feature-card {
+      background: var(--doc-bg);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--doc-border);
+      padding: 1rem;
+    }
+
+    .feature-card strong {
+      display: block;
+      font-size: 1rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      margin: 1.5rem 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+    }
+
+    th, td {
+      border: 1px solid var(--doc-border);
+      padding: 0.6rem 0.8rem;
+      text-align: left;
+    }
+
+    th {
+      background: var(--doc-bg);
+      font-weight: 600;
+    }
+
+    hr {
+      margin: 2rem 0;
+      border: none;
+      border-top: 1px solid var(--doc-border);
+    }
+
+    .note {
+      background: rgba(59, 130, 246, 0.08);
+      border-left: 3px solid var(--doc-accent);
+      padding: 1rem;
+      border-radius: var(--radius-sm);
+      margin: 1rem 0;
+    }
+
+    @media (max-width: 900px) {
+      .doc-wrapper {
+        flex-direction: column;
+        padding: 1rem;
+      }
+      .doc-sidebar {
+        position: static;
+        width: 100%;
+        height: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+<div class="doc-wrapper">
+  <aside class="doc-sidebar">
+    <h3>📘 Mini-X Router</h3>
+    <nav>
+      <ul>
+        <li><a href="#intro">✨ Introduction</a></li>
+        <li><a href="#install">📦 Installation</a></li>
+        <li><a href="#basics">⚡ Basic Setup</a></li>
+        <li><a href="#routes">🧩 Route Definition</a></li>
+        <li><a href="#navigation">🖱️ Navigation & Directives</a></li>
+        <li><a href="#views">🖼️ Router View & KeepAlive</a></li>
+        <li><a href="#guards">🛡️ Guards & Hooks</a></li>
+        <li><a href="#lazy">⏳ Lazy Loading</a></li>
+        <li><a href="#api">🔧 API Reference</a></li>
+        <li><a href="#debug">🐞 Debugging & Events</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main class="doc-content">
+    <h1>Mini-X Router <span style="font-weight: 400; font-size: 1rem;">advanced SPA router for Mini-X</span></h1>
+    <p><strong>Lightweight, feature-rich</strong> routing for <strong>Mini-X</strong> reactive framework. Nested layouts, named views, lazy loading, keep-alive, navigation guards, and full reactive route state — all in ~8kb gzipped.</p>
+
+    <div class="feature-grid">
+      <div class="feature-card"><strong>🎯 Nested routes</strong> with deep linking</div>
+      <div class="feature-card"><strong>🧩 Named views</strong> (sidebar + main + etc)</div>
+      <div class="feature-card"><strong>💾 KeepAlive</strong> preserve component state</div>
+      <div class="feature-card"><strong>⏱️ Lazy loading</strong> dynamic component import</div>
+      <div class="feature-card"><strong>🔐 Guards</strong> (global, per-route)</div>
+      <div class="feature-card"><strong>📜 HTML5 / Hash history</strong> auto fallback</div>
+      <div class="feature-card"><strong>⚛️ Reactive $route / $params</strong> auto updates</div>
+      <div class="feature-card"><strong>🎬 Transition hooks</strong> beforeRouteLeave/Enter</div>
+    </div>
+
+    <h2 id="intro">✨ Introduction</h2>
+    <p>Mini-X Router is the official routing solution for <strong>Mini-X</strong> — a tiny reactive UI library. It offers a Vue Router–like API but deeply integrated with Mini-X reactivity, directives, and component lifecycle. Perfect for SPAs, dashboards, and advanced demos.</p>
+    <div class="note">✅ Works with <code>mini-x.js</code> core. Provides <code>x-router-view</code>, <code>x-link</code>, <code>x-route</code> directives, programmatic navigation, and route meta fields.</div>
+
+    <h2 id="install">📦 Installation</h2>
+    <p>Include <code>mini-x.js</code> (core) and <code>plugin-router.js</code> in your HTML:</p>
+    <pre><code>&lt;script src="./mini-x.js"&gt;&lt;/script&gt;
+&lt;script src="./plugin-router.js"&gt;&lt;/script&gt;</code></pre>
+    <p>Then create a router instance and install it into your Mini-X app.</p>
+
+    <h2 id="basics">⚡ Basic Setup</h2>
+    <pre><code>const routes = [
+  { path: '/', component: 'HomePage', name: 'home' },
+  { path: '/about', component: 'AboutPage', name: 'about' }
+];
+
+const router = MiniXRouter.createRouter({
+  history: MiniXRouter.createWebHistory('/'),
+  routes,
+  debug: true
+});
+
+MiniX.createApp(AppShell)
+  .component('HomePage', HomePage)
+  .component('AboutPage', AboutPage)
+  .use(router)
+  .mount('#app');</code></pre>
+    <p>Inside your template, use <code>&lt;div x-router-view&gt;&lt;/div&gt;</code> as outlet.</p>
+
+    <h2 id="routes">🧩 Route Definition</h2>
+    <p>Routes support paths, names, nested children, named views, redirects, meta, and props.</p>
+    <pre><code>{
+  path: '/workspace',
+  components: { default: 'WorkspaceLayout', sidebar: 'SidebarComp' },
+  meta: { requiresAuth: true, keepAlive: true },
+  beforeEnter: (to, from) => { /* custom guard */ },
+  children: [
+    { path: '', component: 'WorkspaceOverview', name: 'workspace' },
+    { path: 'projects', component: 'WorkspaceProjects' }
+  ]
+},
+{
+  path: '/users/:id',
+  component: 'UserProfile',
+  props: true, // pass params as props
+  name: 'userDetails'
+}</code></pre>
+
+    <h3>Route meta fields</h3>
+    <p><code>meta.title</code> (string or function) sets document title automatically. <code>meta.keepAlive</code> enables component caching. Custom meta like <code>requiresAuth</code> can be used in guards.</p>
+
+    <h2 id="navigation">🖱️ Navigation & Directives</h2>
+    <h3>Programmatic navigation</h3>
+    <pre><code>// inside component context (this.$router)
+this.$router.push('/analytics')
+this.$router.push({ name: 'userDetails', params: { id: 5 }, query: { tab: 'billing' } })
+this.$router.replace('/home')
+this.$router.back()</code></pre>
+
+    <h3>Directives: x-link & x-route</h3>
+    <p><strong>x-link</strong> accepts a path string, <strong>x-route</strong> accepts route name or object literal. Both provide automatic active class and handle SPA navigation.</p>
+    <pre><code>&lt;a x-link="/dashboard" x-active="active" x-active-mode="startsWith"&gt;Dashboard&lt;/a&gt;
+&lt;a x-route="{ name: 'settingsProfile', params: { id: user.id } }" x-replace&gt;Profile&lt;/a&gt;</code></pre>
+    <ul>
+      <li><code>x-active</code> – CSS class when route matches (default "active")</li>
+      <li><code>x-active-mode</code> – <code>exact</code> or <code>startsWith</code></li>
+      <li><code>x-replace</code> – use replace instead of push</li>
+    </ul>
+
+    <h2 id="views">🖼️ Router View & KeepAlive</h2>
+    <p><code>&lt;div x-router-view&gt;&lt;/div&gt;</code> renders matched component. Supports named views via attribute: <code>x-router-view="sidebar"</code>. Depth is automatically detected for nested routes.</p>
+    <p><strong>Keep-alive</strong> : when a route record has <code>meta: { keepAlive: true }</code>, the component instance is cached and reused on revisit. You can clear cache with <code>router.clearKeepAlive()</code>.</p>
+    <pre><code>&lt;div x-router-view&gt;&lt;/div&gt;          &lt;!-- main outlet --&gt;
+&lt;div x-router-view="sidebar"&gt;&lt;/div&gt; &lt;!-- named view --&gt;</code></pre>
+
+    <h2 id="guards">🛡️ Guards & Hooks</h2>
+    <p>Global guards, per-route guards, and view transition hooks. Guards can return <code>true</code>, <code>false</code>, a string path, or a location object to cancel/redirect.</p>
+    <pre><code>// Global beforeEach
+router.beforeEach((to, from) => {
+  if (to.meta.requiresAuth &amp;&amp; !store.isLoggedIn) return { name: 'login' };
+  return true;
+});
+
+// Per-route
+beforeEnter: (to, from) => { if(to.params.id === 'admin') return '/forbidden'; }
+
+// View transition hooks (animations)
+router.beforeRouteLeave(async ({ el }) => {
+  el.classList.add('fade-out');
+  await delay(150);
+});
+router.afterRouteEnter(({ el }) => el.classList.add('fade-in'));</code></pre>
+
+    <h2 id="lazy">⏳ Lazy Loading</h2>
+    <p>Mini-X Router provides a powerful, integrated lazy‑loading system that works without any build tools. You can load components on demand by simply placing them in separate <code>.js</code> files and letting the router handle the injection.</p>
+
+    <h3>Built‑in Loader (<code>MiniXRouter.Loader</code>)</h3>
+    <p>The router includes a <strong>MiniX_Loader</strong> class that dynamically injects <code>&lt;script&gt;</code> tags, supports retries, timeouts, and caching. You can either pass a loader instance or a configuration object directly to <code>createRouter</code>.</p>
+    <pre><code>// Option 1: Pass loader config (router creates internal loader)
+const router = MiniXRouter.createRouter({
+  history: createWebHistory(),
+  loader: {
+    baseDir: '/components',   // directory where .js files live
+    ext: '.js',               // file extension
+    retries: 1,               // number of retries on failure
+    timeout: 5000             // load timeout in ms
+  },
+  routes: [
+    {
+      path: '/customer',
+      component: (load) => load('Customer')   // load function is provided
+    }
+  ]
+});
+
+// Option 2: Use a custom loader instance
+const myLoader = new MiniXRouter.Loader('/lazy', { retries: 2 });
+const router = MiniXRouter.createRouter({
+  loader: myLoader,
+  routes: [ /* ... */ ]
+});</code></pre>
+
+    <h3>How It Works</h3>
+    <ol>
+      <li>When a route with <code>component: (load) => load('Customer')</code> is activated for the first time, the router calls the function and passes a <code>load(name)</code> function.</li>
+      <li>The <code>load</code> function uses the configured loader to fetch <code>/components/Customer.js</code> (or the specified baseDir + name + ext).</li>
+      <li>The loader injects a <code>&lt;script&gt;</code> tag, waits for the file to load, and resolves the promise.</li>
+      <li>The component file <strong>must</strong> register itself with <code>MiniX_Component.register('Customer', CustomerClass)</code>.</li>
+      <li>The router then resolves to the registered component and renders it.</li>
+    </ol>
+    <p>The loader caches successful loads, so subsequent visits to the same route will reuse the component without a second network request.</p>
+
+    <h3>Example: Lazy Component File (<code>Customer.js</code>)</h3>
+    <pre><code>class Customer {
+  data() { return { name: '' }; }
+  template() { return `&lt;input x-model="name"&gt;`; }
+}
+// Required registration
+if (typeof MiniX_Component !== 'undefined') {
+  MiniX_Component.register('Customer', Customer);
+}</code></pre>
+
+    <h3>Preloading & Cache Management</h3>
+    <p>You can preload components during idle time to reduce latency:</p>
+    <pre><code>const loader = router.getLoader(); // returns the internal loader instance
+loader.preload('Customer');       // fetches but doesn't execute (browser cache)</code></pre>
+    <p>Clear cached components with <code>loader.clearCache('Customer')</code> or <code>loader.clearCache()</code> to force re‑fetch.</p>
+
+    <div class="note">📌 <strong>Legacy async components</strong> (functions returning <code>Promise&lt;Component&gt;</code>) are still fully supported. The new loader pattern is recommended for zero‑build, file‑based lazy loading.</div>
+
+    <h2 id="api">🔧 API Reference</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Method / Property</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>createRouter(options)</code></td><td>Creates router instance. Options: <code>routes</code>, <code>history</code>, <code>debug</code>, <code>loader</code> (config or Loader instance).</td></tr>
+          <tr><td><code>createWebHistory(base)</code></td><td>HTML5 history mode (pushState).</td></tr>
+          <tr><td><code>createWebHashHistory(base)</code></td><td>Hash mode (fallback for file://).</td></tr>
+          <tr><td><code>router.push(to)</code> / <code>replace(to)</code></td><td>Navigate programmatically.</td></tr>
+          <tr><td><code>router.resolve(target)</code></td><td>Resolves location to normalized route object.</td></tr>
+          <tr><td><code>router.href(target)</code></td><td>Generates full URL for given route.</td></tr>
+          <tr><td><code>router.beforeEach(fn)</code></td><td>Global navigation guard.</td></tr>
+          <tr><td><code>router.beforeRouteLeave(fn)</code></td><td>Called before a view is unmounted (useful for exit animations).</td></tr>
+          <tr><td><code>router.afterRouteEnter(fn)</code></td><td>Called after view is mounted/restored.</td></tr>
+          <tr><td><code>router.clearKeepAlive(key?)</code></td><td>Clear all or specific keep-alive cache.</td></tr>
+          <tr><td><code>router.getLoader()</code></td><td>Returns the internal <code>MiniX_Loader</code> instance (if configured).</td></tr>
+          <tr><td><code>router.onDebug(listener)</code></td><td>Subscribe to internal debug events.</td></tr>
+          <tr><td><code>router.currentRoute</code></td><td>Reactive route object with <code>path</code>, <code>params</code>, <code>query</code>, <code>meta</code>, <code>fullPath</code>.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Component instance APIs</h3>
+    <p>Every component mounted by the router gets <code>this.$router</code>, <code>this.$route</code>, <code>this.$params</code>, <code>this.$query</code>. Additionally, reactive getters <code>route</code>, <code>params</code>, <code>query</code> are available directly in templates.</p>
+    <pre><code>&lt;template&gt;
+  &lt;div&gt;Current user ID: {{ params.id }} &lt;/div&gt;
+  &lt;div&gt;Full path: {{ route.fullPath }} &lt;/div&gt;
+  &lt;button @click="$router.push('/')"&gt;Home&lt;/button&gt;
+&lt;/template&gt;</code></pre>
+
+    <h2 id="debug">🐞 Debugging & Events</h2>
+    <p>Enable debug mode: <code>router.enableDebug()</code> or set <code>debug: true</code> in options. Debug events are logged to console and can be captured with <code>router.onDebug(fn)</code>.</p>
+    <p>Events: <code>navigation:start</code>, <code>navigation:finish</code>, <code>lazy:load:start</code>, <code>keepalive:hit</code>, <code>route:resolved</code>, etc.</p>
+    <div class="note">📌 <strong>File protocol support:</strong> Router auto-detects <code>file://</code> and falls back to hash history. Perfect for local demos without a dev server.</div>
+
+    <hr>
+    <h3>📁 Complete Example (with lazy loader)</h3>
+    <pre><code>// router setup
+const router = MiniXRouter.createRouter({
+  history: MiniXRouter.createWebHashHistory(),
+  loader: { baseDir: './components', ext: '.js', retries: 1 },
+  routes: [
+    { path: '/', component: 'HomePage' },
+    { path: '/customer', component: (load) => load('Customer') }
+  ]
+});
+
+// Customer.js (in ./components/Customer.js)
+class Customer { /* ... */ }
+MiniX_Component.register('Customer', Customer);</code></pre>
+
+    <h3>🔄 Nested router-view behavior</h3>
+    <p>The router automatically resolves depth based on parent <code>x-router-view</code> containers. Nested routes render inside the nearest matching router-view without extra configuration.</p>
+
+    <h3>🎨 Advanced: named views + multiple outlets</h3>
+    <pre><code>components: {
+  default: 'MainContent',
+  sidebar: 'SidebarPanel',
+  footer: 'FooterNote'
+}</code></pre>
+    <p>In your layout: <code>&lt;div x-router-view&gt;&lt;/div&gt;</code>, <code>&lt;div x-router-view="sidebar"&gt;&lt;/div&gt;</code>, etc.</p>
+
+    <div class="note">
+      <strong>⚡ Performance tip:</strong> Use <code>meta.keepAlive</code> for heavy dashboards. Manage cache with <code>router.clearKeepAlive()</code> when needed.
+    </div>
+
+    <p style="margin-top: 2rem; text-align: center; color: var(--doc-muted); border-top: 1px solid var(--doc-border); padding-top: 1.5rem;">
+      Built for Mini-X · Full control over SPA routing · Inspired by modern routers
+    </p>
+  </main>
+</div>
+</body>
+</html>

@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>MiniX Mask Plugin · Complete documentation</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #f9fafc;
+      font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, sans-serif;
+      line-height: 1.5;
+      color: #1e293b;
+      padding: 2rem 1rem;
+    }
+
+    .doc-container {
+      max-width: 1280px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 2rem;
+      box-shadow: 0 20px 35px -12px rgba(0, 0, 0, 0.08);
+      overflow: hidden;
+      border: 1px solid #eef2f6;
+    }
+
+    .doc-header {
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      padding: 2.5rem 2rem;
+      color: white;
+    }
+
+    .doc-header h1 {
+      font-size: 2.5rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 0.5rem;
+    }
+
+    .doc-header p {
+      font-size: 1.125rem;
+      opacity: 0.85;
+      max-width: 720px;
+    }
+
+    .badge {
+      display: inline-block;
+      background: rgba(255,255,255,0.15);
+      backdrop-filter: blur(4px);
+      padding: 0.2rem 0.75rem;
+      border-radius: 40px;
+      font-size: 0.8rem;
+      font-weight: 500;
+      margin-top: 0.75rem;
+    }
+
+    .doc-content {
+      padding: 2rem 2rem 2.5rem 2rem;
+    }
+
+    .section {
+      margin-bottom: 3rem;
+    }
+
+    .section-title {
+      font-size: 1.8rem;
+      font-weight: 700;
+      border-left: 5px solid #3b82f6;
+      padding-left: 1rem;
+      margin-bottom: 1.5rem;
+      color: #0f172a;
+    }
+
+    .subsection-title {
+      font-size: 1.4rem;
+      font-weight: 600;
+      margin: 1.5rem 0 1rem 0;
+      color: #1e293b;
+    }
+
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.5rem;
+      margin: 1.5rem 0;
+    }
+
+    .feature-card {
+      background: #f8fafc;
+      border-radius: 1.25rem;
+      padding: 1.25rem;
+      border: 1px solid #e2e8f0;
+      transition: all 0.2s ease;
+    }
+
+    .feature-card strong {
+      color: #0f172a;
+      font-size: 1.1rem;
+      display: block;
+      margin-bottom: 0.5rem;
+    }
+
+    code, .code-inline {
+      font-family: 'SF Mono', 'Fira Code', 'Menlo', monospace;
+      background: #f1f5f9;
+      padding: 0.2rem 0.4rem;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      color: #0f172a;
+      border: 1px solid #e2e8f0;
+    }
+
+    pre {
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: 1.25rem;
+      border-radius: 1rem;
+      overflow-x: auto;
+      margin: 1rem 0;
+      font-size: 0.85rem;
+      line-height: 1.45;
+    }
+
+    pre code {
+      background: transparent;
+      padding: 0;
+      border: none;
+      color: inherit;
+      font-size: 0.85rem;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0;
+      background: white;
+      border-radius: 1rem;
+      overflow: hidden;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+    }
+
+    th, td {
+      border: 1px solid #e2e8f0;
+      padding: 0.75rem 1rem;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #f1f5f9;
+      font-weight: 600;
+      color: #0f172a;
+    }
+
+    .note {
+      background: #eff6ff;
+      border-left: 4px solid #3b82f6;
+      padding: 1rem 1.25rem;
+      border-radius: 1rem;
+      margin: 1.25rem 0;
+    }
+
+    hr {
+      margin: 2rem 0;
+      border: none;
+      height: 1px;
+      background: #e2e8f0;
+    }
+
+    .footer {
+      margin-top: 2rem;
+      text-align: center;
+      font-size: 0.85rem;
+      color: #64748b;
+      border-top: 1px solid #eef2f6;
+      padding-top: 2rem;
+    }
+
+    @media (max-width: 640px) {
+      .doc-content {
+        padding: 1.5rem;
+      }
+      .section-title {
+        font-size: 1.5rem;
+      }
+    }
+  </style>
+</head>
+<body>
+<div class="doc-container">
+  <div class="doc-header">
+    <h1>🎭 MiniX Mask Plugin</h1>
+    <p>Effortless, reactive input masking for MiniX apps — literal patterns & free-form token masks with smart caret handling.</p>
+    <div class="badge">v1.2.0</div>
+  </div>
+  <div class="doc-content">
+    
+    <!-- Intro section -->
+    <div class="section">
+      <div class="section-title">📌 Overview</div>
+      <p><strong>MiniX Mask Plugin</strong> brings declarative input masking to the <code>MiniX</code> reactive framework. It provides two powerful directives: <code class="code-inline">x-mask</code> for literal placeholder masks <em>(e.g., phone, date)</em> and <code class="code-inline">x-mask-free</code> for token‑based constraints (digits only, alphanumeric, custom sets). Built on top of the robust <strong>InputMaskEngine</strong>, the plugin handles real‑time formatting, deletions, paste, composition events, and reactive mask updates.</p>
+      <div class="note">
+        ⚡ <strong>Reactive by nature</strong> — Mask definitions can depend on component data (dynamic token, max length) and will recompile & reformat automatically.
+      </div>
+    </div>
+
+    <!-- Features -->
+    <div class="section">
+      <div class="section-title">✨ Key features</div>
+      <div class="card-grid">
+        <div class="feature-card"><strong>🎯 Literal masks</strong><br>Pattern like <code>"(999) 999-9999"</code> — digits replace <code>9</code>, letters replace <code>A</code>, and more.</div>
+        <div class="feature-card"><strong>🔓 Free masks</strong><br>Define allowed character set via token (<code>'9'</code>, <code>'A'</code>, <code>'X'</code>, custom) + max length.</div>
+        <div class="feature-card"><strong>🔄 Reactive definitions</strong><br>Bind mask parameters directly to component state → dynamic validation rules.</div>
+        <div class="feature-card"><strong>🧹 Smart editing</strong><br>Backspace, delete, paste, and composition events are fully controlled & caret position preserved.</div>
+        <div class="feature-card"><strong>🧩 Custom tokens</strong><br>Extend engine with your own token logic (<code>test</code> + <code>transform</code>).</div>
+        <div class="feature-card"><strong>⚡ Minimal overhead</strong><br>Compiled masks are cached, directives use efficient event listeners.</div>
+      </div>
+    </div>
+
+    <!-- Installation -->
+    <div class="section">
+      <div class="section-title">📦 Installation</div>
+      <p>Include the required scripts in your HTML (order matters):</p>
+      <pre><code>&lt;script src="./mini-x.js"&gt;&lt;/script&gt;
+&lt;script src="./input-mask-engine.js"&gt;&lt;/script&gt;
+&lt;script src="./plugin-mask.js"&gt;&lt;/script&gt;</code></pre>
+      <p>Then register the plugin with your MiniX app:</p>
+      <pre><code>MiniX.createApp(App)
+  .use(MiniX_Mask_Plugin())       // basic usage
+  .mount('#app');</code></pre>
+      <p>The plugin automatically registers <code>x-mask</code> and <code>x-mask-free</code> directives on all text-like inputs.</p>
+    </div>
+
+    <!-- Directives reference -->
+    <div class="section">
+      <div class="section-title">🎛️ Directives API</div>
+      
+      <div class="subsection-title">🔹 <code>x-mask</code> – Literal mask</div>
+      <p>Accepts a static string pattern where placeholder characters define allowed input. Uses the engine’s default token set <strong>(9, A, a, X)</strong> plus any custom tokens registered via plugin options.</p>
+      <pre><code>&lt;input x-model="phone" x-mask="(999) 999-9999" placeholder="(123) 456-7890" /&gt;</code></pre>
+      <p><strong>Example output:</strong> typed <code>1234567890</code> → <code>(123) 456-7890</code></p>
+      
+      <div class="subsection-title">🔹 <code>x-mask-free</code> – Free / token‑based mask</div>
+      <p>Configurable with an object or shorthand string. Perfect for length‑restricted fields like OTP, coupon codes, or custom character classes.</p>
+      <pre><code>&lt;!-- only digits, max 6 characters --&gt;
+&lt;input x-model="otp" x-mask-free="{ token: '9', max: 6 }" /&gt;
+
+&lt;!-- shorthand: unlimited alphanumeric (token 'X') --&gt;
+&lt;input x-mask-free="'X'" /&gt;
+
+&lt;!-- dynamic reactive mask --&gt;
+&lt;input x-mask-free="{ token: dynamicToken, max: dynamicMax }" /&gt;</code></pre>
+      <div class="note">
+        💡 <strong>Shorthand forms:</strong> <code>x-mask-free="'9'"</code> → unlimited digits. <code>x-mask-free="{ max: 4 }"</code> (default token <code>'9'</code>) → up to 4 digits.
+      </div>
+    </div>
+
+    <!-- Free mask configuration -->
+    <div class="section">
+      <div class="section-title">⚙️ Free mask definition (deep dive)</div>
+      <p>The free mask accepts a definition object with the following properties:</p>
+      <table>
+        <thead>
+          <tr><th>Property</th><th>Type</th><th>Description</th><th>Default</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>token</code></td><td>string</td><td>Character class identifier (built‑in or custom).</td><td><code>'9'</code></td></tr>
+          <tr><td><code>max</code></td><td>number</td><td>Maximum allowed characters. Use <code>Infinity</code> or large number for unlimited.</td><td><code>Infinity</code></td></tr>
+        </tbody>
+      </table>
+      <p><strong>Built‑in token behaviours (InputMaskEngine default):</strong></p>
+      <table>
+        <thead><tr><th>Token</th><th>Accepted characters</th><th>Transform</th></tr></thead>
+        <tbody>
+          <tr><td><code>9</code></td><td>digits <code>0-9</code></td><td>none</td></tr>
+          <tr><td><code>A</code></td><td>uppercase A-Z</td><td>toUpperCase</td></tr>
+          <tr><td><code>a</code></td><td>lowercase a-z</td><td>toLowerCase</td></tr>
+          <tr><td><code>X</code></td><td>alphanumeric <code>A-Za-z0-9</code></td><td>none</td></tr>
+          <tr><td><code>*</code> (custom)</td><td>user‑defined</td><td>custom transform</td></tr>
+        </tbody>
+      </table>
+      <p><strong>Example:</strong> uppercase letters only, max 4 chars: <code>{ token: 'A', max: 4 }</code> → "HELL" becomes "HELL".</p>
+    </div>
+
+    <!-- Dynamic masks -->
+    <div class="section">
+      <div class="section-title">🔄 Reactive & dynamic masks</div>
+      <p>Both directives re-evaluate the mask expression whenever the component data changes. This enables powerful conditional formatting.</p>
+      <pre><code>data() {
+  return {
+    inputCode: '',
+    maskType: '9',    // '9' or 'X' or 'A'
+    maxLen: 8
+  };
+},
+template: `
+  &lt;input x-model="inputCode" 
+         x-mask-free="{ token: maskType, max: maxLen }" /&gt;
+  &lt;select x-model="maskType"&gt;
+    &lt;option&gt;9&lt;/option&gt;&lt;option&gt;X&lt;/option&gt;&lt;option&gt;A&lt;/option&gt;
+  &lt;/select&gt;
+`</code></pre>
+      <p>Whenever <code>maskType</code> or <code>maxLen</code> updates, the plugin recompiles the mask and reapplies formatting automatically without losing caret context.</p>
+    </div>
+
+    <!-- Custom tokens & plugin options -->
+    <div class="section">
+      <div class="section-title">🧬 Custom tokens & plugin configuration</div>
+      <p>Pass a token map to <code>MiniX_Mask_Plugin(options)</code> to extend or override token behaviour. This works for both literal masks (<code>x-mask</code>) and free masks.</p>
+      <pre><code>MiniX_Mask_Plugin({
+  // define token 'Z' for hex characters (0-9, A-F) + uppercase transform
+  Z: {
+    test: ch => /[A-Fa-f0-9]/.test(ch),
+    transform: ch => ch.toUpperCase(),
+  },
+  // override token '9' to allow only even digits (example)
+  '9': {
+    test: ch => /[02468]/.test(ch),
+    transform: ch => ch,
+  }
+});</code></pre>
+      <p>You can also pass <strong>full engine options</strong>:</p>
+      <pre><code>MiniX_Mask_Plugin({
+  tokens: { HEX: { test: /[0-9A-F]/i, transform: v => v.toUpperCase() } },
+  engineOptions: { /* custom InputMaskEngine settings */ }
+});</code></pre>
+      <p><strong>Usage with literal mask:</strong> after registering token <code>Z</code>, pattern <code>"ZZZ-ZZ"</code> will only accept hexadecimal characters.</p>
+    </div>
+
+    <!-- How events & integration work -->
+    <div class="section">
+      <div class="section-title">⚙️ How it works (integration details)</div>
+      <p>The plugin installs two directives that attach to <code>&lt;input&gt;</code> or <code>&lt;textarea&gt;</code> elements. It intercepts <code>beforeinput</code>, <code>keydown</code>, <code>paste</code>, and composition events to apply formatting via <strong>InputMaskEngine</strong> methods: <code>apply()</code>, <code>paste()</code>, <code>backspace()</code>, <code>deleteForward()</code>. Changes are synced back to the MiniX model via <code>x-model</code> automatically.</p>
+      <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
+        <li>✅ Works seamlessly with <code>x-model</code> two‑way binding.</li>
+        <li>✅ IME composition support (Chinese, Japanese, etc.) — masks are applied after composition end.</li>
+        <li>✅ Maintains caret position after each edit.</li>
+        <li>✅ Performance: compiled masks are cached using stable serialization.</li>
+      </ul>
+      <div class="note">
+        🧪 <strong>Developer tip:</strong> Both directives respect <code>priority: 675</code>, ensuring they run before typical event handlers. You can safely combine with other MiniX directives.
+      </div>
+    </div>
+
+    <!-- Practical examples -->
+    <div class="section">
+      <div class="section-title">📝 Live examples (snippets)</div>
+      <div class="card-grid">
+        <div class="feature-card">
+          <strong>📞 US Phone</strong>
+          <pre style="margin: 8px 0 0 0; background:#eef2ff; color:#0c4a6e;"><code style="background:transparent;">&lt;input x-mask="(999) 999-9999"&gt;</code></pre>
+          <small>Literal digits mask with static separators.</small>
+        </div>
+        <div class="feature-card">
+          <strong>🔢 OTP (6 digits)</strong>
+          <pre style="margin: 8px 0 0 0; background:#eef2ff;"><code style="background:transparent;">x-mask-free="{ token:'9', max:6 }"</code></pre>
+          <small>Allows exactly 6 numeric characters.</small>
+        </div>
+        <div class="feature-card">
+          <strong>🎫 Promo code (hex, 8)</strong>
+          <pre style="margin: 8px 0 0 0; background:#eef2ff;"><code style="background:transparent;">x-mask-free="{ token:'Z', max:8 }"</code></pre>
+          <small>Uses custom token Z (hex + uppercase).</small>
+        </div>
+        <div class="feature-card">
+          <strong>🆔 Alphanumeric serial</strong>
+          <pre style="margin: 8px 0 0 0; background:#eef2ff;"><code style="background:transparent;">x-mask-free="{ token:'X', max:12 }"</code></pre>
+          <small>Letters & digits, max 12 chars.</small>
+        </div>
+      </div>
+    </div>
+
+    <!-- Full component example -->
+    <div class="section">
+      <div class="section-title">🧩 Complete component integration</div>
+      <pre><code>const { createApp } = MiniX;
+
+const App = {
+  data() {
+    return {
+      phone: '',
+      coupon: '',
+      dynamicToken: '9',
+      maxLen: 6
+    };
+  },
+  template: `
+    &lt;div&gt;
+      &lt;input x-model="phone" x-mask="(999) 999-9999" placeholder="Phone" /&gt;
+      &lt;input x-model="coupon" x-mask-free="{ token: dynamicToken, max: maxLen }" placeholder="Dynamic" /&gt;
+      &lt;select x-model="dynamicToken"&gt;
+        &lt;option&gt;9&lt;/option&gt;&lt;option&gt;A&lt;/option&gt;&lt;option&gt;X&lt;/option&gt;
+      &lt;/select&gt;
+    &lt;/div&gt;
+  `
+};
+
+createApp(App)
+  .use(MiniX_Mask_Plugin({ 
+    Z: { test: ch => /[A-F0-9]/i.test(ch), transform: v => v.toUpperCase() } 
+  }))
+  .mount('#app');</code></pre>
+    </div>
+
+    <!-- Plugin options reference -->
+    <div class="section">
+      <div class="section-title">📚 Plugin API reference</div>
+      <table>
+        <thead><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>engine</code></td><td>Constructor</td><td>Optional custom InputMaskEngine class (by default uses global <code>InputMaskEngine</code>).</td></tr>
+          <tr><td><code>tokens</code></td><td>Object</td><td>Custom token definitions merged into engine. Each key is a token character, value is <code>{ test: RegExp|function, transform?: function }</code>.</td></tr>
+          <tr><td><code>engineOptions</code></td><td>Object</td><td>Options passed when instantiating the engine (e.g., <code>placeholderChar</code>).</td></tr>
+        </tbody>
+      </table>
+      <p><strong>Shortcut:</strong> if you pass an object without <code>tokens</code>/<code>engine</code> keys, it is treated as a token map: <code>MiniX_Mask_Plugin({ Z: {...}, H: {...} })</code>.</p>
+      <pre><code>// Both forms are valid
+.use(MiniX_Mask_Plugin({ tokens: { HEX: {...} } }))
+.use(MiniX_Mask_Plugin({ HEX: {...} }))   // auto-detected</code></pre>
+    </div>
+
+    <!-- Troubleshooting / notes -->
+    <div class="section">
+      <div class="section-title">⚠️ Important notes</div>
+      <ul style="margin-left: 1.5rem;">
+        <li><strong>Dependency:</strong> <code>input-mask-engine.js</code> MUST be loaded before <code>plugin-mask.js</code>. The plugin looks for <code>window.InputMaskEngine</code>.</li>
+        <li><strong>Text inputs only:</strong> Directives are ignored on <code>type="checkbox"</code>, <code>radio</code>, <code>file</code>, etc.</li>
+        <li><strong>Model update:</strong> The formatted value is automatically written back to the component’s data (via <code>x-model</code> binding). No extra glue code needed.</li>
+        <li><strong>Mask compilation:</strong> Expressions are re-evaluated reactively, but intensive mask changes (e.g., every keystroke) are cached to avoid overhead.</li>
+        <li><strong>Custom token naming:</strong> Use single characters (except built‑in tokens) for literal mask patterns. Free masks work with any token string (single char recommended).</li>
+      </ul>
+      <div class="note">
+        🧹 <strong>Caret stability:</strong> The plugin uses <code>setSelectionRange</code> after each mask operation to preserve expected cursor position. Edge cases like rapid IME composition are fully handled.
+      </div>
+    </div>
+
+    <!-- Demo reference -->
+    <div class="section">
+      <div class="section-title">🎬 Interactive demo</div>
+      <p>Check the included <code>demo-mask.html</code> for a fully interactive playground. It showcases phone formatting, OTP field, reactive dynamic masks, and custom <code>Z</code> token for hexadecimal input.</p>
+      <p>You can also open browser devtools to inspect reactive updates — mask expressions log their recompilation only when necessary.</p>
+    </div>
+
+    <hr />
+
+    <div class="footer">
+      MiniX Mask Plugin · Built on InputMaskEngine · Perfectly paired with MiniX reactive core<br>
+      © MIT license — free for production and open source.
+    </div>
+  </div>
+</div>
+</body>
+</html>

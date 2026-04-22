@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>InputMaskEngine Documentation</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 32px auto; max-width: 980px; padding: 0 18px; line-height: 1.6; }
+    h1, h2, h3 { line-height: 1.25; }
+    pre, code { background: #fafafa; border: 1px solid #ececec; border-radius: 8px; }
+    pre { padding: 14px; overflow: auto; }
+    code { padding: 2px 6px; }
+    table { width: 100%; border-collapse: collapse; margin: 14px 0 24px; }
+    th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+    .note { padding: 12px 14px; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 10px; }
+  </style>
+</head>
+<body>
+  <h1>InputMaskEngine Documentation</h1>
+  <p>Pure JavaScript engine for two input styles:</p>
+  <ul>
+    <li><strong>Fixed masks</strong> like <code>AAAA-9999-AA</code> or <code>(999) 999-9999</code></li>
+    <li><strong>Free constrained fields</strong> like “letters and spaces only, max 40”</li>
+  </ul>
+
+  <div class="note">
+    The engine is pure. It does not register listeners, mutate DOM on its own, or depend on any framework. Your UI layer decides when to call it.
+  </div>
+
+  <h2>Constructor</h2>
+  <pre><code>const engine = new InputMaskEngine({
+  tokens: {
+    H: {
+      test: ch => /^[A-Fa-f0-9]$/.test(ch),
+      transform: ch => ch.toUpperCase(),
+    },
+    S: {
+      test: ch => /^[A-Za-z ]$/.test(ch),
+      transform: ch => ch,
+    }
+  }
+});</code></pre>
+
+  <h2>Built-in tokens</h2>
+  <table>
+    <thead>
+      <tr><th>Token</th><th>Meaning</th><th>Transform</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>A</code></td><td>Alphabetic letter</td><td>Uppercase</td></tr>
+      <tr><td><code>a</code></td><td>Alphabetic letter</td><td>Lowercase</td></tr>
+      <tr><td><code>9</code></td><td>Digit</td><td>None</td></tr>
+      <tr><td><code>X</code></td><td>Alphanumeric</td><td>None</td></tr>
+      <tr><td><code>*</code></td><td>Any single character</td><td>None</td></tr>
+    </tbody>
+  </table>
+
+  <h2>compile(mask)</h2>
+  <p>Compiles either a fixed mask string or a free-field config object.</p>
+
+  <h3>Fixed mask example</h3>
+  <pre><code>const compiled = engine.compile('AAAA-9999-AA');</code></pre>
+
+  <h3>Free rule example</h3>
+  <pre><code>const compiled = engine.compile({
+  type: 'free',
+  token: 'S',
+  max: 40
+});</code></pre>
+
+  <h2>Core API</h2>
+  <table>
+    <thead>
+      <tr><th>Method</th><th>Purpose</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>engine.apply(...)</code></td><td>Strict single edit. Rejects if the whole input cannot be accepted.</td></tr>
+      <tr><td><code>engine.paste(...)</code></td><td>Loose insert. Accepts valid characters and skips invalid ones.</td></tr>
+      <tr><td><code>engine.backspace(...)</code></td><td>Delete backward.</td></tr>
+      <tr><td><code>engine.deleteForward(...)</code></td><td>Delete forward.</td></tr>
+      <tr><td><code>engine.accepts(...)</code></td><td>Checks whether <code>apply()</code> would be accepted.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Payload shape</h2>
+  <pre><code>{
+  value: 'AB12',
+  selectionStart: 4,
+  selectionEnd: 4,
+  input: '3',
+  mask: compiledMaskOrFreeConfig
+}</code></pre>
+
+  <h2>Return shape</h2>
+  <pre><code>{
+  ok: true,
+  value: 'AB12-3',
+  selectionStart: 6,
+  selectionEnd: 6
+}</code></pre>
+
+  <p>On rejection:</p>
+  <pre><code>{
+  ok: false,
+  value: 'AB12',
+  selectionStart: 4,
+  selectionEnd: 4,
+  reason: 'Character "x" is not allowed here'
+}</code></pre>
+
+  <h2>Examples</h2>
+
+  <h3>1) Fixed mask</h3>
+  <pre><code>const mask = engine.compile('(999) 999-9999');
+
+let state = { value: '', selectionStart: 0, selectionEnd: 0 };
+state = engine.apply({ ...state, input: '9', mask });
+state = engine.apply({ ...state, input: '8', mask });
+state = engine.apply({ ...state, input: '7', mask });
+
+console.log(state.value);
+// (987) </code></pre>
+
+  <h3>2) Letters and spaces only, max 40</h3>
+  <pre><code>const nameField = engine.compile({
+  type: 'free',
+  token: 'S',
+  max: 40
+});
+
+const result = engine.apply({
+  value: 'Ankit',
+  selectionStart: 5,
+  selectionEnd: 5,
+  input: ' Karan',
+  mask: nameField
+});
+
+console.log(result.value);
+// Ankit Karan</code></pre>
+
+  <h3>3) Paste while skipping junk</h3>
+  <pre><code>const nameField = engine.compile({ type: 'free', token: 'S', max: 40 });
+
+const result = engine.paste({
+  value: '',
+  selectionStart: 0,
+  selectionEnd: 0,
+  input: 'Ankit Karan 123 !!',
+  mask: nameField
+});
+
+console.log(result.value);
+// Ankit Karan </code></pre>
+
+  <h2>Escaping literals</h2>
+  <p>Use <code>\</code> to escape a token symbol and treat it as a literal.</p>
+  <pre><code>const literalA = engine.compile('AA\\A-99');
+// third A is literal, not a token</code></pre>
+
+  <h2>Notes</h2>
+  <ul>
+    <li>Free fields are ideal for rules like “A-Z, a-z and space in any order, max 40”.</li>
+    <li>Fixed masks are ideal for rigid patterns like phone numbers and codes.</li>
+    <li><code>apply()</code> is strict. <code>paste()</code> is forgiving.</li>
+    <li>This version does not implement optional tokens like <code>A?</code> or repeat syntax like <code>{4,6}</code>.</li>
+  </ul>
+
+  <h2>Files</h2>
+  <ul>
+    <li><code>input-mask-engine.js</code> — engine/plugin</li>
+    <li><code>input-mask-engine-demo.html</code> — interactive demo</li>
+    <li><code>input-mask-engine-docs.html</code> — this documentation</li>
+  </ul>
+</body>
+</html>

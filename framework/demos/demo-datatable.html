@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MiniX DataTable Plugin Demo</title>
+
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css" />
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 24px;
+      background: #f8f9fa;
+      color: #222;
+    }
+
+    .wrap {
+      max-width: 1100px;
+      margin: 0 auto;
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 4px 18px rgba(0,0,0,0.05);
+    }
+
+    h1 {
+      margin-top: 0;
+      font-size: 26px;
+    }
+
+    .muted {
+      color: #666;
+      margin-bottom: 18px;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .toolbar button {
+      border: 1px solid #ccc;
+      background: #fff;
+      padding: 8px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    .toolbar button:hover {
+      background: #f3f3f3;
+    }
+
+    .btn-group {
+      display: inline-flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .btn {
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      padding: 5px 10px;
+      background: #fff;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    .btn:hover {
+      background: #f7f7f7;
+    }
+
+    .badge {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 12px;
+      line-height: 1.2;
+      border: 1px solid transparent;
+    }
+
+    .badge.active {
+      background: #e7f8ee;
+      color: #0b7a39;
+      border-color: #b7e6c8;
+    }
+
+    .badge.inactive {
+      background: #f4f4f4;
+      color: #666;
+      border-color: #ddd;
+    }
+
+    .log-box {
+      margin-top: 18px;
+      border: 1px solid #ddd;
+      background: #0f172a;
+      color: #dbeafe;
+      border-radius: 10px;
+      padding: 12px;
+      font-family: Consolas, monospace;
+      font-size: 12px;
+      max-height: 250px;
+      overflow: auto;
+      white-space: pre-wrap;
+    }
+
+    table.dataTable tbody td {
+      vertical-align: middle;
+    }
+
+    .hint {
+      margin-top: 12px;
+      font-size: 13px;
+      color: #444;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap" id="app">
+    <h1>MiniX + DataTables Plugin Demo</h1>
+    <div class="muted">
+      This demo assumes MiniX core and the MiniX DataTable plugin are loaded externally before the demo script runs.
+    </div>
+
+    <div class="toolbar">
+      <button id="shuffleRows">Shuffle rows + redraw</button>
+      <button id="toggleStatus">Toggle first row status + redraw</button>
+      <button id="reloadData">Replace dataset + redraw</button>
+      <button id="detachBridge">Detach bridge</button>
+      <button id="attachBridge">Attach bridge</button>
+      <button id="refreshBridge">Refresh bridge</button>
+      <button id="clearLog">Clear log</button>
+    </div>
+
+    <table id="usersTable" x-ignore class="display" style="width:100%">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <div class="hint">
+      Try searching, sorting, paging, or using the toolbar buttons. The log below helps confirm that MiniX cell components mount and unmount correctly across DataTables redraws.
+    </div>
+
+    <div class="log-box" id="logBox"></div>
+  </div>
+
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+
+  <script src="../mini-x.js"></script>
+  <script src="../plugin-datatable.js"></script>
+
+  <script>
+    (function () {
+      function log(message) {
+        const box = document.getElementById('logBox');
+        const time = new Date().toLocaleTimeString();
+        box.textContent = '[' + time + '] ' + message + '\n' + box.textContent;
+      }
+
+      function makeUsers(count, offset) {
+        offset = offset || 0;
+        const names = ['Ankit', 'Kavita', 'Ojaswini', 'Ravi', 'Neha', 'Aman', 'Priya', 'Rohit', 'Pooja', 'Vikas'];
+
+        return Array.from({ length: count }, function (_, i) {
+          const id = offset + i + 1;
+          const name = names[i % names.length] + ' ' + id;
+          return {
+            id: id,
+            name: name,
+            email: 'user' + id + '@example.com',
+            status: id % 2 === 0 ? 'active' : 'inactive'
+          };
+        });
+      }
+
+      function shuffle(array) {
+        const clone = array.slice();
+        for (let i = clone.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          const tmp = clone[i];
+          clone[i] = clone[j];
+          clone[j] = tmp;
+        }
+        return clone;
+      }
+
+      if (!window.MiniX) {
+        throw new Error('mini-x.js is not loaded.');
+      }
+
+      if (!window.MiniXDataTablePlugin) {
+        throw new Error('plugin-datatable.js is not loaded.');
+      }
+
+      class App {}
+
+      const app = MiniX.createApp(App);
+      app.use(MiniXDataTablePlugin);
+      app.mount('#app');
+
+      if (typeof app.$dtCell !== 'function') {
+        throw new Error('DataTable plugin did not register app.$dtCell');
+      }
+
+      if (!app.$dataTable) {
+        throw new Error('DataTable plugin did not register app.$dataTable');
+      }
+
+      class StatusBadge {
+        data(props) {
+          return {
+            row: props.row,
+            badgeClass: props.row && props.row.status === 'active' ? 'active' : 'inactive'
+          };
+        }
+
+        created() {
+          log('created StatusBadge row=' + this.row.id);
+        }
+
+        mounted() {
+          log('mounted StatusBadge row=' + this.row.id);
+        }
+
+        beforeUnmount() {
+          log('beforeUnmount StatusBadge row=' + this.row.id);
+        }
+
+        unmounted() {
+          log('unmounted StatusBadge row=' + this.row.id);
+        }
+
+        template = '<span class="badge {{ badgeClass }}" x-text="row.status"></span>';
+      }
+
+      class RowActions {
+        data(props) {
+          return {
+            row: props.row
+          };
+        }
+
+        methods = {
+          edit() {
+            log('edit clicked row=' + this.row.id);
+            alert('Edit row #' + this.row.id + ' (' + this.row.name + ')');
+          },
+          remove() {
+            log('delete clicked row=' + this.row.id);
+            alert('Delete row #' + this.row.id + ' (' + this.row.name + ')');
+          }
+        };
+
+        created() {
+          log('created RowActions row=' + this.row.id);
+        }
+
+        mounted() {
+          log('mounted RowActions row=' + this.row.id);
+        }
+
+        beforeUnmount() {
+          log('beforeUnmount RowActions row=' + this.row.id);
+        }
+
+        unmounted() {
+          log('unmounted RowActions row=' + this.row.id);
+        }
+
+        template = '<div class="btn-group"><button class="btn" x-on:click="edit">Edit</button><button class="btn" x-on:click="remove">Delete</button></div>';
+      }
+
+      let users = makeUsers(24);
+
+      const bridgeOptions = {
+        debug: false,
+        onMounted(instance, ctx) {
+          if (ctx && ctx.rowData) {
+            log('bridge mounted row=' + ctx.rowData.id);
+          }
+        },
+        onBeforeUnmount(instance, ctx) {
+          if (ctx && ctx.rowData) {
+            log('bridge unmount row=' + ctx.rowData.id);
+          }
+        }
+      };
+
+      const dt = $('#usersTable').DataTable({
+        data: users,
+        pageLength: 5,
+        columns: [
+          { data: 'id' },
+          { data: 'name' },
+          { data: 'email' },
+          {
+            data: 'status',
+            orderable: true,
+            searchable: true,
+            render: app.$dtCell(StatusBadge, {
+              className: 'd-inline-block',
+              props(rowData) {
+                return { row: rowData };
+              }
+            })
+          },
+          {
+            data: null,
+            orderable: false,
+            searchable: false,
+            render: app.$dtCell(RowActions, {
+              className: 'd-inline-block',
+              props(rowData) {
+                return { row: rowData };
+              }
+            })
+          }
+        ]
+      });
+
+      app.$dataTable.attach(dt, bridgeOptions);
+
+      document.getElementById('shuffleRows').addEventListener('click', function () {
+        users = shuffle(users);
+        dt.clear().rows.add(users).draw(false);
+        log('dataset shuffled and redrawn');
+      });
+
+      document.getElementById('toggleStatus').addEventListener('click', function () {
+        if (!users.length) return;
+        users[0].status = users[0].status === 'active' ? 'inactive' : 'active';
+        dt.clear().rows.add(users).draw(false);
+        log('first row status toggled to ' + users[0].status);
+      });
+
+      document.getElementById('reloadData').addEventListener('click', function () {
+        users = makeUsers(18, Math.floor(Math.random() * 100));
+        dt.clear().rows.add(users).draw(true);
+        log('dataset replaced and fully redrawn');
+      });
+
+      document.getElementById('detachBridge').addEventListener('click', function () {
+        app.$dataTable.detach(dt);
+        log('bridge detached');
+      });
+
+      document.getElementById('attachBridge').addEventListener('click', function () {
+        app.$dataTable.attach(dt, bridgeOptions);
+        log('bridge attached');
+      });
+
+      document.getElementById('refreshBridge').addEventListener('click', function () {
+        app.$dataTable.refresh(dt);
+        log('bridge refreshed manually');
+      });
+
+      document.getElementById('clearLog').addEventListener('click', function () {
+        document.getElementById('logBox').textContent = '';
+      });
+
+      log('demo booted');
+    })();
+  </script>
+</body>
+</html>

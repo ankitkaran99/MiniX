@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MiniX Validate + Ajax Demo</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #0f1115;
+      color: #e8eaed;
+    }
+    .wrap {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 32px 20px 60px;
+    }
+    h1 {
+      margin: 0 0 10px;
+      font-size: 30px;
+    }
+    p.sub {
+      margin: 0 0 28px;
+      color: #98a2b3;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+    .card {
+      background: #171a21;
+      border: 1px solid #2a2f3a;
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .card h2 {
+      margin: 0 0 8px;
+      font-size: 18px;
+    }
+    .hint {
+      margin: 0 0 18px;
+      font-size: 13px;
+      color: #98a2b3;
+      line-height: 1.5;
+    }
+    .field {
+      margin-bottom: 14px;
+    }
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 12px;
+      color: #b7c0cc;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+    input, textarea, select {
+      width: 100%;
+      padding: 11px 12px;
+      border-radius: 8px;
+      border: 1px solid #313744;
+      background: #0f1115;
+      color: #e8eaed;
+      outline: none;
+    }
+    textarea { min-height: 96px; resize: vertical; }
+    input:focus, textarea:focus, select:focus {
+      border-color: #91f25c;
+      box-shadow: 0 0 0 3px rgba(145,242,92,.12);
+    }
+    .err {
+      margin-top: 6px;
+      font-size: 12px;
+      color: #ff6b6b;
+      min-height: 16px;
+    }
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    button {
+      background: #91f25c;
+      color: #111;
+      border: 0;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button[disabled] {
+      opacity: .6;
+      cursor: not-allowed;
+    }
+    .log {
+      grid-column: span 2;
+      background: #171a21;
+      border: 1px solid #2a2f3a;
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .log-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: 320px;
+      overflow: auto;
+    }
+    .entry {
+      background: #0f1115;
+      border: 1px solid #2a2f3a;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 13px;
+    }
+    .entry .time {
+      color: #98a2b3;
+      float: right;
+      margin-left: 8px;
+      font-size: 11px;
+    }
+    .entry.event { border-left: 3px solid #91f25c; }
+    .entry.error { border-left: 3px solid #ff6b6b; }
+    .entry.success { border-left: 3px solid #55c2ff; }
+    .server-error {
+      margin-bottom: 12px;
+      padding: 10px 12px;
+      background: rgba(255,107,107,.08);
+      border: 1px solid rgba(255,107,107,.28);
+      border-radius: 8px;
+      color: #ff8e8e;
+    }
+    @media (max-width: 820px) {
+      .grid { grid-template-columns: 1fr; }
+      .log { grid-column: span 1; }
+      .row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>MiniX Validate + Ajax Demo</h1>
+    <p class="sub">Fresh demo with plugin-managed error nodes. No scope voodoo, no stale template ghosts.</p>
+
+    <div class="grid">
+      <div class="card" id="app-login">
+        <h2>Login</h2>
+        <p class="hint">Try invalid input first. Valid login is <b>admin@demo.com</b> and <b>password123</b>.</p>
+
+        <form
+          action="/api/login"
+          method="POST"
+          x-validate
+          x-validate-on="blur|input"
+          x-ajax="{ onSuccess: 'onSuccess', onFailure: 'onFailure', onLoader: 'setLoading' }"
+        >
+          <div x-if="serverError" class="server-error" x-text="serverError"></div>
+
+          <div class="field">
+            <label>Email</label>
+            <input type="text" name="email" placeholder="admin@demo.com" />
+            <div class="err" x-show="$errors.email" x-text="$errors.email || ''"></div>
+          </div>
+
+          <div class="field">
+            <label>Password</label>
+            <input type="password" name="password" placeholder="password123" />
+            <div class="err" x-show="$errors.password" x-text="$errors.password || ''"></div>
+          </div>
+
+          <button type="submit" :disabled="loading" x-text="loading ? 'Signing In…' : 'Sign In'"></button>
+        </form>
+      </div>
+
+      <div class="card" id="app-contact">
+        <h2>Contact</h2>
+        <p class="hint">This one always succeeds when valid. Good for checking blur/input behavior and textarea rules.</p>
+
+        <form
+          action="/api/contact"
+          method="POST"
+          x-validate
+          x-validate-on="blur|input"
+          x-ajax="{ onSuccess: 'onSuccess', onFailure: 'onFailure', onLoader: 'setLoading' }"
+        >
+          <div class="row">
+            <div class="field">
+              <label>Name</label>
+              <input type="text" name="name" placeholder="Jane Smith" />
+              <div class="err" x-show="$errors.name" x-text="$errors.name || ''"></div>
+            </div>
+            <div class="field">
+              <label>Phone</label>
+              <input type="text" name="phone" placeholder="+911234567890" />
+              <div class="err" x-show="$errors.phone" x-text="$errors.phone || ''"></div>
+            </div>
+          </div>
+
+          <div class="field">
+            <label>Subject</label>
+            <select name="subject">
+              <option value="">-- choose --</option>
+              <option value="support">Support</option>
+              <option value="billing">Billing</option>
+              <option value="other">Other</option>
+            </select>
+            <div class="err" x-show="$errors.subject" x-text="$errors.subject || ''"></div>
+          </div>
+
+          <div class="field">
+            <label>Message</label>
+            <textarea name="message" placeholder="Write at least 20 characters"></textarea>
+            <div class="err" x-show="$errors.message" x-text="$errors.message || ''"></div>
+          </div>
+
+          <button type="submit" :disabled="loading" x-text="loading ? 'Sending…' : 'Send Message'"></button>
+        </form>
+      </div>
+
+      <div class="log">
+        <h2 style="margin-top:0">Event Log</h2>
+        <p class="hint">If invalid submit is blocked, you should see loader activity without fetch only when valid. That is the whole game.</p>
+        <div class="log-list" id="log-list">
+          <div class="entry event">No events yet. Poke the forms.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="../mini-x.js"></script>
+  <script src="../../Inspect/Inspect.js"></script>
+  <script src="../plugin-form.js"></script>
+
+  <script>
+    function now() {
+      const d = new Date();
+      return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}.${String(d.getMilliseconds()).padStart(3,'0')}`;
+    }
+
+    function addLog(type, message, detail = '') {
+      const list = document.getElementById('log-list');
+      const empty = list.querySelector('.entry');
+      if (empty && list.children.length === 1 && empty.textContent.includes('No events yet')) {
+        list.innerHTML = '';
+      }
+
+      const el = document.createElement('div');
+      el.className = `entry ${type}`;
+      el.innerHTML = `<span class="time">${now()}</span><div>${message}</div>${detail ? `<div style="margin-top:6px;color:#98a2b3">${detail}</div>` : ''}`;
+      list.prepend(el);
+    }
+
+    const realFetch = window.fetch.bind(window);
+    window.fetch = async function(url, opts = {}) {
+      await new Promise(r => setTimeout(r, 450));
+
+      const body = opts.body instanceof FormData
+        ? Object.fromEntries(opts.body.entries())
+        : {};
+
+      addLog('event', `${opts.method || 'GET'} ${url}`, JSON.stringify(body));
+
+      if (url === '/api/login') {
+        if (body.email === 'admin@demo.com' && body.password === 'password123') {
+          return new Response(JSON.stringify({ ok: true, message: 'Welcome back, Admin!' }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        return new Response(JSON.stringify({ ok: false, message: 'Invalid email or password.' }), {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      return new Response(JSON.stringify({ ok: true, message: 'Message sent successfully.' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    };
+
+    class LoginApp {
+      data() {
+        return { loading: false, serverError: null };
+      }
+
+      rules() {
+        return [
+          { field: 'email', rules: { required: true, email: true }, pretty: 'Email' },
+          { field: 'password', rules: { required: true, minlen: 8 }, pretty: 'Password' },
+        ];
+      }
+
+      setLoading(active) {
+        this.loading = active;
+        if (active) this.serverError = null;
+        addLog('event', `Login loader → ${active}`);
+      }
+
+      onSuccess(data) {
+        addLog('success', data.message);
+      }
+
+      onFailure(data, form, response) {
+        const msg = data?.message || data?.data?.message || 'Request failed.';
+        this.serverError = msg;
+        addLog('error', msg, `status ${response?.status || 'n/a'}`);
+      }
+    }
+
+    class ContactApp {
+      data() {
+        return { loading: false };
+      }
+
+      rules() {
+        return [
+          { field: 'name', rules: { required: true, minlen: 2 }, pretty: 'Name' },
+          { field: 'phone', rules: { required: true, phone: true }, pretty: 'Phone' },
+          { field: 'subject', rules: { required: true }, pretty: 'Subject' },
+          { field: 'message', rules: { required: true, minlen: 20 }, pretty: 'Message' },
+        ];
+      }
+
+      setLoading(active) {
+        this.loading = active;
+        addLog('event', `Contact loader → ${active}`);
+      }
+
+      onSuccess(data) {
+        addLog('success', data.message);
+      }
+
+      onFailure(data, form, response) {
+        const msg = data?.message || data?.data?.message || 'Request failed.';
+        addLog('error', msg, `status ${response?.status || 'n/a'}`);
+      }
+    }
+
+    MiniX.createApp(LoginApp)
+      .use(MiniXValidatePlugin)
+      .use(MiniXAjaxPlugin)
+      .mount('#app-login');
+
+    MiniX.createApp(ContactApp)
+      .use(MiniXValidatePlugin)
+      .use(MiniXAjaxPlugin)
+      .mount('#app-contact');
+  </script>
+</body>
+</html>

@@ -1,0 +1,1112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mini-X Router Advanced Demo</title>
+  <style>
+    /* (same as original – no changes) */
+    :root {
+      --bg: #0b1020;
+      --bg2: #111934;
+      --panel: rgba(20, 28, 52, 0.92);
+      --panel2: rgba(31, 41, 73, 0.92);
+      --text: #edf2ff;
+      --muted: #9fb0d8;
+      --line: #2a3767;
+      --accent: #7aa2ff;
+      --accent2: #9b8cff;
+      --ok: #22c55e;
+      --warn: #f59e0b;
+      --danger: #ef4444;
+      --shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
+      --radius: 18px;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: linear-gradient(180deg, var(--bg) 0%, var(--bg2) 100%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    a { color: inherit; text-decoration: none; }
+    button, input, select { font: inherit; }
+    .app-shell {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px;
+      display: grid;
+      gap: 16px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+    }
+    .topbar {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 18px;
+      flex-wrap: wrap;
+    }
+    .brand {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    .brand-badge {
+      width: 42px;
+      height: 42px;
+      border-radius: 14px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: white;
+      font-weight: 700;
+      box-shadow: var(--shadow);
+    }
+    .brand-copy small,
+    .muted {
+      color: var(--muted);
+    }
+    .top-actions {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .pill,
+    .btn,
+    .nav a {
+      border-radius: 12px;
+      border: 1px solid transparent;
+      transition: 160ms ease;
+    }
+    .pill {
+      padding: 6px 10px;
+      background: rgba(255,255,255,0.06);
+      color: var(--muted);
+      border-color: var(--line);
+      font-size: 12px;
+    }
+    .btn {
+      background: var(--panel2);
+      color: var(--text);
+      border-color: var(--line);
+      padding: 10px 14px;
+      cursor: pointer;
+    }
+    .btn:hover,
+    .nav a:hover {
+      transform: translateY(-1px);
+      border-color: rgba(122, 162, 255, 0.35);
+    }
+    .btn.ok { background: rgba(34, 197, 94, 0.16); border-color: rgba(34, 197, 94, 0.35); }
+    .btn.warn { background: rgba(245, 158, 11, 0.14); border-color: rgba(245, 158, 11, 0.35); }
+    .btn.danger { background: rgba(239, 68, 68, 0.12); border-color: rgba(239, 68, 68, 0.35); }
+    .nav-wrap {
+      display: grid;
+      gap: 14px;
+      padding: 14px 18px;
+    }
+    .nav {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .nav a {
+      padding: 10px 14px;
+      color: var(--muted);
+      background: transparent;
+      border-color: transparent;
+    }
+    .nav a.active {
+      color: white;
+      background: rgba(122, 162, 255, 0.18);
+      border-color: rgba(122, 162, 255, 0.35);
+    }
+    .breadcrumbs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .breadcrumbs strong {
+      color: var(--text);
+    }
+    .main-grid {
+      display: grid;
+      grid-template-columns: 280px 1fr 360px;
+      gap: 16px;
+    }
+    .sidebar,
+    .content,
+    .debug {
+      min-height: 500px;
+      padding: 16px;
+    }
+    .section-title {
+      margin: 0 0 14px;
+      font-size: 18px;
+    }
+    .stack { display: grid; gap: 12px; }
+    .mini-stack { display: grid; gap: 8px; }
+    .panel {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px;
+    }
+    .panel h4,
+    .panel h3,
+    .panel h2,
+    .panel p { margin-top: 0; }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .stat {
+      padding: 14px;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--line);
+    }
+    .stat .value {
+      font-size: 24px;
+      font-weight: 700;
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .log {
+      background: #0a0f1d;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+      max-height: 420px;
+      overflow: auto;
+    }
+    .list { display: grid; gap: 10px; }
+    .list-item {
+      padding: 12px;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--line);
+    }
+    .tag-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .tag {
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.06);
+      color: var(--muted);
+      border: 1px solid var(--line);
+      font-size: 12px;
+    }
+    .route-enter {
+      opacity: 0;
+      transform: translateY(8px) scale(.995);
+    }
+    .route-leave {
+      opacity: 0;
+      transform: translateY(-8px) scale(.995);
+      transition: all 180ms ease;
+    }
+    .code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      background: rgba(255,255,255,0.06);
+      padding: 2px 6px;
+      border-radius: 8px;
+    }
+    .footer-note {
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+      padding-bottom: 10px;
+    }
+    @media (max-width: 1180px) {
+      .main-grid {
+        grid-template-columns: 260px 1fr;
+      }
+      .debug {
+        grid-column: 1 / -1;
+      }
+    }
+    @media (max-width: 860px) {
+      .main-grid,
+      .stats,
+      .grid-2 {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <script src="../mini-x.js"></script>
+  <script src="../plugin-router.js"></script>
+
+  <script>
+    // --- 1. Make demoState a reactive MiniX_State instance ---
+    window.demoState = new MiniX_State({
+      isLoggedIn: false,
+      role: "guest",
+      debugLines: [],
+      homeCounter: 1
+    });
+
+    // Helper to push debug lines (reactive)
+    function pushDebugLine(line) {
+      const ts = new Date().toLocaleTimeString();
+      const lines = window.demoState.get('debugLines');
+      lines.unshift("[" + ts + "] " + line);
+      // Keep last 40 entries
+      window.demoState.set('debugLines', lines.slice(0, 40));
+    }
+
+    const fakeUsers = [
+      { id: 1, name: "Ava Stone", role: "admin", plan: "Enterprise" },
+      { id: 2, name: "Liam Fox", role: "editor", plan: "Pro" },
+      { id: 3, name: "Noah Vale", role: "viewer", plan: "Starter" },
+      { id: 4, name: "Mia Ray", role: "editor", plan: "Pro" }
+    ];
+
+    function getUserById(id) {
+      return fakeUsers.find((u) => String(u.id) === String(id)) || null;
+    }
+
+    function currentHistory() {
+      return location.protocol === "file:"
+        ? MiniXRouter.createWebHashHistory("/")
+        : MiniXRouter.createWebHistory("/");
+    }
+
+    // --- 2. AppShell with methods that use reactive state ---
+    class AppShell {
+      methods = {
+        loginAsEditor() {
+          window.demoState.set('isLoggedIn', true);
+          window.demoState.set('role', 'editor');
+        },
+        loginAsAdmin() {
+          window.demoState.set('isLoggedIn', true);
+          window.demoState.set('role', 'admin');
+        },
+        logout() {
+          window.demoState.set('isLoggedIn', false);
+          window.demoState.set('role', 'guest');
+          this.$router.push({ name: "home" });
+        }
+      };
+
+      template() {
+        return `
+          <div class="app-shell">
+            <header class="card topbar">
+              <div class="brand">
+                <div class="brand-badge">MX</div>
+                <div class="brand-copy">
+                  <div><strong>Mini-X Router</strong> Advanced Demo</div>
+                  <small>Nested layouts, guards, lazy pages, keep-alive, named views, and fewer mysterious explosions.</small>
+                </div>
+              </div>
+
+              <div class="top-actions">
+                <span class="pill">Auth: {{ demoState.isLoggedIn ? 'yes' : 'no' }}</span>
+                <span class="pill">Role: {{ demoState.role }}</span>
+
+                <button class="btn ok" @click="loginAsEditor" style="{{ demoState.isLoggedIn ? 'display:none' : '' }}">Login as Editor</button>
+                <button class="btn warn" @click="loginAsAdmin" style="{{ demoState.isLoggedIn ? 'display:none' : '' }}">Login as Admin</button>
+                <button class="btn danger" @click="logout" style="{{ demoState.isLoggedIn ? '' : 'display:none' }}">Logout</button>
+              </div>
+            </header>
+
+            <section class="card nav-wrap">
+              <nav class="nav">
+                <a x-route="home" x-active="active">Home</a>
+                <a x-route="analytics" x-active="active">Analytics</a>
+                <a x-route="workspace" x-active="active" x-active-mode="startsWith">Workspace</a>
+                <a x-route="reports" x-active="active">Lazy Reports</a>
+                <a x-route="settingsProfile" x-active="active" x-active-mode="startsWith">Settings</a>
+                <a x-route="adminOverview" x-active="active" x-active-mode="startsWith">Admin</a>
+                <a x-route="{ name: 'userDetails', params: { id: 2 }, query: { tab: 'profile' }, hash: 'usage' }" x-active="active" x-active-mode="startsWith">User 2</a>
+                <a x-route="notFound" x-active="active">404</a>
+              </nav>
+
+              <div class="breadcrumbs">
+                <span>Route:</span>
+                <strong>{{ route.fullPath }}</strong>
+                <span>•</span>
+                <span>Name:</span>
+                <strong>{{ route.name || 'null' }}</strong>
+                <span>•</span>
+                <span>Title:</span>
+                <strong>{{ (route.meta && route.meta.title && typeof route.meta.title !== 'function') ? route.meta.title : 'dynamic/none' }}</strong>
+              </div>
+            </section>
+
+            <section class="main-grid">
+              <aside class="card sidebar">
+                <div x-router-view="sidebar"></div>
+              </aside>
+
+              <main class="card content">
+                <div x-router-view></div>
+              </main>
+
+              <aside class="card debug">
+                <div x-component="'DebugPanel'"></div>
+              </aside>
+            </section>
+
+            <div class="footer-note">
+              Local file mode uses hash history automatically, because browsers get grumpy when asked to SPA straight from disk.
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    // --- GlobalSidebar (uses demoState) ---
+    class GlobalSidebar {
+      template() {
+        return `
+          <div class="stack">
+            <h3 class="section-title">Quick Routes</h3>
+
+            <div class="mini-stack">
+              <a class="panel" x-route="home">Home dashboard</a>
+              <a class="panel" x-route="analytics">Analytics board</a>
+              <a class="panel" x-route="workspace">Workspace</a>
+              <a class="panel" x-route="{ name: 'userDetails', params: { id: 1 }, query: { tab: 'billing' }, hash: 'usage' }">User #1 billing</a>
+            </div>
+
+            <div class="panel">
+              <h4>Guard Notes</h4>
+              <p class="muted">Workspace requires login. Admin requires <span class="code">admin</span>. Reports is lazy-loaded.</p>
+            </div>
+
+            <div class="panel">
+              <h4>Current Params</h4>
+              <div class="tag-row">
+                <span class="tag">{{ Object.keys(params || {}).length ? JSON.stringify(params) : 'none' }}</span>
+              </div>
+            </div>
+
+            <div class="panel">
+              <h4>Current Query</h4>
+              <div class="tag-row">
+                <span class="tag">{{ Object.keys(query || {}).length ? JSON.stringify(query) : 'none' }}</span>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    // --- HomePage with reactive counter via demoState ---
+    class HomePage {
+     data(){
+      return {
+        counter:1
+      };
+     }
+      methods = {
+        bump() {
+          // Use reactive state update
+          this.counter++;
+          window.demoState.set('homeCounter', window.demoState.get('homeCounter') + 1);
+        }
+      };
+
+      template() {
+        return `
+          <div class="stack">
+            <div class="panel">
+              <h2>Home</h2>
+              <p class="muted">This page is keep-alive cached. Navigate away and return — the counter should survive.</p>
+              <button class="btn ok" @click="bump">Visits counter: {{ counter }} / {{ demoState.homeCounter }}</button>
+            </div>
+
+            <div class="stats">
+              <div class="stat">
+                <div class="muted">Nested layouts</div>
+                <div class="value">✓</div>
+              </div>
+              <div class="stat">
+                <div class="muted">Named views</div>
+                <div class="value">✓</div>
+              </div>
+              <div class="stat">
+                <div class="muted">Keep-alive</div>
+                <div class="value">✓</div>
+              </div>
+            </div>
+
+            <div class="grid-2">
+              <div class="panel">
+                <h3>Try these routes</h3>
+                <div class="list">
+                  <a class="list-item" x-route="workspace">Protected workspace</a>
+                  <a class="list-item" x-route="{ name: 'settingsTeam', query: { tab: 'members' } }">Settings → Team</a>
+                  <a class="list-item" x-route="{ name: 'adminUsers' }">Admin → Users</a>
+                </div>
+              </div>
+
+              <div class="panel">
+                <h3>Meta + title demo</h3>
+                <p class="muted">The document title comes from route <span class="code">meta.title</span>, including dynamic functions.</p>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    // --- AnalyticsPage (unchanged, but uses demoState indirectly via demoState.raw if needed) ---
+    class AnalyticsPage {
+      template() {
+        return `
+          <div class="stack">
+            <div class="panel">
+              <h2>Analytics</h2>
+              <p class="muted">Named views, query params, and route metadata in one tidy place.</p>
+            </div>
+
+            <div class="stats">
+              <div class="stat">
+                <div class="muted">Monthly active users</div>
+                <div class="value">18.4k</div>
+              </div>
+              <div class="stat">
+                <div class="muted">Conversion</div>
+                <div class="value">4.8%</div>
+              </div>
+              <div class="stat">
+                <div class="muted">Bounce</div>
+                <div class="value">29%</div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <h3>Filter examples</h3>
+              <div class="nav">
+                <a class="btn" x-link="/analytics?range=7d">7d</a>
+                <a class="btn" x-link="/analytics?range=30d">30d</a>
+                <a class="btn" x-link="/analytics?range=90d">90d</a>
+              </div>
+              <p class="muted">Current range: <span class="code">{{ query.range || 'default' }}</span></p>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    class AnalyticsSidebar {
+      template() {
+        return `
+          <div class="stack">
+            <h3 class="section-title">Analytics Sidebar</h3>
+            <div class="panel">
+              <div class="tag-row">
+                <span class="tag">range={{ query.range || 'default' }}</span>
+                <span class="tag">section={{ (route.meta && route.meta.section) || 'n/a' }}</span>
+              </div>
+            </div>
+            <a class="panel" x-route="analytics">Refresh view</a>
+          </div>
+        `;
+      }
+    }
+
+    // --- WorkspaceLayout (unchanged) ---
+    class WorkspaceLayout {
+      template() {
+        return `
+          <div class="stack">
+            <div class="panel">
+              <h2>Workspace</h2>
+              <p class="muted">Protected area. Requires login. Also has nested child routes and an inner router-view.</p>
+              <div class="nav">
+                <a x-route="workspace" x-active="active">Overview</a>
+                <a x-route="workspaceProjects" x-active="active">Projects</a>
+                <a x-route="workspaceActivity" x-active="active">Activity</a>
+              </div>
+            </div>
+            <div x-router-view></div>
+          </div>
+        `;
+      }
+    }
+
+    class WorkspaceOverview {
+      template() {
+        return `
+          <div class="panel">
+            <h3>Overview</h3>
+            <p class="muted">Welcome to the workspace. Guard passed. Everyone is pretending the roadmap is under control.</p>
+          </div>
+        `;
+      }
+    }
+
+    class WorkspaceProjects {
+      template() {
+        return `
+          <div class="stack">
+            <div class="panel">
+              <h3>Projects</h3>
+              <div class="list">
+                <a class="list-item" x-route="{ name: 'userDetails', params: { id: 1 }, query: { tab: 'profile' } }">Open User 1</a>
+                <a class="list-item" x-route="{ name: 'userDetails', params: { id: 3 }, query: { tab: 'activity' }, hash: 'usage' }">Open User 3 activity</a>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    class WorkspaceActivity {
+      template() {
+        return `
+          <div class="panel">
+            <h3>Recent Activity</h3>
+            <p class="muted">No one broke production in the last 12 minutes. That either means excellence or very selective logging.</p>
+          </div>
+        `;
+      }
+    }
+
+    class SettingsLayout {
+      template() {
+        return `
+          <div class="stack">
+            <div class="panel">
+              <h2>Settings</h2>
+              <div class="nav">
+                <a x-route="settingsProfile" x-active="active" x-active-mode="startsWith">Profile</a>
+                <a x-route="settingsBilling" x-active="active" x-active-mode="startsWith">Billing</a>
+                <a x-route="settingsTeam" x-active="active" x-active-mode="startsWith">Team</a>
+              </div>
+            </div>
+            <div x-router-view></div>
+          </div>
+        `;
+      }
+    }
+
+    class SettingsProfile {
+      template() {
+        return `
+          <div class="panel">
+            <h3>Profile Settings</h3>
+            <p class="muted">Route section: <span class="code">{{ (route.meta && route.meta.section) || 'none' }}</span></p>
+          </div>
+        `;
+      }
+    }
+
+    class SettingsBilling {
+      template() {
+        return `
+          <div class="panel">
+            <h3>Billing Settings</h3>
+            <p class="muted">This route is keep-alive cached too.</p>
+          </div>
+        `;
+      }
+    }
+
+    class SettingsTeam {
+      template() {
+        return `
+          <div class="panel">
+            <h3>Team Settings</h3>
+            <p class="muted">Current tab: <span class="code">{{ query.tab || 'overview' }}</span></p>
+            <div class="nav">
+              <a class="btn" x-link="/settings/team?tab=members">Members</a>
+              <a class="btn" x-link="/settings/team?tab=roles">Roles</a>
+              <a class="btn" x-link="/settings/team?tab=invites">Invites</a>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    class UserLayout {
+      template() {
+        return `
+          <div class="stack">
+            <div class="panel">
+              <h2>User Detail</h2>
+              <div class="nav">
+                <a x-route="{ name: 'userDetails', params: { id: params.id }, query: { tab: 'profile' } }" x-active="active" x-active-mode="startsWith">Profile</a>
+                <a x-route="{ name: 'userDetails', params: { id: params.id }, query: { tab: 'billing' } }" x-active="active" x-active-mode="startsWith">Billing</a>
+                <a x-route="{ name: 'userDetails', params: { id: params.id }, query: { tab: 'activity' }, hash: 'usage' }" x-active="active" x-active-mode="startsWith">Activity</a>
+              </div>
+            </div>
+            <div x-router-view></div>
+          </div>
+        `;
+      }
+    }
+
+    class UserDetails {
+      template() {
+        const user = getUserById(this.params ? this.params.id : null);
+        if (!user) {
+          return `
+            <div class="panel">
+              <h3>User not found</h3>
+              <p class="muted">That user does not exist. Either the ID is wrong, or they unlocked legendary stealth mode.</p>
+            </div>
+          `;
+        }
+        const tab = (this.query && this.query.tab) || "profile";
+        return `
+          <div class="stack">
+            <div class="panel">
+              <h3>${user.name}</h3>
+              <div class="tag-row">
+                <span class="tag">id=${user.id}</span>
+                <span class="tag">role=${user.role}</span>
+                <span class="tag">plan=${user.plan}</span>
+                <span class="tag">tab=${tab}</span>
+                <span class="tag">hash=${(this.route && this.route.hash) || 'none'}</span>
+              </div>
+            </div>
+            <div class="panel">
+              <h4>Route-driven tab content</h4>
+              <p class="muted">
+                ${tab === "billing" ? "Billing history, card status, and subscription details would render here." :
+                  tab === "activity" ? "Recent events, audits, and usage logs would render here." :
+                  "Profile info, permissions, and basic account details render here."}
+              </p>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    class AdminLayout {
+      template() {
+        return `
+          <div class="stack">
+            <div class="panel">
+              <h2>Admin Area</h2>
+              <p class="muted">Requires admin role. No crown, no entry.</p>
+              <div class="nav">
+                <a x-route="adminOverview" x-active="active">Overview</a>
+                <a x-route="adminUsers" x-active="active">Users</a>
+                <a x-route="adminFlags" x-active="active">Feature Flags</a>
+              </div>
+            </div>
+            <div x-router-view></div>
+          </div>
+        `;
+      }
+    }
+
+    class AdminOverview {
+      template() {
+        return `
+          <div class="panel">
+            <h3>Admin Overview</h3>
+            <p class="muted">You are in because your role is <span class="code">{{ demoState.role }}</span>.</p>
+          </div>
+        `;
+      }
+    }
+
+    class AdminUsers {
+      template() {
+        return `
+          <div class="panel">
+            <h3>Admin Users</h3>
+            <div class="list">
+              ${fakeUsers.map(u => `
+                <a class="list-item" x-route="{ name: 'userDetails', params: { id: ${u.id} }, query: { tab: 'profile' } }">
+                  ${u.name} — ${u.role} — ${u.plan}
+                </a>
+              `).join("")}
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    class AdminFlags {
+      template() {
+        return `
+          <div class="panel">
+            <h3>Feature Flags</h3>
+            <div class="tag-row">
+              <span class="tag">router.keepAlive=true</span>
+              <span class="tag">router.debug=true</span>
+              <span class="tag">lazy.reports=true</span>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    class LoginPage {
+      template() {
+        return `
+          <div class="panel">
+            <h2>Login Required</h2>
+            <p class="muted">You got redirected here by a guard. Use the header buttons to login as editor or admin.</p>
+          </div>
+        `;
+      }
+    }
+
+    class NotFoundPage {
+      template() {
+        return `
+          <div class="panel">
+            <h2>404</h2>
+            <p class="muted">No route matched. The page wandered into the void and declined to share its location.</p>
+            <a class="btn" x-route="home">Take me home</a>
+          </div>
+        `;
+      }
+    }
+
+    class DebugPanel {
+      methods = {
+        clearCache() {
+          this.$router.clearKeepAlive();
+          pushDebugLine("keep-alive cache cleared");
+        }
+      };
+
+      template() {
+        // Access demoState.debugLines reactively
+        const lines = window.demoState.get('debugLines') || [];
+        return `
+          <div class="stack">
+            <h3 class="section-title">Debug Panel</h3>
+
+            <div class="panel">
+              <div class="mini-stack">
+                <div><strong>fullPath:</strong> <span class="code">{{ route.fullPath }}</span></div>
+                <div><strong>name:</strong> <span class="code">{{ route.name || 'null' }}</span></div>
+                <div><strong>hash:</strong> <span class="code">{{ route.hash || 'none' }}</span></div>
+                <div><strong>meta:</strong> <span class="code">{{ JSON.stringify(route.meta || {}) }}</span></div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <button class="btn warn" @click="clearCache">Clear Keep-Alive Cache</button>
+            </div>
+
+            <div class="log">${lines.join('\\n') || 'No events yet.'}</div>
+          </div>
+        `;
+      }
+    }
+
+    function lazyReportsPage() {
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          class ReportsPage {
+            template() {
+              return `
+                <div class="stack">
+                  <div class="panel">
+                    <h2>Lazy Reports</h2>
+                    <p class="muted">This route component was lazy-loaded. A little dramatic, but in a good way.</p>
+                  </div>
+                  <div class="grid-2">
+                    <div class="panel">
+                      <h3>Revenue</h3>
+                      <p class="muted">$148,230</p>
+                    </div>
+                    <div class="panel">
+                      <h3>Churn</h3>
+                      <p class="muted">1.8%</p>
+                    </div>
+                  </div>
+                </div>
+              `;
+            }
+          }
+          resolve(ReportsPage);
+        }, 500);
+      });
+    }
+
+    const routes = [
+      {
+        path: "/",
+        components: {
+          default: "HomePage",
+          sidebar: "GlobalSidebar"
+        },
+        name: "home",
+        meta: {
+          title: "Home",
+          section: "dashboard",
+          keepAlive: true
+        }
+      },
+      {
+        path: "/analytics",
+        components: {
+          default: "AnalyticsPage",
+          sidebar: "AnalyticsSidebar"
+        },
+        name: "analytics",
+        meta: {
+          title: "Analytics",
+          section: "insights"
+        }
+      },
+      {
+        path: "/workspace",
+        components: {
+          default: "WorkspaceLayout",
+          sidebar: "GlobalSidebar"
+        },
+        meta: {
+          title: "Workspace",
+          requiresAuth: true,
+          section: "workspace"
+        },
+        beforeEnter() {
+          if (!window.demoState.get('isLoggedIn')) return { name: "login" };
+          return true;
+        },
+        children: [
+          {
+            path: "",
+            name: "workspace",
+            component: "WorkspaceOverview",
+            meta: { title: "Workspace Overview", requiresAuth: true }
+          },
+          {
+            path: "projects",
+            name: "workspaceProjects",
+            component: "WorkspaceProjects",
+            meta: { title: "Workspace Projects", requiresAuth: true }
+          },
+          {
+            path: "activity",
+            name: "workspaceActivity",
+            component: "WorkspaceActivity",
+            meta: { title: "Workspace Activity", requiresAuth: true }
+          }
+        ]
+      },
+      {
+        path: "/settings",
+        components: {
+          default: "SettingsLayout",
+          sidebar: "GlobalSidebar"
+        },
+        meta: {
+          title: "Settings",
+          section: "settings"
+        },
+        children: [
+          {
+            path: "profile",
+            name: "settingsProfile",
+            component: "SettingsProfile",
+            meta: { title: "Settings • Profile" }
+          },
+          {
+            path: "billing",
+            name: "settingsBilling",
+            component: "SettingsBilling",
+            meta: { title: "Settings • Billing", keepAlive: true }
+          },
+          {
+            path: "team",
+            name: "settingsTeam",
+            component: "SettingsTeam",
+            meta: { title: "Settings • Team" }
+          }
+        ]
+      },
+      {
+        path: "/users/:id",
+        components: {
+          default: "UserLayout",
+          sidebar: "GlobalSidebar"
+        },
+        meta: {
+          title: function (route) { return "User • " + route.params.id; },
+          section: "users"
+        },
+        children: [
+          {
+            path: "",
+            name: "userDetails",
+            component: "UserDetails",
+            props: true,
+            meta: {
+              title: function (route) { return "User #" + route.params.id; }
+            }
+          }
+        ]
+      },
+      {
+        path: "/reports",
+        name: "reports",
+        components: {
+          default: lazyReportsPage,
+          sidebar: "GlobalSidebar"
+        },
+        meta: {
+          title: "Reports",
+          section: "reports"
+        }
+      },
+      {
+        path: "/admin",
+        components: {
+          default: "AdminLayout",
+          sidebar: "GlobalSidebar"
+        },
+        meta: {
+          title: "Admin",
+          requiresAuth: true,
+          requiresRole: "admin",
+          section: "admin"
+        },
+        beforeEnter() {
+          if (!window.demoState.get('isLoggedIn')) return { name: "login" };
+          if (window.demoState.get('role') !== "admin") return { name: "home" };
+          return true;
+        },
+        children: [
+          {
+            path: "",
+            name: "adminOverview",
+            component: "AdminOverview",
+            meta: { title: "Admin • Overview" }
+          },
+          {
+            path: "users",
+            name: "adminUsers",
+            component: "AdminUsers",
+            meta: { title: "Admin • Users" }
+          },
+          {
+            path: "flags",
+            name: "adminFlags",
+            component: "AdminFlags",
+            meta: { title: "Admin • Feature Flags" }
+          }
+        ]
+      },
+      {
+        path: "/login",
+        name: "login",
+        component: "LoginPage",
+        meta: { title: "Login" }
+      },
+      {
+        path: "/404",
+        name: "notFound",
+        component: "NotFoundPage",
+        meta: { title: "404" }
+      },
+      {
+        path: "/:anything",
+        redirect: "/404"
+      }
+    ];
+
+    const router = MiniXRouter.createRouter({
+      history: currentHistory(),
+      debug: true,
+      routes
+    });
+
+    router.beforeEach((to) => {
+      if (to.meta.requiresAuth && !window.demoState.get('isLoggedIn')) {
+        return { name: "login" };
+      }
+      if (to.meta.requiresRole && window.demoState.get('role') !== to.meta.requiresRole) {
+        return { name: "home" };
+      }
+      return true;
+    });
+
+    router.beforeRouteLeave(async ({ el }) => {
+      if (!el) return;
+      el.classList.add("route-leave");
+      await new Promise((resolve) => setTimeout(resolve, 120));
+    });
+
+    router.beforeRouteEnter(({ el }) => {
+      if (!el) return;
+      el.classList.add("route-enter");
+    });
+
+    router.afterRouteEnter(({ el }) => {
+      if (!el) return;
+      requestAnimationFrame(() => {
+        el.classList.remove("route-enter");
+        el.classList.remove("route-leave");
+      });
+    });
+
+    router.afterEach(({ to, from }) => {
+      pushDebugLine("afterEach: " + from.fullPath + " -> " + to.fullPath);
+    });
+
+    router.onDebug((event) => {
+      if (event.type === "route:resolved") return;
+      pushDebugLine(event.type + " :: " + JSON.stringify(event.detail));
+    });
+
+    // --- Create app, inject demoState into all scopes, mount ---
+    const app = MiniX.createApp(AppShell)
+      .component("AppShell", AppShell)
+      .component("GlobalSidebar", GlobalSidebar)
+      .component("HomePage", HomePage)
+      .component("AnalyticsPage", AnalyticsPage)
+      .component("AnalyticsSidebar", AnalyticsSidebar)
+      .component("WorkspaceLayout", WorkspaceLayout)
+      .component("WorkspaceOverview", WorkspaceOverview)
+      .component("WorkspaceProjects", WorkspaceProjects)
+      .component("WorkspaceActivity", WorkspaceActivity)
+      .component("SettingsLayout", SettingsLayout)
+      .component("SettingsProfile", SettingsProfile)
+      .component("SettingsBilling", SettingsBilling)
+      .component("SettingsTeam", SettingsTeam)
+      .component("UserLayout", UserLayout)
+      .component("UserDetails", UserDetails)
+      .component("AdminLayout", AdminLayout)
+      .component("AdminOverview", AdminOverview)
+      .component("AdminUsers", AdminUsers)
+      .component("AdminFlags", AdminFlags)
+      .component("LoginPage", LoginPage)
+      .component("NotFoundPage", NotFoundPage)
+      .component("DebugPanel", DebugPanel)
+      .addScope(() => ({ demoState: window.demoState.raw() }))   // inject reactive demoState
+      .use(router)
+      .mount("#app");
+  </script>
+</body>
+</html>

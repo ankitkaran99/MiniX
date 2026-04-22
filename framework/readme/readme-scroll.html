@@ -1,0 +1,231 @@
+<!-- UPDATED README FOR MINI-X SCROLL PLUGIN v16 -->
+
+<h1>MiniX Scroll Plugin</h1>
+
+<p>
+A lightweight infinite scroll directive for MiniX with proper scroll preservation,
+edge-triggered loading, and support for both normal and reverse (chat-style) lists.
+</p>
+
+<hr/>
+
+<h2>✨ Features</h2>
+
+<ul>
+  <li>🔥 Bottom infinite scroll (feeds, lists)</li>
+  <li>💬 Top reverse scroll (chat apps)</li>
+  <li>🧠 Scroll position preservation (no jump)</li>
+  <li>⚡ Edge-triggered (no infinite loop spam)</li>
+  <li>🪶 requestAnimationFrame optimized</li>
+  <li>🔄 Works with async + callback style loading</li>
+</ul>
+
+<hr/>
+
+<h2>📦 Installation</h2>
+
+<pre>
+&lt;script src="mini-x.js"&gt;&lt;/script&gt;
+&lt;script src="plugin-scroll.js"&gt;&lt;/script&gt;
+
+&lt;script&gt;
+MiniX.createApp(App)
+  .use(MiniXScrollPlugin)
+  .mount('#app');
+&lt;/script&gt;
+</pre>
+
+<hr/>
+
+<h2>🚀 Basic Usage</h2>
+
+<pre>
+&lt;div
+  style="height:300px; overflow-y:auto;"
+  x-scroll="loadMore"
+  x-scroll-dir="bottom"
+  x-scroll-threshold="20"
+&gt;
+  &lt;div x-for="item in items" :key="item"&gt;
+    {{ item }}
+  &lt;/div&gt;
+&lt;/div&gt;
+</pre>
+
+<hr/>
+
+<h2>⚙️ Attributes</h2>
+
+<table>
+<tr><th>Attribute</th><th>Description</th></tr>
+
+<tr>
+<td><code>x-scroll</code></td>
+<td>Function or expression to execute when threshold is reached</td>
+</tr>
+
+<tr>
+<td><code>x-scroll-dir</code></td>
+<td><code>bottom</code> (default) or <code>top</code></td>
+</tr>
+
+<tr>
+<td><code>x-scroll-threshold</code></td>
+<td>Distance in px from edge before triggering (default: 10)</td>
+</tr>
+
+<tr>
+<td><code>x-scroll-initial</code></td>
+<td>Triggers once on mount if already near boundary</td>
+</tr>
+
+</table>
+
+<hr/>
+
+<h2>🧠 How It Works</h2>
+
+<ul>
+<li>Listens to scroll events on the element</li>
+<li>Checks distance from top or bottom</li>
+<li>Triggers only when entering threshold zone</li>
+<li>Prevents duplicate calls during loading</li>
+</ul>
+
+<hr/>
+
+<h2>📍 Scroll Preservation (Important)</h2>
+
+<p>
+When new items are appended, the plugin preserves the previous scroll position.
+</p>
+
+<p>
+Without this, scroll would "stick to bottom" and keep firing endlessly.
+</p>
+
+<p><strong>Handled internally:</strong></p>
+
+<pre>
+prevHeight = el.scrollHeight
+prevTop = el.scrollTop
+
+// after DOM update
+el.scrollTop = prevTop
+</pre>
+
+<hr/>
+
+<h2>💬 Reverse Scroll (Chat Style)</h2>
+
+<pre>
+&lt;div
+  style="height:300px; overflow-y:auto;"
+  x-scroll="loadOlder"
+  x-scroll-dir="top"
+&gt;
+  &lt;div x-for="msg in messages" :key="msg.id"&gt;
+    {{ msg.text }}
+  &lt;/div&gt;
+&lt;/div&gt;
+</pre>
+
+<p>
+For top loading, scroll position is adjusted automatically to prevent jump.
+</p>
+
+<hr/>
+
+<h2>⏳ Async Handling</h2>
+
+<h3>✅ Promise-based (auto)</h3>
+
+<pre>
+async loadMore() {
+  const data = await fetchData()
+  this.items.push(...data)
+}
+</pre>
+
+<h3>⚠️ Callback / setTimeout style</h3>
+
+You MUST call <code>ctx.done()</code>
+
+<pre>
+loadMore(el, ctx) {
+  setTimeout(() => {
+    this.items.push(...newData)
+    ctx.done()
+  }, 1000)
+}
+</pre>
+
+<hr/>
+
+<h2>⚠️ Common Mistakes</h2>
+
+<table>
+<tr><th>Issue</th><th>Cause</th></tr>
+
+<tr>
+<td>Scroll stuck at bottom</td>
+<td>Async not handled correctly (missing <code>ctx.done()</code>)</td>
+</tr>
+
+<tr>
+<td>Items appear in wrong order</td>
+<td>MiniX <code>x-for</code> diff bug (not plugin issue)</td>
+</tr>
+
+<tr>
+<td>Scroll jumps</td>
+<td>Container being re-rendered instead of updated</td>
+</tr>
+
+</table>
+
+<hr/>
+
+<h2>🧪 Recommended Pattern</h2>
+
+<pre>
+loadMore(el, ctx) {
+  if (this.loading) return;
+
+  this.loading = true;
+
+  fetch('/api/data?page=' + this.page)
+    .then(res => res.json())
+    .then(data => {
+      this.items.push(...data);
+      this.page++;
+    })
+    .finally(() => {
+      this.loading = false;
+      ctx.done();
+    });
+}
+</pre>
+
+<hr/>
+
+<h2>💡 Notes</h2>
+
+<ul>
+<li>Container must have <code>overflow-y: auto</code></li>
+<li>Do NOT replace container element during render</li>
+<li>Only update children (<code>x-for</code>)</li>
+<li>Always use a loading guard in your method</li>
+</ul>
+
+<hr/>
+
+<h2>📌 Summary</h2>
+
+<ul>
+<li>No sentinels needed</li>
+<li>No manual scroll math needed</li>
+<li>Works like Vue infinite scroll</li>
+<li>Supports chat-style reverse loading</li>
+<li>Stable, predictable behavior</li>
+</ul>

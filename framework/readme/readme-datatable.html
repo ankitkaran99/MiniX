@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MiniX DataTable Plugin - README</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #121a2b;
+      --panel-2: #172036;
+      --text: #e8edf7;
+      --muted: #a9b4c8;
+      --accent: #7cc4ff;
+      --border: #28324a;
+      --code: #0f1524;
+      --good: #7ee787;
+      --warn: #ffd580;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: linear-gradient(180deg, #0b1020 0%, #0e1424 100%);
+      color: var(--text);
+      line-height: 1.55;
+    }
+    .wrap {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 32px 20px 80px;
+    }
+    .hero {
+      background: linear-gradient(135deg, #121a2b, #172036);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 28px;
+      margin-bottom: 24px;
+      box-shadow: 0 12px 40px rgba(0,0,0,.22);
+    }
+    h1, h2, h3 { line-height: 1.2; }
+    h1 { margin: 0 0 12px; font-size: 34px; }
+    h2 { margin: 30px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); font-size: 24px; }
+    h3 { margin: 24px 0 10px; font-size: 18px; }
+    p { margin: 10px 0; color: var(--text); }
+    .muted { color: var(--muted); }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px;
+      margin: 16px 0;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 14px;
+      margin-top: 14px;
+    }
+    .pill {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--panel-2);
+      color: var(--accent);
+      font-size: 12px;
+      margin-right: 6px;
+      margin-bottom: 6px;
+    }
+    ul { padding-left: 20px; }
+    li { margin: 6px 0; }
+    code {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 6px;
+      padding: 2px 6px;
+      color: #d6e9ff;
+      font-family: Consolas, Monaco, monospace;
+      font-size: 0.95em;
+    }
+    pre {
+      margin: 12px 0 0;
+      padding: 16px;
+      overflow: auto;
+      background: var(--code);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      color: #dfe8ff;
+      font-family: Consolas, Monaco, monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .note, .warn, .ok {
+      border-left: 4px solid var(--accent);
+      padding: 12px 14px;
+      border-radius: 10px;
+      background: rgba(124,196,255,0.08);
+      margin: 14px 0;
+    }
+    .warn {
+      border-left-color: var(--warn);
+      background: rgba(255,213,128,0.08);
+    }
+    .ok {
+      border-left-color: var(--good);
+      background: rgba(126,231,135,0.08);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    th, td {
+      text-align: left;
+      padding: 12px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    th { background: var(--panel-2); }
+    .footer {
+      margin-top: 36px;
+      color: var(--muted);
+      font-size: 14px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <div class="pill">MiniX</div>
+      <div class="pill">DataTables</div>
+      <div class="pill">Plugin</div>
+      <h1>MiniX DataTable Plugin</h1>
+      <p class="muted">
+        HTML README for the instance-based MiniX plugin that mounts MiniX components inside DataTables cells,
+        while keeping the table area under <code>x-ignore</code> so the main app does not try to compile it.
+      </p>
+      <div class="ok">
+        The plugin owns the DataTable lifecycle. It listens to DataTables redraw events and mounts or destroys MiniX
+        cell components as rows appear and disappear.
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>What this plugin does</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>Cell renderer helper</h3>
+          <p>Use <code>app.$dtCell(Component, options)</code> inside a DataTables column definition.</p>
+        </div>
+        <div class="card">
+          <h3>Lifecycle bridge</h3>
+          <p>Use <code>app.$dataTable.attach(dt)</code> after DataTable init so MiniX can mount per-cell components.</p>
+        </div>
+        <div class="card">
+          <h3>x-ignore friendly</h3>
+          <p>The main MiniX app ignores the table. The plugin handles everything inside the DataTable region.</p>
+        </div>
+        <div class="card">
+          <h3>Safe redraw cleanup</h3>
+          <p>Components are unmounted on redraw and destroy, so row ghosts do not pile up in memory.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Requirements</h2>
+      <ul>
+        <li><code>mini-x.js</code></li>
+        <li><code>plugin-datatable.js</code></li>
+        <li>jQuery</li>
+        <li>DataTables</li>
+      </ul>
+      <pre>&lt;script src="https://code.jquery.com/jquery-3.7.1.min.js"&gt;&lt;/script&gt;
+&lt;script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"&gt;&lt;/script&gt;
+&lt;script src="./mini-x.js"&gt;&lt;/script&gt;
+&lt;script src="./plugin-datatable.js"&gt;&lt;/script&gt;</pre>
+    </section>
+
+    <section class="card">
+      <h2>Basic usage</h2>
+      <h3>1) Mark the table with x-ignore</h3>
+      <pre>&lt;div id="app"&gt;
+  &lt;table id="usersTable" x-ignore class="display" style="width:100%"&gt;
+    &lt;thead&gt;
+      &lt;tr&gt;
+        &lt;th&gt;ID&lt;/th&gt;
+        &lt;th&gt;Name&lt;/th&gt;
+        &lt;th&gt;Status&lt;/th&gt;
+        &lt;th&gt;Actions&lt;/th&gt;
+      &lt;/tr&gt;
+    &lt;/thead&gt;
+    &lt;tbody&gt;&lt;/tbody&gt;
+  &lt;/table&gt;
+&lt;/div&gt;</pre>
+
+      <div class="note">
+        <strong>Why x-ignore?</strong> Because DataTables owns the table DOM. The main MiniX app should not try to compile it.
+        The plugin will handle component creation inside the table after DataTable has initialized.
+      </div>
+
+      <h3>2) Create the MiniX app and install the plugin</h3>
+      <pre>class App {}
+
+const app = MiniX.createApp(App);
+app.use(MiniXDataTablePlugin);
+app.mount('#app');</pre>
+
+      <h3>3) Define cell components</h3>
+      <div class="warn">
+        Inside DataTable-mounted components, prefer directives like <code>x-text</code>, <code>x-bind</code>,
+        and <code>x-on</code> over raw moustache interpolation when possible.
+      </div>
+
+      <pre>class StatusBadge {
+  data(props) {
+    return {
+      row: props.row
+    };
+  }
+
+  computed = {
+    badgeClass() {
+      return this.row && this.row.status === 'active' ? 'active' : 'inactive';
+    }
+  };
+
+  template = `
+    &lt;span class="badge" x-bind:class="badgeClass" x-text="row.status"&gt;&lt;/span&gt;
+  `;
+}
+
+class RowActions {
+  data(props) {
+    return {
+      row: props.row
+    };
+  }
+
+  methods = {
+    edit() {
+      alert('Edit row #' + this.row.id);
+    },
+    remove() {
+      alert('Delete row #' + this.row.id);
+    }
+  };
+
+  template = `
+    &lt;div class="btn-group"&gt;
+      &lt;button class="btn" x-on:click="edit"&gt;Edit&lt;/button&gt;
+      &lt;button class="btn" x-on:click="remove"&gt;Delete&lt;/button&gt;
+    &lt;/div&gt;
+  `;
+}</pre>
+
+      <h3>4) Use app.$dtCell in DataTables columns</h3>
+      <pre>const dt = $('#usersTable').DataTable({
+  data: users,
+  pageLength: 5,
+  columns: [
+    { data: 'id' },
+    { data: 'name' },
+    {
+      data: 'status',
+      render: app.$dtCell(StatusBadge, {
+        className: 'd-inline-block',
+        props(rowData) {
+          return { row: rowData };
+        }
+      })
+    },
+    {
+      data: null,
+      orderable: false,
+      searchable: false,
+      render: app.$dtCell(RowActions, {
+        className: 'd-inline-block',
+        props(rowData) {
+          return { row: rowData };
+        }
+      })
+    }
+  ]
+});</pre>
+
+      <h3>5) Attach the DataTable bridge</h3>
+      <pre>app.$dataTable.attach(dt, {
+  debug: false,
+  onMounted(instance, ctx) {
+    console.log('mounted row', ctx.rowData);
+  },
+  onBeforeUnmount(instance, ctx) {
+    console.log('before unmount row', ctx.rowData);
+  }
+});</pre>
+    </section>
+
+    <section class="card">
+      <h2>Available API</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>API</th>
+            <th>Purpose</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>app.$dtCell(Component, options)</code></td>
+            <td>Returns a DataTables render function that creates a MiniX mount placeholder for that cell.</td>
+          </tr>
+          <tr>
+            <td><code>app.$dataTable.attach(dt, options)</code></td>
+            <td>Starts listening to DataTables events and mounts MiniX components inside visible rows.</td>
+          </tr>
+          <tr>
+            <td><code>app.$dataTable.detach(dt)</code></td>
+            <td>Unmounts all active cell components and removes DataTables event listeners.</td>
+          </tr>
+          <tr>
+            <td><code>app.$dataTable.refresh(dt)</code></td>
+            <td>Forces unmount and remount of components in the current table state.</td>
+          </tr>
+          <tr>
+            <td><code>app.$dataTable.defaults</code></td>
+            <td>Default plugin options.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>Cell renderer options</h2>
+      <pre>app.$dtCell(ComponentClass, {
+  tag: 'div',
+  className: 'd-inline-block',
+  attrs: {
+    'data-mode': 'compact'
+  },
+  html: '',
+  mountOn: 'display',
+  props(rowData, rowNode, dtApi, mountEl, meta) {
+    return { row: rowData };
+  }
+});</pre>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Option</th>
+            <th>Meaning</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>tag</code></td>
+            <td>Placeholder element tag. Default is <code>div</code>.</td>
+          </tr>
+          <tr>
+            <td><code>className</code></td>
+            <td>Extra classes added to the placeholder mount element.</td>
+          </tr>
+          <tr>
+            <td><code>attrs</code></td>
+            <td>Extra HTML attributes added to the placeholder mount element.</td>
+          </tr>
+          <tr>
+            <td><code>html</code></td>
+            <td>Optional HTML placed inside the placeholder before MiniX compiles it.</td>
+          </tr>
+          <tr>
+            <td><code>mountOn</code></td>
+            <td>Usually <code>display</code>. Non-display render types return normal cell data instead.</td>
+          </tr>
+          <tr>
+            <td><code>props</code></td>
+            <td>Function or object used to generate component props for that row.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>Bridge options</h2>
+      <pre>app.$dataTable.attach(dt, {
+  debug: false,
+  visibleRowsOnly: true,
+  includeChildRows: true,
+  clearWhenNoRow: true,
+  onMounted(instance, ctx) {},
+  onBeforeUnmount(instance, ctx) {},
+  props(entry, rowData, rowNode, dtApi, mountEl, meta) {
+    return {
+      row: rowData,
+      rowIndex: meta.row,
+      colIndex: meta.col,
+      cellData: meta.cellData,
+      dt: dtApi,
+      mountEl: mountEl
+    };
+  }
+});</pre>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Option</th>
+            <th>Meaning</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>debug</code></td>
+            <td>Logs mount and unmount activity to the console.</td>
+          </tr>
+          <tr>
+            <td><code>visibleRowsOnly</code></td>
+            <td>Mount only for current page rows. Usually this is what you want.</td>
+          </tr>
+          <tr>
+            <td><code>includeChildRows</code></td>
+            <td>Also scan responsive child rows if DataTables creates them.</td>
+          </tr>
+          <tr>
+            <td><code>clearWhenNoRow</code></td>
+            <td>Clears placeholder HTML if row data is missing.</td>
+          </tr>
+          <tr>
+            <td><code>props</code></td>
+            <td>Global prop builder used before per-cell <code>options.props</code> is merged in.</td>
+          </tr>
+          <tr>
+            <td><code>onMounted</code></td>
+            <td>Called after a MiniX cell component is mounted.</td>
+          </tr>
+          <tr>
+            <td><code>onBeforeUnmount</code></td>
+            <td>Called right before a MiniX cell component is destroyed.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>Lifecycle behavior</h2>
+      <ul>
+        <li>On <code>attach()</code>, the plugin immediately scans current DataTable rows and mounts cell components.</li>
+        <li>On <code>preDraw.dt</code>, it unmounts all active cell components.</li>
+        <li>On <code>draw.dt</code>, it mounts components again for the newly drawn rows.</li>
+        <li>On <code>column-visibility.dt</code> and <code>responsive-display.dt</code>, it refreshes mounts.</li>
+        <li>On <code>destroy.dt</code>, it cleans up everything.</li>
+      </ul>
+
+      <div class="ok">
+        Components are created only when row data is truthy. If a row does not exist, the plugin skips initialization.
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Recommended component style</h2>
+      <h3>Prefer directives</h3>
+      <pre>template = `
+  &lt;span x-text="row.status"&gt;&lt;/span&gt;
+`;</pre>
+
+      <h3>Avoid reserved prop names</h3>
+      <p>Do not use these names in custom plugin props if you can avoid it:</p>
+      <pre>el, $el, root, parent, props, $props, _props</pre>
+
+      <p>Better names:</p>
+      <pre>mountEl, row, dt, rowIndex, colIndex, cellData</pre>
+    </section>
+
+    <section class="card">
+      <h2>Complete example</h2>
+      <pre>&lt;table id="usersTable" x-ignore class="display"&gt;&lt;/table&gt;
+
+&lt;script&gt;
+class App {}
+
+class StatusBadge {
+  data(props) {
+    return { row: props.row };
+  }
+
+  computed = {
+    badgeClass() {
+      return this.row.status === 'active' ? 'active' : 'inactive';
+    }
+  };
+
+  template = `
+    &lt;span class="badge" x-bind:class="badgeClass" x-text="row.status"&gt;&lt;/span&gt;
+  `;
+}
+
+class RowActions {
+  data(props) {
+    return { row: props.row };
+  }
+
+  methods = {
+    edit() {
+      console.log('edit', this.row.id);
+    },
+    remove() {
+      console.log('remove', this.row.id);
+    }
+  };
+
+  template = `
+    &lt;div class="btn-group"&gt;
+      &lt;button class="btn" x-on:click="edit"&gt;Edit&lt;/button&gt;
+      &lt;button class="btn" x-on:click="remove"&gt;Delete&lt;/button&gt;
+    &lt;/div&gt;
+  `;
+}
+
+const app = MiniX.createApp(App);
+app.use(MiniXDataTablePlugin);
+app.mount('#app');
+
+const dt = $('#usersTable').DataTable({
+  data: users,
+  columns: [
+    { data: 'id' },
+    { data: 'name' },
+    {
+      data: 'status',
+      render: app.$dtCell(StatusBadge, {
+        props(rowData) {
+          return { row: rowData };
+        }
+      })
+    },
+    {
+      data: null,
+      render: app.$dtCell(RowActions, {
+        props(rowData) {
+          return { row: rowData };
+        }
+      })
+    }
+  ]
+});
+
+app.$dataTable.attach(dt);
+&lt;/script&gt;</pre>
+    </section>
+
+    <section class="card">
+      <h2>Troubleshooting</h2>
+      <h3>Cell is blank</h3>
+      <ul>
+        <li>Make sure the table has <code>x-ignore</code>.</li>
+        <li>Make sure you called <code>app.$dataTable.attach(dt)</code> after DataTable init.</li>
+        <li>Prefer <code>x-text</code> and <code>x-bind</code> over raw <code>{{ }}</code> interpolation.</li>
+      </ul>
+
+      <h3>Buttons work but text interpolation does not</h3>
+      <p>
+        That usually means directives are being compiled but raw moustache interpolation is not being processed in that mount path.
+        Switch text/class interpolation to directives.
+      </p>
+
+      <h3>Getter-only property errors</h3>
+      <p>
+        Do not pass reserved prop names like <code>el</code>. Use <code>mountEl</code> instead.
+      </p>
+
+      <h3>Components mount before data exists</h3>
+      <p>
+        The plugin should skip initialization unless <code>rowData</code> and <code>props.row</code> are both truthy.
+      </p>
+    </section>
+
+    <div class="footer">
+      MiniX DataTable Plugin README
+    </div>
+  </div>
+</body>
+</html>

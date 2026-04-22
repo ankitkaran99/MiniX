@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MiniX Validate + Ajax - README</title>
+<style>
+body{font-family:Arial;background:#0f1115;color:#e8eaed;margin:0;padding:40px}
+h1{color:#91f25c}
+code,pre{background:#171a21;padding:10px;border-radius:6px;display:block;overflow:auto}
+.section{margin-bottom:30px}
+</style>
+</head>
+<body>
+
+<h1>MiniX Validate + Ajax Plugin - Usage Guide</h1>
+
+<div class="section">
+<h2>1. Include Scripts</h2>
+<pre>
+&lt;script src="mini-x.js"&gt;&lt;/script&gt;
+&lt;script src="Inspect.js"&gt;&lt;/script&gt;
+&lt;script src="plugin-form.js"&gt;&lt;/script&gt;
+</pre>
+</div>
+
+<div class="section">
+<h2>2. Basic Form Setup</h2>
+<pre>
+&lt;form
+  x-validate
+  x-validate-on="blur|input"
+  x-ajax="{ onSuccess: 'onSuccess', onFailure: 'onFailure', onLoader: 'setLoading' }"&gt;
+
+  &lt;input name="email"&gt;
+  &lt;div class="err" x-show="$errors.email" x-text="$errors.email || ''"&gt;&lt;/div&gt;
+
+  &lt;button type="submit"&gt;Submit&lt;/button&gt;
+&lt;/form&gt;
+</pre>
+</div>
+
+<div class="section">
+<h2>3. Define Rules in Component</h2>
+<pre>
+class MyApp {
+  data() {
+    return { loading: false };
+  }
+
+  rules() {
+    return [
+      { field: 'email', rules: { required: true, email: true }, pretty: 'Email' }
+    ];
+  }
+}
+</pre>
+</div>
+
+<div class="section">
+<h2>4. Available Helpers</h2>
+<pre>
+this.$errors          // reactive object — read per field: this.$errors.email
+this.$validate()      // run validation, returns Promise&lt;boolean&gt;
+this.$validateForm()  // alias for $validate()
+this.$clearErrors()   // reset all field errors
+</pre>
+</div>
+
+<div class="section">
+<h2>5. Error Display</h2>
+<p>Errors are exposed via the reactive <b>$errors</b> scope object. Bind directly in the template using <b>x-show</b> and <b>x-text</b> — no <code>data-error-for</code> nodes or manual DOM writes needed:</p>
+<pre>
+&lt;!-- one div per field --&gt;
+&lt;div class="err" x-show="$errors.email"   x-text="$errors.email   || ''"&gt;&lt;/div&gt;
+&lt;div class="err" x-show="$errors.name"    x-text="$errors.name    || ''"&gt;&lt;/div&gt;
+&lt;div class="err" x-show="$errors.message" x-text="$errors.message || ''"&gt;&lt;/div&gt;
+</pre>
+<p><code>x-show</code> handles visibility automatically. The <code>|| ''</code> keeps the expression safe when the value is null.</p>
+</div>
+
+<div class="section">
+<h2>6. Ajax Callbacks</h2>
+<pre>
+onSuccess(data, form, response) {}
+onFailure(data, form, response) {}
+setLoading(active) {}
+</pre>
+</div>
+
+<div class="section">
+<h2>7. Mount App</h2>
+<pre>
+MiniX.createApp(MyApp)
+  .use(MiniXValidatePlugin)
+  .use(MiniXAjaxPlugin)
+  .mount('#app');
+</pre>
+</div>
+
+<div class="section">
+<h2>Notes</h2>
+<ul>
+<li>Validation blocks submit automatically</li>
+<li>Inspect.js is required</li>
+<li>Do <b>not</b> use <code>data-error-for</code> — it is no longer supported. Use <code>x-show="$errors.field"</code> and <code>x-text="$errors.field || ''"</code> instead</li>
+<li>Each field in <code>rules()</code> must have a corresponding <code>data()</code> entry is <em>not</em> required — errors live in plugin-managed state, not component data</li>
+<li><code>x-validate-on="blur|input"</code> enables live validation as the user types or leaves a field</li>
+</ul>
+</div>
+
+</body>
+</html>

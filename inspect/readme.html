@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Inspect.js — Advanced Form Validation Library</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        :root {
+            --doc-primary: #0d6efd;
+            --doc-bg: #f8fafc;
+            --code-bg: #1e293b;
+        }
+        body {
+            background: var(--doc-bg);
+            font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        }
+        .docs-header {
+            background: linear-gradient(135deg, #0b2b4e 0%, #0a1c2f 100%);
+            color: white;
+            padding: 3rem 0 2.5rem;
+            margin-bottom: 2rem;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .docs-header h1 {
+            font-weight: 700;
+            letter-spacing: -0.3px;
+        }
+        .badge-version {
+            background: rgba(255,255,255,0.2);
+            font-weight: 500;
+            border-radius: 40px;
+            padding: 0.4rem 1rem;
+        }
+        .section-card {
+            background: white;
+            border-radius: 1.25rem;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.02), 0 2px 6px rgba(0,0,0,0.05);
+            padding: 1.8rem;
+            margin-bottom: 2rem;
+            border: 1px solid #eef2f6;
+            transition: all 0.2s;
+        }
+        .section-card h2 {
+            font-size: 1.8rem;
+            font-weight: 600;
+            margin-bottom: 1.2rem;
+            border-left: 5px solid var(--doc-primary);
+            padding-left: 1rem;
+        }
+        .section-card h3 {
+            font-weight: 600;
+            font-size: 1.4rem;
+            margin: 1.5rem 0 1rem;
+            color: #0c4e6e;
+        }
+        .code-block {
+            background: var(--code-bg);
+            color: #e2e8f0;
+            border-radius: 1rem;
+            padding: 1.2rem;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: 0.85rem;
+            overflow-x: auto;
+            margin: 1rem 0;
+            white-space: pre;
+        }
+        .validator-table {
+            font-size: 0.9rem;
+        }
+        .validator-table th {
+            background: #f1f5f9;
+            font-weight: 600;
+        }
+        .demo-form {
+            background: #ffffff;
+            border-radius: 1.25rem;
+            padding: 1.5rem;
+            border: 1px solid #e9edf2;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.02);
+        }
+        .footer-docs {
+            background: #eef2f6;
+            border-radius: 2rem;
+            padding: 1.5rem;
+            text-align: center;
+            margin-top: 3rem;
+        }
+        .icon-title {
+            margin-right: 10px;
+            color: var(--doc-primary);
+        }
+        kbd {
+            background-color: #1e293b;
+            border-radius: 6px;
+            padding: 0.2rem 0.5rem;
+            font-family: monospace;
+            font-weight: 500;
+        }
+        @media (max-width: 768px) {
+            .section-card { padding: 1.2rem; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="docs-header">
+    <div class="container">
+        <div class="d-flex flex-wrap align-items-center justify-content-between">
+            <div>
+                <h1><i class="fas fa-check-circle me-2"></i>Inspect.js</h1>
+                <p class="lead mb-0">Lightning-fast, modular form validation with 50+ built-in rules.<br>Zero dependencies, works with any UI framework.</p>
+            </div>
+            <div class="mt-2 mt-md-0">
+                <span class="badge-version"><i class="fas fa-code-branch"></i> v2.0</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container mb-5">
+    <!-- INTRO + QUICK START -->
+    <div class="section-card">
+        <h2><i class="fas fa-rocket icon-title"></i> Quick start</h2>
+        <p><strong>Inspect.js</strong> provides a declarative validation engine. Define rules, attach to any form, and get powerful validation with instant feedback. Supports nested fields, file validation, multi-selects, checkboxes, radio groups, and dynamic data.</p>
+        <div class="code-block">
+            // 1. Define rules
+            const rules = [
+                { field: 'email', pretty: 'Email', rules: { required: true, email: true, maxlen: 100 } },
+                { field: 'age', pretty: 'Age', rules: { required: true, min: 18, max: 99 } },
+                { field: 'skills[]', pretty: 'Skills', rules: { required: true, min_elem: 1 } }
+            ];
+
+            // 2. Initialize validator
+            const inspector = new Inspect().init(document.getElementById('myForm'), rules);
+
+            // 3. Validate on submit
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const result = await inspector.validate();
+                if (result.valid) console.log('Data:', result.data);
+            });
+        </div>
+        <p class="mt-2">✨ Supports array fields (<code>name="hobbies[]"</code>), file inputs, custom error messages, and dynamic rules.</p>
+    </div>
+
+    <!-- API REFERENCE -->
+    <div class="section-card">
+        <h2><i class="fas fa-cogs icon-title"></i> API Reference</h2>
+        <h3><code>new Inspect(options)</code> → <code>.init(formElement, rules)</code></h3>
+        <p>Creates validator instance bound to a specific form. Returns an object with core methods:</p>
+        <ul class="list-group list-group-flush mb-3">
+            <li class="list-group-item bg-transparent"><strong>⚡ validate()</strong> → <code>{ valid, errors, data }</code> — runs validation against current form, shows errors automatically.</li>
+            <li class="list-group-item bg-transparent"><strong>⚡ validateData(dataObject)</strong> → same result but validates raw JS object (useful for API testing).</li>
+            <li class="list-group-item bg-transparent"><strong>⚡ parseFormData()</strong> → extracts form data respecting array keys, file lists, multi-values.</li>
+            <li class="list-group-item bg-transparent"><strong>⚡ clearErrors()</strong> → removes all validation error styles and messages.</li>
+        </ul>
+        <h3>Rule definition structure</h3>
+        <div class="code-block">
+{
+    field: 'username',           // form field name (supports "name[]" for arrays)
+    pretty: 'Username',          // display name in error messages
+    rules: {
+        required: true,
+        minlen: 3,
+        maxlen: 30,
+        alpha_num: true
+    },
+    messages: {                  // optional custom messages
+        required: 'Username is mandatory.',
+        minlen: 'Too short, need at least 3 chars'
+    }
+}
+        </div>
+        <p class="mb-0"><i class="fas fa-info-circle text-primary"></i> The <code>rules</code> object supports any built-in validator (see table below) and also custom validators by extending <code>Inspect.validators</code>.</p>
+    </div>
+
+    <!-- VALIDATORS TABLE -->
+    <div class="section-card">
+        <h2><i class="fas fa-list-check icon-title"></i> Built-in validators (50+)</h2>
+        <div class="table-responsive">
+            <table class="table table-hover validator-table">
+                <thead>
+                    <tr><th>Rule</th><th>Description</th><th>Example param</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><kbd>required</kbd></td><td>Field must not be empty (array, string, file)</td><td>true</td></tr>
+                    <tr><td><kbd>minlen / maxlen</kbd></td><td>String length constraints</td><td>minlen: 3</td></tr>
+                    <tr><td><kbd>min / max</kbd></td><td>Numeric boundaries (inclusive)</td><td>min: 18, max: 100</td></tr>
+                    <tr><td><kbd>email</kbd></td><td>Valid email format</td><td>true</td></tr>
+                    <tr><td><kbd>url</kbd></td><td>Valid HTTP/HTTPS URL</td><td>true</td></tr>
+                    <tr><td><kbd>alpha / alpha_num / alpha_dash</kbd></td><td>Letter / alphanumeric / with dashes</td><td>true</td></tr>
+                    <tr><td><kbd>numeric / integer</kbd></td><td>Number or integer validation</td><td>true</td></tr>
+                    <tr><td><kbd>min_elem / max_elem</kbd></td><td>Array length > N / < N (strict)</td><td>min_elem: 1</td></tr>
+                    <tr><td><kbd>min_eq_elem / max_eq_elem</kbd></td><td>Array length >= N / <= N</td><td>min_eq_elem: 1</td></tr>
+                    <tr><td><kbd>in_arr / n_in_arr</kbd></td><td>Value in / not in allowed list</td><td>in_arr: ['admin','user']</td></tr>
+                    <tr><td><kbd>regex</kbd></td><td>Custom regex pattern</td><td>"^[A-Z]+$"</td></tr>
+                    <tr><td><kbd>date</kbd></td><td>Valid date (parsable)</td><td>true</td></tr>
+                    <tr><td><kbd>date_min / date_max</kbd></td><td>Date after/before specific ISO date</td><td>date_min: '2000-01-01'</td></tr>
+                    <tr><td><kbd>time / time_min / time_max</kbd></td><td>Time validation (HH:MM:SS)</td><td>time_min: '09:00'</td></tr>
+                    <tr><td><kbd>file_format_in</kbd></td><td>Allowed file extensions (jpg,png,pdf)</td><td>'jpg,jpeg,png'</td></tr>
+                    <tr><td><kbd>file_size_max / file_size_min</kbd></td><td>File size in KB</td><td>file_size_max: 2048</td></tr>
+                    <tr><td><kbd>phone</kbd></td><td>International phone pattern</td><td>true</td></tr>
+                    <tr><td><kbd>uuid / json / base64 / hex_color / slug</kbd></td><td>Special formats</td><td>true</td></tr>
+                    <tr><td><kbd>required_if</kbd></td><td>Required if another field matches value</td><td>"role,admin"</td></tr>
+                    <tr><td><kbd>pincode / pan_card / aadhaar</kbd></td><td>India-specific validators</td><td>true</td></tr>
+                    <tr><td><kbd>equal_to / different</kbd></td><td>Compare with another field</td><td>equal_to: 'confirm_password'</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <p class="mt-2 small text-secondary">📘 All validators return <code>true</code> when the field is empty (except <code>required</code>). Check the source for complete list: <strong>lowercase, uppercase, accepted, digits, alpha_spaces, mac_address, credit_card</strong> and more.</p>
+    </div>
+
+    <!-- CUSTOMIZATION -->
+    <div class="section-card">
+        <h2><i class="fas fa-palette icon-title"></i> Custom error handling & messages</h2>
+        <p>Override default messages or provide a global error handler:</p>
+        <div class="code-block">
+const customInspector = new Inspect({
+    messages: {
+        required: '⚠️ {1} cannot be blank.',
+        email: '✉️ Invalid email address.'
+    },
+    errorHandler: (field, message, config, show) => {
+        // Custom UI logic (toast, tooltip, etc)
+        if (show) field.classList.add('custom-error');
+        else field.classList.remove('custom-error');
+    }
+}).init(form, rules);
+        </div>
+        <p>You can also define field-specific messages inside the rule definition (<code>messages: { min: 'Age must be at least {0}' }</code>).</p>
+    </div>
+
+    <!-- LIVE DEMO SECTION (showcase Inspect.js in action) -->
+    <div class="section-card">
+        <h2><i class="fas fa-laptop-code icon-title"></i> Live interactive demo</h2>
+        <p>Try the form below — it uses <strong>Inspect.js</strong> with multiple validators, real-time error feedback, and Bootstrap styling.</p>
+        <div class="demo-form">
+            <form id="demoValidationForm" method="POST">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="fullName" class="form-label fw-semibold">Full name *</label>
+                        <input type="text" class="form-control" id="fullName" name="fullName" placeholder="John Doe">
+                        <div class="form-text">Required, min 2 chars, max 50.</div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="emailAddr" class="form-label fw-semibold">Email *</label>
+                        <input type="email" class="form-control" id="emailAddr" name="emailAddr" placeholder="hello@example.com">
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label for="userAge" class="form-label fw-semibold">Age *</label>
+                        <input type="number" class="form-control" id="userAge" name="userAge" placeholder="25">
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label for="dobDate" class="form-label fw-semibold">Date of birth</label>
+                        <input type="date" class="form-control" id="dobDate" name="dobDate">
+                        <div class="form-text">Optional, but must be valid date</div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label fw-semibold">Gender *</label>
+                        <div class="d-flex gap-3">
+                            <div class="form-check"><input class="form-check-input" type="radio" name="gender" value="male" id="male"> <label class="form-check-label" for="male">Male</label></div>
+                            <div class="form-check"><input class="form-check-input" type="radio" name="gender" value="female" id="female"> <label class="form-check-label" for="female">Female</label></div>
+                            <div class="form-check"><input class="form-check-input" type="radio" name="gender" value="other" id="other"> <label class="form-check-label" for="other">Other</label></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Hobbies (Multiple select, at least 1, max 3) *</label>
+                    <select class="form-select" name="hobbies[]" multiple size="3">
+                        <option value="reading">Reading</option>
+                        <option value="sports">Sports</option>
+                        <option value="music">Music</option>
+                        <option value="coding">Coding</option>
+                        <option value="travel">Travel</option>
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Skills (Checkboxes, at least one) *</label>
+                    <div class="d-flex flex-wrap gap-3">
+                        <div class="form-check"><input class="form-check-input" type="checkbox" name="skills[]" value="html"> <label>HTML</label></div>
+                        <div class="form-check"><input class="form-check-input" type="checkbox" name="skills[]" value="css"> <label>CSS</label></div>
+                        <div class="form-check"><input class="form-check-input" type="checkbox" name="skills[]" value="js"> <label>JavaScript</label></div>
+                        <div class="form-check"><input class="form-check-input" type="checkbox" name="skills[]" value="react"> <label>React</label></div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="bioText" class="form-label fw-semibold">Bio *</label>
+                    <textarea class="form-control" id="bioText" name="bio" rows="2" placeholder="Tell about yourself..."></textarea>
+                    <div class="form-text">Required, minimum 10 characters, max 300.</div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="profileDoc" class="form-label">Profile picture (optional, JPG/PNG, max 2MB)</label>
+                    <input class="form-control" type="file" id="profileDoc" name="profilePic" accept="image/jpeg,image/png">
+                </div>
+
+                <div class="d-flex gap-2 mt-3">
+                    <button type="submit" class="btn btn-primary px-4"><i class="fas fa-check"></i> Validate & Submit</button>
+                    <button type="button" id="clearDemoErrors" class="btn btn-outline-secondary">Clear errors</button>
+                </div>
+                <div id="demoResultMessage" class="mt-3 alert d-none" role="alert"></div>
+            </form>
+        </div>
+        <div class="mt-3 small text-secondary">
+            <i class="fas fa-code"></i> Demo rules: name (required, minlen:2, maxlen:50), email (required, email, maxlen:100), age (required, min:18, max:99), gender (required), hobbies (required, min_eq_elem:1, max_eq_elem:3), skills (required, min_eq_elem:1), bio (required, minlen:10, maxlen:300), profilePic (file_format_in: jpg,jpeg,png, file_size_max: 2048). Date optional but validates date format.
+        </div>
+    </div>
+    
+    <div class="footer-docs">
+        <i class="fas fa-heart text-danger"></i> Inspect.js — MIT Licensed. Full control, extensible architecture. Built-in validators cover most use-cases from simple strings to file & date comparisons.
+    </div>
+</div>
+
+<!-- Embed FULL Inspect.js (enhanced with date_min/date_max & robust file handling) -->
+<script>
+// ==============================
+// INSPECT.JS (Enhanced Edition)
+// ==============================
+class Inspect {
+    constructor(options = {}) {
+        this.defaults = {
+            errorHandler: (field, message, config, show = true) => {
+                if (!field || typeof field.closest !== 'function') return;
+                if (field.type === 'checkbox' || field.type === 'radio') {
+                    const formGroup = field.closest('.form-group') || field.closest('.mb-3, .form-group');
+                    if (!formGroup) return;
+                    if (show) {
+                        const inputs = formGroup.querySelectorAll(`input[type="${field.type}"]`);
+                        inputs.forEach(input => input.classList.add('is-invalid'));
+                        let errorElement = formGroup.querySelector('.invalid-feedback');
+                        if (!errorElement) {
+                            errorElement = document.createElement('div');
+                            errorElement.className = 'invalid-feedback d-block';
+                            formGroup.appendChild(errorElement);
+                        }
+                        errorElement.textContent = message;
+                    } else {
+                        const inputs = formGroup.querySelectorAll(`input[type="${field.type}"]`);
+                        inputs.forEach(input => input.classList.remove('is-invalid'));
+                        const errorElement = formGroup.querySelector('.invalid-feedback');
+                        if (errorElement) errorElement.remove();
+                    }
+                } else {
+                    if (show) {
+                        field.classList.add('is-invalid');
+                        let errorElement = field.nextElementSibling;
+                        if (!errorElement || !errorElement.classList.contains('invalid-feedback')) {
+                            errorElement = document.createElement('div');
+                            errorElement.className = 'invalid-feedback';
+                            field.parentNode.insertBefore(errorElement, field.nextSibling);
+                        }
+                        errorElement.textContent = message;
+                    } else {
+                        field.classList.remove('is-invalid');
+                        const errorElement = field.nextElementSibling;
+                        if (errorElement && errorElement.classList.contains('invalid-feedback')) errorElement.remove();
+                    }
+                }
+            },
+            messages: {
+                required: '{1} is required.',
+                min: '{1} must be at least {0}.', max: '{1} must be ≤ {0}.',
+                minlen: '{1} must be at least {0} characters.',
+                maxlen: '{1} cannot exceed {0} characters.',
+                email: 'Please enter a valid email address.',
+                min_eq_elem: '{1} must have at least {0} items.',
+                max_eq_elem: '{1} must have at most {0} items.',
+                date_min: 'Date must be after {0}.', date_max: 'Date must be before {0}.',
+                file_format_in: 'Allowed formats: {0}.', file_size_max: 'File max size {0}KB.',
+                // others fallback
+            }
+        };
+        this.config = { ...this.defaults, ...options };
+        this.rules = {};
+        this.formElement = null;
+    }
+
+    init(container, rules) {
+        if (!container) throw new Error('Container required');
+        this.formElement = container;
+        this.rules = rules.reduce((acc, rule) => { acc[rule.field] = rule; return acc; }, {});
+        return {
+            validate: this.validate.bind(this),
+            validateData: this.validateData.bind(this),
+            parseFormData: this.parseFormData.bind(this),
+            clearErrors: this.clearErrors.bind(this)
+        };
+    }
+
+    parseFormData(container = this.formElement) {
+        const data = {}, fieldsByName = {};
+        container.querySelectorAll('[name]').forEach(field => {
+            const name = field.name;
+            if (!fieldsByName[name]) fieldsByName[name] = [];
+            fieldsByName[name].push(field);
+        });
+        Object.entries(fieldsByName).forEach(([name, fields]) => {
+            data[name] = this._extractFieldValue(fields);
+        });
+        return { data, fieldsByName };
+    }
+
+    _extractFieldValue(fields) {
+        if (fields.length > 1) {
+            if (fields[0].type === 'checkbox') return fields.filter(f => f.checked).map(f => f.value);
+            if (fields[0].type === 'radio') {
+                const selected = fields.find(f => f.checked);
+                return selected ? selected.value : '';
+            }
+        }
+        const field = fields[0];
+        if (field.type === 'checkbox') return field.checked ? field.value : '';
+        if (field.type === 'file') return field.files;
+        return field.value?.trim?.() ?? field.value;
+    }
+
+    checkRequired(value, field) {
+        if (field && field.type === 'file') {
+            return field.files && field.files.length > 0;
+        }
+        if (Array.isArray(value)) return value.length > 0;
+        return value !== '' && value !== null && value !== undefined;
+    }
+
+    async validate(source = null, isState = false) {
+        if (!isState) this.clearErrors();
+        const payload = isState ? { data: source || {}, fieldsByName: {} } : this.parseFormData(source || this.formElement);
+        let valid = true;
+        const errors = {};
+        for (const [fieldName, rule] of Object.entries(this.rules)) {
+            const fields = payload.fieldsByName[fieldName] || [];
+            const field = fields[0] || null;
+            let value = payload.data[fieldName];
+            const result = await this.validateField(field, value, rule, payload.data);
+            if (result !== true) {
+                valid = false;
+                errors[fieldName] = result;
+                if (!isState && field) this.showError(field, result);
+            } else {
+                if (!isState && field) this.clearError(field);
+            }
+        }
+        return { valid, errors, data: payload.data };
+    }
+
+    async validateData(data) { return this.validate(data, true); }
+
+    async validateField(field, value, rule, allData) {
+        // required special handling (including file)
+        if (rule.rules.required) {
+            let isRequiredValid = false;
+            if (field && field.type === 'file') isRequiredValid = (field.files && field.files.length > 0);
+            else if (Array.isArray(value)) isRequiredValid = value.length > 0;
+            else isRequiredValid = (value !== '' && value !== null && value !== undefined);
+            if (!isRequiredValid) return this.getMessage(rule, 'required');
+        }
+        if (!rule.rules.required && (value === '' || value === undefined || value === null || (Array.isArray(value) && value.length === 0))) return true;
+        for (const [ruleName, ruleValue] of Object.entries(rule.rules)) {
+            if (ruleName === 'required') continue;
+            let validator = Inspect.validators[ruleName];
+            if (!validator) continue;
+            let valToCheck = value;
+            if (field && field.type === 'file' && (ruleName === 'file_format_in' || ruleName === 'file_size_max' || ruleName === 'file_size_min')) {
+                valToCheck = field.files;
+            }
+            let result = await validator.call(this, valToCheck, ruleValue, field, allData);
+            if (result !== true) return this.getMessage(rule, ruleName);
+        }
+        return true;
+    }
+
+    getMessage(rule, ruleName) {
+        const msg = (rule.messages && rule.messages[ruleName]) || this.config.messages[ruleName] || `Invalid ${ruleName}`;
+        return msg.replace('{1}', rule.pretty || rule.field);
+    }
+
+    showError(field, message) { this.config.errorHandler(field, message, this.config, true); }
+    clearError(field) { this.config.errorHandler(field, '', this.config, false); }
+    clearErrors() { if (this.formElement) this.formElement.querySelectorAll('input, select, textarea').forEach(f => this.clearError(f)); }
+
+    static validators = {
+        required: () => true, min: (v, m) => v === '' || parseFloat(v) >= m, max: (v, m) => v === '' || parseFloat(v) <= m,
+        minlen: (v, m) => v === '' || String(v).length >= m, maxlen: (v, m) => v === '' || String(v).length <= m,
+        email: (v) => v === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v)),
+        numeric: (v) => v === '' || /^-?\d*\.?\d+$/.test(String(v)), integer: (v) => v === '' || /^-?\d+$/.test(String(v)),
+        min_eq_elem: (v, m) => Array.isArray(v) ? v.length >= m : true, max_eq_elem: (v, m) => Array.isArray(v) ? v.length <= m : true,
+        min_elem: (v, m) => Array.isArray(v) ? v.length > m : true, max_elem: (v, m) => Array.isArray(v) ? v.length < m : true,
+        in_arr: (v, a) => v === '' || (Array.isArray(a) && a.includes(v)), date: (v) => v === '' || !isNaN(Date.parse(v)),
+        date_min: (v, minDate) => v === '' || new Date(v) >= new Date(minDate),
+        date_max: (v, maxDate) => v === '' || new Date(v) <= new Date(maxDate),
+        file_format_in: (files, allowedStr) => { if (!files || files.length === 0) return true; const allowed = allowedStr.split(',').map(s=>s.trim().toLowerCase()); return Array.from(files).every(f => allowed.includes(f.name.split('.').pop().toLowerCase())); },
+        file_size_max: (files, maxKB) => { if (!files || files.length === 0) return true; return Array.from(files).every(f => f.size <= maxKB * 1024); },
+        alpha: (v) => v === '' || /^[a-zA-Z]+$/.test(v), alpha_num: (v) => v === '' || /^[a-zA-Z0-9]+$/.test(v),
+        url: (v) => { if(v==='') return true; try { new URL(v); return true; } catch { return false; } },
+        phone: (v) => v === '' || /^\+?[1-9]\d{1,14}$/.test(v.replace(/[\s\-\(\)]/g, '')),
+        uuid: (v) => v === '' || /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v),
+    };
+}
+// additional validators to match documentation
+Inspect.validators.date_min = Inspect.validators.date_min;
+Inspect.validators.date_max = Inspect.validators.date_max;
+Inspect.validators.file_size_min = (files, minKB) => { if (!files || files.length===0) return true; return Array.from(files).every(f => f.size >= minKB * 1024); };
+window.Inspect = Inspect;
+</script>
+
+<script>
+    // DEMO implementation with Inspect.js
+    document.addEventListener('DOMContentLoaded', () => {
+        const demoForm = document.getElementById('demoValidationForm');
+        const rules = [
+            { field: 'fullName', pretty: 'Full name', rules: { required: true, minlen: 2, maxlen: 50 } },
+            { field: 'emailAddr', pretty: 'Email', rules: { required: true, email: true, maxlen: 100 } },
+            { field: 'userAge', pretty: 'Age', rules: { required: true, min: 18, max: 99, integer: true } },
+            { field: 'gender', pretty: 'Gender', rules: { required: true } },
+            { field: 'hobbies[]', pretty: 'Hobbies', rules: { required: true, min_eq_elem: 1, max_eq_elem: 3 } },
+            { field: 'skills[]', pretty: 'Skills', rules: { required: true, min_eq_elem: 1 } },
+            { field: 'bio', pretty: 'Bio', rules: { required: true, minlen: 10, maxlen: 300 } },
+            { field: 'dobDate', pretty: 'Date of birth', rules: { date: true } },
+            { field: 'profilePic', pretty: 'Profile picture', rules: { file_format_in: 'jpg,jpeg,png', file_size_max: 2048 } }
+        ];
+        const validator = new Inspect().init(demoForm, rules);
+        const resultDiv = document.getElementById('demoResultMessage');
+        
+        demoForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const result = await validator.validate();
+            if (result.valid) {
+                resultDiv.className = 'alert alert-success mt-3';
+                resultDiv.innerHTML = `<i class="fas fa-check-circle"></i> Form is valid! Data: <pre class="mb-0 small">${JSON.stringify(result.data, null, 2)}</pre>`;
+                resultDiv.classList.remove('d-none');
+            } else {
+                resultDiv.className = 'alert alert-danger mt-3';
+                resultDiv.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Validation failed. Please fix errors above.`;
+                resultDiv.classList.remove('d-none');
+                console.warn('Errors:', result.errors);
+            }
+        });
+        
+        document.getElementById('clearDemoErrors').addEventListener('click', () => {
+            validator.clearErrors();
+            resultDiv.classList.add('d-none');
+        });
+    });
+</script>
+</body>
+</html>

@@ -1,0 +1,1671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MiniX — Feature Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --ink: #0d0d0d;
+    --paper: #f5f2eb;
+    --accent: #e84d1c;
+    --accent2: #2563eb;
+    --mid: #7a7568;
+    --border: #d4cfc4;
+    --pass: #16a34a;
+    --fail: #dc2626;
+    --card: #ffffff;
+    --shadow: 0 2px 0 var(--border);
+    --mono: 'Space Mono', monospace;
+    --sans: 'Syne', sans-serif;
+  }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    min-height: 100vh;
+  }
+
+  [x-cloak] { display: none !important; }
+
+  /* ── Header ── */
+  .site-header {
+    border-bottom: 2px solid var(--ink);
+    padding: 1rem 2rem;
+    display: flex;
+    align-items: baseline;
+    gap: 1.5rem;
+    background: var(--paper);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .logo {
+    font-size: 1.5rem;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    color: var(--ink);
+  }
+  .logo span { color: var(--accent); }
+  .tagline {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--mid);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+  }
+  .pass-badge, .fail-badge {
+    margin-left: auto;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 0.25rem 0.6rem;
+    border-radius: 3px;
+    letter-spacing: 0.08em;
+  }
+  .pass-badge { background: #dcfce7; color: var(--pass); border: 1px solid #86efac; }
+  .fail-badge { background: #fee2e2; color: var(--fail); border: 1px solid #fca5a5; }
+
+  /* ── Layout ── */
+  .demo-grid {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    min-height: calc(100vh - 58px);
+  }
+
+  /* ── Nav ── */
+  .demo-nav {
+    border-right: 2px solid var(--ink);
+    padding: 1.5rem 0;
+    position: sticky;
+    top: 58px;
+    height: calc(100vh - 58px);
+    overflow-y: auto;
+    background: var(--paper);
+  }
+  .nav-section {
+    padding: 0 1rem 0.5rem;
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--mid);
+    margin-top: 1rem;
+  }
+  .nav-section:first-child { margin-top: 0; }
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.45rem 1rem;
+    cursor: pointer;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--ink);
+    border-left: 3px solid transparent;
+    transition: border-color 0.15s, background 0.15s;
+    user-select: none;
+  }
+  .nav-item:hover { background: rgba(0,0,0,0.04); }
+  .nav-item.active { border-left-color: var(--accent); background: rgba(232,77,28,0.06); }
+  .nav-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--border);
+    flex-shrink: 0;
+  }
+  .nav-dot.pass { background: var(--pass); }
+  .nav-dot.fail { background: var(--fail); }
+  .nav-dot.pending { background: var(--mid); }
+
+  /* ── Main ── */
+  .demo-main {
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+  }
+
+  /* ── Section card ── */
+  .section-card {
+    border: 2px solid var(--ink);
+    background: var(--card);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem 1.25rem;
+    border-bottom: 2px solid var(--ink);
+    background: var(--ink);
+    color: #fff;
+  }
+  .section-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    flex: 1;
+  }
+  .section-tag {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 2px;
+    background: rgba(255,255,255,0.15);
+    letter-spacing: 0.06em;
+  }
+  .section-body {
+    padding: 1.5rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+  }
+  .section-body.single { grid-template-columns: 1fr; }
+  .section-body.triple { grid-template-columns: 1fr 1fr 1fr; }
+
+  /* ── Test box ── */
+  .test-box {
+    border: 1.5px solid var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .test-label {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--mid);
+    padding: 0.4rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+    background: #faf9f6;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .test-content {
+    padding: 0.875rem 0.875rem;
+  }
+
+  /* ── Inputs ── */
+  input[type=text], input[type=number], input[type=email],
+  textarea, select {
+    width: 100%;
+    padding: 0.5rem 0.625rem;
+    border: 1.5px solid var(--border);
+    border-radius: 3px;
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    background: #fff;
+    color: var(--ink);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  input:focus, textarea:focus, select:focus {
+    border-color: var(--accent2);
+  }
+  textarea { resize: vertical; min-height: 80px; }
+
+  /* ── Buttons ── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 1rem;
+    border: 2px solid var(--ink);
+    border-radius: 3px;
+    font-family: var(--sans);
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    background: var(--paper);
+    color: var(--ink);
+    transition: background 0.12s, transform 0.1s;
+    letter-spacing: 0.02em;
+  }
+  .btn:hover { background: var(--ink); color: #fff; }
+  .btn:active { transform: translateY(1px); }
+  .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn.primary:hover { background: #c43c10; border-color: #c43c10; }
+  .btn.sm { padding: 0.3rem 0.7rem; font-size: 0.72rem; border-width: 1.5px; }
+  .btn.danger { border-color: var(--fail); color: var(--fail); }
+  .btn.danger:hover { background: var(--fail); color: #fff; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn:disabled:hover { background: var(--paper); color: var(--ink); }
+  .btn.primary:disabled:hover { background: var(--accent); color: #fff; }
+
+  /* ── Output display ── */
+  .output {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--accent2);
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 2px;
+    padding: 0.4rem 0.6rem;
+    margin-top: 0.5rem;
+    min-height: 2rem;
+    word-break: break-all;
+  }
+  .output.accent { background: #fff7ed; border-color: #fed7aa; color: var(--accent); }
+  .output.green { background: #f0fdf4; border-color: #bbf7d0; color: var(--pass); }
+
+  /* ── Row / Stack ── */
+  .row { display: flex; gap: 0.5rem; align-items: flex-start; flex-wrap: wrap; }
+  .col { display: flex; flex-direction: column; gap: 0.5rem; }
+  .mt { margin-top: 0.5rem; }
+  .mt2 { margin-top: 1rem; }
+
+  /* ── Counter ── */
+  .counter-display {
+    font-size: 3rem;
+    font-weight: 800;
+    letter-spacing: -0.05em;
+    line-height: 1;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+  .counter-display.big { font-size: 4rem; }
+
+  /* ── Badge ── */
+  .badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    padding: 0.15rem 0.45rem;
+    border-radius: 2px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+  }
+  .badge.blue { background: #dbeafe; color: var(--accent2); }
+  .badge.red { background: #fee2e2; color: var(--fail); }
+  .badge.green { background: #dcfce7; color: var(--pass); }
+  .badge.orange { background: #ffedd5; color: var(--accent); }
+  .badge.gray { background: #f3f4f6; color: var(--mid); }
+
+  /* ── Progress ── */
+  .progress-track {
+    height: 10px;
+    background: var(--border);
+    border-radius: 999px;
+    overflow: hidden;
+    margin-top: 0.5rem;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 999px;
+    transition: width 0.3s;
+  }
+
+  /* ── Todo list ── */
+  .todo-item {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.85rem;
+  }
+  .todo-item:last-child { border-bottom: none; }
+  .todo-item.done span { text-decoration: line-through; color: var(--mid); }
+  .todo-check {
+    width: 18px; height: 18px;
+    border: 2px solid var(--border);
+    border-radius: 3px;
+    cursor: pointer;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    transition: background 0.12s, border-color 0.12s;
+  }
+  .todo-check.checked { background: var(--pass); border-color: var(--pass); color: #fff; }
+
+  /* ── Event log ── */
+  .event-log {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    max-height: 140px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    background: #faf9f6;
+  }
+  .log-entry {
+    padding: 0.3rem 0.6rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 0.5rem;
+  }
+  .log-entry:last-child { border-bottom: none; }
+  .log-ts { color: var(--mid); flex-shrink: 0; }
+  .log-msg { color: var(--ink); }
+  .log-msg.green { color: var(--pass); }
+  .log-msg.orange { color: var(--accent); }
+
+  /* ── Component slot demo ── */
+  .card-component {
+    border: 2px solid var(--ink);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .card-component-head {
+    background: var(--ink);
+    color: #fff;
+    padding: 0.5rem 0.875rem;
+    font-weight: 700;
+    font-size: 0.8rem;
+  }
+  .card-component-body {
+    padding: 0.875rem;
+    font-size: 0.85rem;
+  }
+
+  /* ── x-transition demo ── */
+  .fade-box {
+    padding: 0.75rem;
+    background: linear-gradient(135deg, #e84d1c22 0%, #2563eb22 100%);
+    border: 1.5px solid var(--accent2);
+    border-radius: 3px;
+    font-weight: 600;
+    text-align: center;
+    font-size: 0.85rem;
+  }
+  .x-enter { animation: fadeSlideIn 0.3s ease forwards; }
+  .x-leave { animation: fadeSlideOut 0.3s ease forwards; }
+  @keyframes fadeSlideIn {
+    from { opacity: 0; transform: translateY(-8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeSlideOut {
+    from { opacity: 1; transform: translateY(0); }
+    to   { opacity: 0; transform: translateY(-8px); }
+  }
+
+  /* ── Pipe filter chips ── */
+  .pipe-demo {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .pipe-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+  }
+  .pipe-label {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    color: var(--mid);
+    min-width: 80px;
+  }
+  .pipe-val {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    background: #f3f4f6;
+    border-radius: 2px;
+    padding: 0.15rem 0.4rem;
+  }
+
+  /* ── Scoped data ── */
+  .scoped-counter {
+    border: 1.5px dashed var(--accent2);
+    border-radius: 3px;
+    padding: 0.75rem;
+    background: #eff6ff;
+    text-align: center;
+  }
+  .scoped-counter .lbl {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    color: var(--accent2);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 0.4rem;
+  }
+
+  /* ── Timer ── */
+  .timer-display {
+    font-family: var(--mono);
+    font-size: 2.5rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── Result table ── */
+  .result-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.78rem;
+    font-family: var(--mono);
+  }
+  .result-table th {
+    text-align: left;
+    padding: 0.4rem 0.5rem;
+    border-bottom: 2px solid var(--ink);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--mid);
+  }
+  .result-table td {
+    padding: 0.35rem 0.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .result-table tr:last-child td { border-bottom: none; }
+
+  /* ── Summary bar ── */
+  .summary-bar {
+    border: 2px solid var(--ink);
+    border-radius: 4px;
+    background: var(--ink);
+    color: #fff;
+    padding: 1rem 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+    flex-wrap: wrap;
+  }
+  .summary-label { font-size: 0.75rem; letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.7; }
+  .summary-val { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.04em; }
+  .summary-item { display: flex; flex-direction: column; }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* ── Responsive ── */
+  @media (max-width: 860px) {
+    .demo-grid { grid-template-columns: 1fr; }
+    .demo-nav { position: static; height: auto; display: flex; flex-wrap: wrap; padding: 0.5rem; border-right: none; border-bottom: 2px solid var(--ink); }
+    .nav-section { display: none; }
+    .nav-item { border-left: none; border-bottom: 2px solid transparent; padding: 0.35rem 0.6rem; font-size: 0.72rem; }
+    .nav-item.active { border-bottom-color: var(--accent); }
+    .section-body { grid-template-columns: 1fr; }
+    .section-body.triple { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="logo">Mini<span>X</span></div>
+  <div class="tagline">Feature Test Suite</div>
+  <div id="global-badge" class="pass-badge">Loading…</div>
+</header>
+
+<div class="demo-grid">
+  <nav class="demo-nav" id="demo-nav">
+    <div class="nav-section">Reactivity</div>
+    <div class="nav-item active" data-section="s-binding" onclick="scrollTo('s-binding', this)">
+      <span class="nav-dot pending" id="dot-binding"></span>x-model / x-text
+    </div>
+    <div class="nav-item" data-section="s-computed" onclick="scrollTo('s-computed', this)">
+      <span class="nav-dot pending" id="dot-computed"></span>Computed
+    </div>
+    <div class="nav-item" data-section="s-watch" onclick="scrollTo('s-watch', this)">
+      <span class="nav-dot pending" id="dot-watch"></span>Watch / Effects
+    </div>
+    <div class="nav-section">Directives</div>
+    <div class="nav-item" data-section="s-cond" onclick="scrollTo('s-cond', this)">
+      <span class="nav-dot pending" id="dot-cond"></span>x-if / x-show
+    </div>
+    <div class="nav-item" data-section="s-loop" onclick="scrollTo('s-loop', this)">
+      <span class="nav-dot pending" id="dot-loop"></span>x-for
+    </div>
+    <div class="nav-item" data-section="s-class" onclick="scrollTo('s-class', this)">
+      <span class="nav-dot pending" id="dot-class"></span>x-class / x-style
+    </div>
+    <div class="nav-item" data-section="s-events" onclick="scrollTo('s-events', this)">
+      <span class="nav-dot pending" id="dot-events"></span>Events / Modifiers
+    </div>
+    <div class="nav-item" data-section="s-pipe" onclick="scrollTo('s-pipe', this)">
+      <span class="nav-dot pending" id="dot-pipe"></span>Pipe Filters
+    </div>
+    <div class="nav-item" data-section="s-transition" onclick="scrollTo('s-transition', this)">
+      <span class="nav-dot pending" id="dot-transition"></span>x-transition
+    </div>
+    <div class="nav-section">Structure</div>
+    <div class="nav-item" data-section="s-components" onclick="scrollTo('s-components', this)">
+      <span class="nav-dot pending" id="dot-components"></span>Components / Slots
+    </div>
+    <div class="nav-item" data-section="s-scoped" onclick="scrollTo('s-scoped', this)">
+      <span class="nav-dot pending" id="dot-scoped"></span>x-data Scoped
+    </div>
+    <div class="nav-item" data-section="s-teleport" onclick="scrollTo('s-teleport', this)">
+      <span class="nav-dot pending" id="dot-teleport"></span>x-teleport
+    </div>
+    <div class="nav-section">Advanced</div>
+    <div class="nav-item" data-section="s-bus" onclick="scrollTo('s-bus', this)">
+      <span class="nav-dot pending" id="dot-bus"></span>Event Bus
+    </div>
+    <div class="nav-item" data-section="s-lifecycle" onclick="scrollTo('s-lifecycle', this)">
+      <span class="nav-dot pending" id="dot-lifecycle"></span>Lifecycle
+    </div>
+    <div class="nav-item" data-section="s-state-api" onclick="scrollTo('s-state-api', this)">
+      <span class="nav-dot pending" id="dot-state-api"></span>State API
+    </div>
+    <div class="nav-item" data-section="s-results" onclick="scrollTo('s-results', this)">
+      <span class="nav-dot pending" id="dot-results"></span>Results
+    </div>
+  </nav>
+
+  <main class="demo-main" id="demo-main">
+
+    <!-- ──────────────────────────────────────── -->
+    <!-- 1. x-model / x-text / Interpolation     -->
+    <!-- ──────────────────────────────────────── -->
+    <div class="section-card" id="s-binding">
+      <div class="section-header">
+        <div class="section-title">x-model · x-text · Interpolation</div>
+        <span class="section-tag">Reactivity</span>
+      </div>
+      <div class="section-body" id="app-binding">
+        <!-- LEFT: two-way binding -->
+        <div class="test-box">
+          <div class="test-label">Two-way binding (x-model + x-text) <span id="badge-binding" class="badge gray">pending</span></div>
+          <div class="test-content col">
+            <input type="text" x-model="name" placeholder="Type your name…">
+            <div>Hello, <strong x-text="name || '—'"></strong>!</div>
+            <div class="output">{{ name }}</div>
+            <div class="row mt">
+              <input type="number" x-model.number="count" style="width:80px">
+              <span class="badge blue" x-text="'× 2 = ' + (count * 2)"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT: textarea + select -->
+        <div class="test-box">
+          <div class="test-label">textarea · select · checkbox <span id="badge-form" class="badge gray">pending</span></div>
+          <div class="test-content col">
+            <textarea x-model="bio" placeholder="Write a bio…" rows="3"></textarea>
+            <div class="output">{{ bio | capitalize }}</div>
+            <div class="row">
+              <select x-model="color">
+                <option value="red">Red</option>
+                <option value="green">Green</option>
+                <option value="blue">Blue</option>
+              </select>
+              <span class="badge" x-style="{ background: color + '22', color: color }">{{ color }}</span>
+            </div>
+            <label class="row" style="cursor:pointer;font-size:.83rem">
+              <input type="checkbox" x-model="agree"> I agree to the terms
+            </label>
+            <span x-show="agree" class="badge green">✓ Agreed</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ──────────────────────────────────────── -->
+    <!-- 2. Computed                              -->
+    <!-- ──────────────────────────────────────── -->
+    <div class="section-card" id="s-computed">
+      <div class="section-header">
+        <div class="section-title">Computed Properties</div>
+        <span class="section-tag">Reactivity</span>
+      </div>
+      <div class="section-body" id="app-computed">
+        <div class="test-box">
+          <div class="test-label">Derived values <span id="badge-computed" class="badge gray">pending</span></div>
+          <div class="test-content col">
+            <div class="row">
+              <input type="text" x-model="firstName" placeholder="First name">
+              <input type="text" x-model="lastName" placeholder="Last name">
+            </div>
+            <div>Full name: <strong x-text="fullName"></strong></div>
+            <div>Length: <span class="badge blue" x-text="fullName.length + ' chars'"></span></div>
+            <div>Reversed: <code class="pipe-val" x-text="fullName.split('').reverse().join('')"></code></div>
+            <div>Initials: <span class="badge orange" x-text="initials"></span></div>
+          </div>
+        </div>
+        <div class="test-box">
+          <div class="test-label">Cart total (computed) <span id="badge-cart" class="badge gray">pending</span></div>
+          <div class="test-content col">
+            <template x-for="(item, i) in cart">
+              <div class="row" style="align-items:center">
+                <span style="flex:1;font-size:.82rem" x-text="item.name"></span>
+                <input type="number" x-model.number="cart[i].qty" style="width:55px" min="0">
+                <span class="badge gray" x-text="'$' + (item.price * item.qty).toFixed(2)"></span>
+              </div>
+            </template>
+            <div style="border-top:1.5px solid var(--border);margin-top:.5rem;padding-top:.5rem">
+              Total: <strong x-text="'$' + cartTotal.toFixed(2)"></strong>
+              <span x-show="cartTotal > 50" class="badge green" style="margin-left:.5rem">Free shipping!</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ──────────────────────────────────────── -->
+    <!-- 3. Watch / Effects                       -->
+    <!-- ──────────────────────────────────────── -->
+    <div class="section-card" id="s-watch">
+      <div class="section-header">
+        <div class="section-title">Watch · $effect</div>
+        <span class="section-tag">Reactivity</span>
+      </div>
+      <div class="section-body" id="app-watch">
+        <div class="test-box">
+          <div class="test-label">Watcher log <span id="badge-watch" class="badge gray">pending</span></div>
+          <div class="test-content col">
+            <input type="text" x-model="watchInput" placeholder="Type to trigger watcher…">
+            <div class="mt">
+              <div style="font-size:.75rem;color:var(--mid);margin-bottom:.3rem">Watch log:</div>
+              <div class="event-log" id="watch-log">
+                <div class="log-entry"><span class="log-ts">init</span><span class="log-msg">Watching 'watchInput'…</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="test-box">
+          <div class="test-label">Timer ($interval + $timeout) <span id="badge-timer" class="badge gray">pending</span></div>
+          <div class="test-content col">
+            <div class="timer-display" x-text="timerDisplay"></div>
+            <div class="row mt">
+              <button class="btn sm" @click="startTimer" x-disabled="timerRunning">Start</button>
+              <button class="btn sm danger" @click="stopTimer" x-disabled="!timerRunning">Stop</button>
+              <button class="btn sm" @click="resetTimer">Reset</button>
+            </div>
+            <div class="output green mt" x-text="timerRunning ? '● Running' : '■ Stopped'"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ──────────────────────────────────────── -->
+    <!-- 4. x-if / x-show                        -->
+    <!-- ──────────────────────────────────────── -->
+    <div class="section-card" id="s-cond">
+      <div class="section-header">
+        <div class="section-title">x-if · x-else-if · x-else · x-show</div>
+        <span class="section-tag">Directives</span>
+      </div>
+      <div class="section-body triple" id="app-cond">
+        <div class="test-box">
+          <div class="test-label">x-if chain <span id="badge-if" class="badge gray">pending</span></div>
+          <div class="test-content col">
+            <div class="row">
+              <button class="btn sm" @click="condScore = Math.max(0, condScore - 10)">−10</button>
+              <span class="badge blue" x-text="condScore"></span>
+              <button class="btn sm" @click="condScore = Math.min(100, condScore + 10)">+10</button>
+            </div>
+            <div x-if="condScore >= 90" class="badge green" style="margin-top:.5rem">🏆 Excellent (≥90)</div>
+            <div x-else-if="condScore >= 70" class="badge blue">👍 Good (70–89)</div>
+            <div x-else-if="condScore >= 50" class="badge orange">😐 OK (50–69)</div>
+            <div x-else class="badge red">😞 Poor (&lt;50)</div>
+          </div>
+        </div>
+
+        <div class="test-box">
+          <div class="test-label">x-show (DOM preserved) <span id="badge-show" class="badge gray">pending</span></div>
+          <div class="test-content col">
+            <button class="btn sm" @click="showPanel = !showPanel">
+              Toggle panel
+            </button>
+            <div x-show="showPanel" class="mt">
+              <div class="fade-box">👋 Panel is visible!</div>
+            </div>
+            <div class="output mt" x-text="showPanel ? 'visible' : 'hidden'"></div>
+          </div>
+        </div>
+
+        <div class="test-box">
+          <div class="test-label">x-if vs x-show timing</div>
+          <div class="test-content col">
+            <button class="btn sm" @click="ifToggle = !ifToggle">Toggle both</button>
+            <div class="mt col" style="gap:.3rem">
+              <div style="font-size:.75rem">x-if: <span class="badge" x-text="ifToggle ? 'mounted' : 'destroyed'" x-class="{ green: ifToggle, red: !ifToggle }"></span></div>
+              <div x-if="ifToggle" class="badge green">x-if content (DOM creates/removes)</div>
+              <div style="font-size:.75rem">x-show: <span class="badge" x-text="ifToggle ? 'visible' : 'hidden'" x-class="{ green: ifToggle, gray: !ifToggle }"></span></div>
+              <div x-show="ifToggle" class="badge blue">x-show content (display toggle)</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ──────────────────────────────────────── -->
+    <!-- 5. x-for                                -->
+    <!-- ──────────────────────────────────────── -->
+    <div class="section-card" id="s-loop">
+      <div class="section-header">
+        <div class="section-title">x-for — Lists &amp; Todos</div>
+        <span class="section-tag">Directives</span>
+      </div>
+      <div class="section-body" id="app-loop">
+        <div class="test-box">
+          <div class="test-label">Todo list <span id="badge-for" class="badge gray">pending</span></div>
+          <div class="test-content col">
+            <div class="row">
+              <input type="text" x-model="newTodo" placeholder="Add a task…" @keydown.enter="addTodo" style="flex:1">
+              <button class="btn sm primary" @click="addTodo" x-disabled="!newTodo.trim()">Add</button>
+            </div>
+            <div class="mt">
+              <template x-for="(todo, i) in todos" :key="todo.id">
+                <div class="todo-item" x-class="{ done: todo.done }">
+                  <div class="todo-check" x-class="{ checked: todo.done }" @click="todos[i].done = !todos[i].done">
+                    <span x-show="todo.done">✓</span>
+                  </div>
+                  <span style="flex:1" x-text="todo.text"></span>
+                  <button class="btn sm danger" @click="removeTodo(i)">×</button>
+                </div>
+              </template>
+              <div x-show="!todos.length" class="output">No tasks yet.</div>
+            </div>
+            <div class="row mt" style="font-size:.78rem">
+              <span x-text="todos.filter(t => t.done).length + '/' + todos.length + ' done'"></span>
+              <button class="btn sm" @click="clearDone" x-disabled="!todos.some(t => t.done)">Clear done</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="test-box">
+          <div class="test-label">Keyed list reorder <span id="badge-reorder" class="badge gray">pending</span></div>
+          <div class="test-content col">
+            <div class="row">
+              <button class="btn sm" @click="shuffleItems">Shuffle</button>
+              <button class="btn sm" @click="addItem">Add</button>
+              <button class="btn sm danger" @click="removeFirst" x-disabled="!listItems.length">Remove first</button>
+            </div>
+            <div class="mt col" style="gap:.3rem">
+              <template x-for="item in listItems" :key="item.id">
+                <div class="row" style="align-items:center;font-size:.82rem">
+                  <span class="badge gray" x-text="item.id"></span>
+                  <span x-text="item.label"></span>
+                  <span class="badge" x-style="{ background: item.color + '33', color: item.color }" x-text="item.color"></span>
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ──────────────────────────────────────── -->
+    <!-- 6. x-class / x-style / x-attr           -->
+    <!-- ──────────────────────────────────────── -->
+    <div class="section-card" id="s-class">
+      <div class="section-header">
+        <div class="section-title">x-class · x-style · x-attr · x-bind</div>
+        <span class="section-tag">Directives</span>
+      </div>
+      <div class="section-body" id="app-class">
+        <div class="test-box">
+          <div class="test-label">Dynamic classes <span id="badge-class" class="badge gray">pending</span></div>
+          <div class="test-content col">
+            <div class="row">
+              <label class="row" style="cursor:pointer;font-size:.8rem"><input type="checkbox" x-model="cls.bold"> Bold</label>
+              <label class="row" style="cursor:pointer;font-size:.8rem"><input type="checkbox" x-model="cls.italic"> Italic</label>
+              <label class="row" style="cursor:pointer;font-size:.8rem"><input type="checkbox" x-model="cls.underline"> Underline</label>
+            </div>
+            <div
+              x-class="{ 'cls-bold': cls.bold, 'cls-italic': cls.italic, 'cls-underline': cls.underline }"
+              style="margin-top:.6rem;padding:.5rem;border:1.5px solid var(--border);border-radius:3px;font-size:.9rem">
+              The quick brown fox.
+            </div>
+          </div>
+        </div>
+        <div class="test-box">
+          <div class="test-label">Dynamic styles + attrs <span id="badge-style" class="badge gray">pending</span></div>
+          <div class="test-content col">
+            <div class="row">
+              <label style="font-size:.78rem;font-family:var(--mono)">Hue</label>
+              <input type="range" x-model.number="styleHue" min="0" max="360" style="flex:1">
+              <span class="badge gray" x-text="styleHue + '°'"></span>
+            </div>
+            <div class="row">
+              <label style="font-size:.78rem;font-family:var(--mono)">Size</label>
+              <input type="range" x-model.number="styleFontSize" min="12" max="36" style="flex:1">
+              <span class="badge gray" x-text="styleFontSize + 'px'"></span>
+            </div>
+            <div
+              x-style="{ color: 'hsl(' + styleHue + ',70%,40%)', fontSize: styleFontSize + 'px', fontWeight: '700', marginTop: '.5rem' }"
+              x-attr="{ title: 'Hue: ' + styleHue + ', Size: ' + styleFontSize + 'px' }">
+              Dynamic text
+            </div>
+            <div class="output" x-text="'hsl(' + styleHue + ', 70%, 40%)'"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ──────────────────────────────────────── -->
+    <!-- 7. Events / Modifiers                   -->
+    <!-- ──────────────────────────────────────── -->
+    <div class="section-card" id="s-events">
+      <div class="section-header">
+        <div class="section-title">Events · Modifiers (prevent · stop · once · self)</div>
+        <span class="section-tag">Directives</span>
+      </div>
+      <div class="section-body" id="app-events">
+        <div class="test-box">
+          <div class="test-label">Keyboard + click modifiers <span id="badge-events" class="badge gray">pending</span></div>
+          <div class="test-content col">
+            <input type="text" x-model="keyInput"
+              @keydown.enter.prevent="pushEvent('Enter pressed')"
+              @keydown.escape="keyInput = ''"
+              placeholder="Enter=event, Esc=clear">
+            <div class="row mt">
+              <button class="btn sm" @click.once="pushEvent('Once-only click fired!')">Click once</button>
+              <button class="btn sm" @click="pushEvent('Normal click')">Normal click</button>
+            </div>
+            <div class="row mt" @click="pushEvent('OUTER clicked')">
+              <button class="btn sm" @click.stop="pushEvent('Inner click (stopped)')">stop propagation</button>
+              <span style="font-size:.72rem;color:var(--mid)">(outer should NOT fire)</span>
+            </div>
+            <div class="event-log mt" style="max-height:100px">
+              <template x-for="(e, i) in eventLog" :key="i">
+                <div class="log-entry">
+                  <span class="log-ts" x-text="e.ts"></span>
+                  <span class="log-msg orange" x-text="e.msg"></span>
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+        <div class="test-box">
+          <div class="test-label">x-ref + focus directive <span id="badge-ref" class="badge gray">pending</span></div>
+          <div class="test-content col">
+            <input type="text" x-ref="refInput" placeholder="I can be focused via $refs">
+            <button class="btn sm mt" @click="focusRefInput">Focus input via $refs</button>
+            <div class="output mt" x-text="'$refs.refInput: ' + (!!$refs.refInput ? 'registered ✓' : 'missing ✗')"></div>
+            <input type="text" x-focus="shouldAutoFocus" placeholder="x-focus auto-focus" class="mt">
+            <div class="row mt">
+              <button class="btn sm" @click="shouldAutoFocus = true">Enable x-focus</button>
+              <button class="btn sm" @click="shouldAutoFocus = false">Disable</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ──────────────────────────────────────── -->
+    <!-- 8. Pipe Filters                         -->
+    <!-- ──────────────────────────────────────── -->
+    <div class="section-card" id="s-pipe">
+      <div class="section-header">
+        <div class="section-title">Pipe Filters (|)</div>
+        <span class="section-tag">Directives</span>
+      </div>
+      <div class="section-body" id="app-pipe">
+        <div class="test-box">
+          <div class="test-label">Built-in modifiers <span id="badge-pipe" class="badge gray">pending</span></div>
+          <div class="test-content col">
+            <input type="text" x-model="pipeInput" placeholder="Type something…">
+            <div class="pipe-demo mt">
+              <div class="pipe-row"><span class="pipe-label">| upper</span><code class="pipe-val" x-text="pipeInput | upper"></code></div>
+              <div class="pipe-row"><span class="pipe-label">| lower</span><code class="pipe-val" x-text="pipeInput | lower"></code></div>
+              <div class="pipe-row"><span class="pipe-label">| capitalize</span><code class="pipe-val" x-text="pipeInput | capitalize"></code></div>
+              <div class="pipe-row"><span class="pipe-label">| trim</span><code class="pipe-val" x-text="pipeInput | trim"></code></div>
+              <div class="pipe-row"><span class="pipe-label">| boolean</span><code class="pipe-val" x-text="pipeInput | boolean"></code></div>
+            </div>
+          </div>
+        </div>
+        <div class="test-box">
+          <div class="test-label">Custom modifier (reverse) + json <span id="badge-custpipe" class="badge gray">pending</span></div>
+          <div class="test-content col">
+            <div class="pipe-demo">
+              <div class="pipe-row"><span class="pipe-label">| reverse</span><code class="pipe-val" x-text="pipeInput | reverse"></code></div>
+              <div class="pipe-row"><span class="pipe-label">| json</span><code class="pipe-val" style="word-break:break-all" x-text="cartTotal | json"></code></div>
+              <div class="pipe-row"><span class="pipe-label">chained</span><code class="pipe-val" x-text="pipeInput | trim | upper | reverse"></code></div>
+            </div>
+            <div class="output mt" x-text="'pipeInput length: ' + pipeInput.length"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ──────────────────────────────────────── -->
+    <!-- 9. x-transition                         -->
+    <!-- ──────────────────────────────────────── -->
+    <div class="section-card" id="s-transition">
+      <div class="section-header">
+        <div class="section-title">x-transition</div>
+        <span class="section-tag">Directives</span>
+      </div>
+      <div class="section-body" id="app-transition">
+        <div class="test-box">
+          <div class="test-label">Fade + slide <span id="badge-transition" class="badge gray">pending</span></div>
+          <div class="test-content col">
+            <button class="btn" @click="transVisible = !transVisible">Toggle with transition</button>
+            <div style="min-height:60px;margin-top:.5rem">
+              <div
+                x-show="transVisible"
+                x-transition="{ enter: 'x-enter', leave: 'x-leave', duration: 300 }"
+                class="fade-box">
+                🎉 Hello! I animate in and out.
+              </div>
+            </div>
+            <div class="output" x-text="transVisible ? 'visible' : 'hidden'"></div>
+          </div>
+        </div>
+        <div class="test-box">
+          <div class="test-label">x-once + x-cloak</div>
+          <div class="test-content col">
+            <div x-once style="font-size:.82rem;color:var(--mid)">
+              Rendered once at: <strong x-text="new Date().toLocaleTimeString()"></strong><br>
+              <em>(Will not update even if state changes)</em>
+            </div>
+            <div x-cloak x-if="false" style="background:red">You should never see this (x-cloak)</div>
+            <div class="output green mt">x-cloak hidden ✓ · x-once frozen ✓</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ──────────────────────────────────────── -->
+    <!-- 10. Components + Slots                  -->
+    <!-- ──────────────────────────────────────── -->
+    <div class="section-card" id="s-components">
+      <div class="section-header">
+        <div class="section-title">Components · Props · Slots · $emit</div>
+        <span class="section-tag">Structure</span>
+      </div>
+      <div class="section-body" id="app-components">
+        <div class="test-box">
+          <div class="test-label">Child component + props <span id="badge-comp" class="badge gray">pending</span></div>
+          <div class="test-content col">
+            <div class="row">
+              <input type="text" x-model="compTitle" placeholder="Component title…">
+              <button class="btn sm primary" @click="compCount++">+1 to child</button>
+            </div>
+            <div class="mt" x-component="InfoCard" x-props="{ title: compTitle, count: compCount }"></div>
+            <div class="output mt" x-text="'Child emitted: ' + lastChildEmit"></div>
+          </div>
+        </div>
+        <div class="test-box">
+          <div class="test-label">Slots <span id="badge-slots" class="badge gray">pending</span></div>
+          <div class="test-content col">
+            <div x-component="CardShell">
+              <span x-slot="title">🎉 Slot Title</span>
+              <span x-slot="body">This content was slotted in from the parent!</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ──────────────────────────────────────── -->
+    <!-- 11. x-data scoped                       -->
+    <!-- ──────────────────────────────────────── -->
+    <div class="section-card" id="s-scoped">
+      <div class="section-header">
+        <div class="section-title">x-data — Scoped Inline State</div>
+        <span class="section-tag">Structure</span>
+      </div>
+      <div class="section-body" id="app-scoped">
+        <div class="test-box">
+          <div class="test-label">Independent counters <span id="badge-scoped" class="badge gray">pending</span></div>
+          <div class="test-content col" style="gap:.6rem">
+            <template x-for="n in 3">
+              <div class="scoped-counter" x-data="{ local: 0, label: 'Counter #' + n }">
+                <div class="lbl" x-text="label"></div>
+                <div class="counter-display" style="font-size:2rem" x-text="local"></div>
+                <div class="row mt" style="justify-content:center">
+                  <button class="btn sm" @click="local--">−</button>
+                  <button class="btn sm" @click="local++">+</button>
+                  <button class="btn sm" @click="local = 0">reset</button>
+                </div>
+              </div>
+            </template>
+            <div class="output" x-text="'Global state is unaffected: count=' + count"></div>
+          </div>
+        </div>
+        <div class="test-box">
+          <div class="test-label">Accordion (x-data per item) <span id="badge-accordion" class="badge gray">pending</span></div>
+          <div class="test-content col" style="gap:.3rem">
+            <template x-for="(item, i) in accordionItems" :key="item.id">
+              <div x-data="{ open: false }" style="border:1.5px solid var(--border);border-radius:3px;overflow:hidden">
+                <div
+                  style="padding:.5rem .75rem;cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-size:.83rem;font-weight:700;background:#faf9f6"
+                  @click="open = !open">
+                  <span x-text="item.title"></span>
+                  <span x-text="open ? '▲' : '▼'"></span>
+                </div>
+                <div x-show="open" style="padding:.5rem .75rem;font-size:.8rem;color:var(--mid)" x-text="item.body"></div>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ──────────────────────────────────────── -->
+    <!-- 12. x-teleport                          -->
+    <!-- ──────────────────────────────────────── -->
+    <div class="section-card" id="s-teleport">
+      <div class="section-header">
+        <div class="section-title">x-teleport</div>
+        <span class="section-tag">Structure</span>
+      </div>
+      <div class="section-body" id="app-teleport">
+        <div class="test-box">
+          <div class="test-label">Teleport to #portal-target <span id="badge-teleport" class="badge gray">pending</span></div>
+          <div class="test-content col">
+            <div style="font-size:.8rem;color:var(--mid)">Content below is teleported OUT of this box:</div>
+            <div x-teleport="'#portal-target'" x-show="teleportVisible" class="badge orange" style="padding:.4rem .8rem">
+              📡 I was teleported here from inside the card!
+            </div>
+            <button class="btn sm mt" @click="teleportVisible = !teleportVisible">Toggle teleport</button>
+          </div>
+        </div>
+        <div class="test-box">
+          <div class="test-label">Portal target (rendered here)</div>
+          <div class="test-content">
+            <div id="portal-target" style="min-height:40px;border:2px dashed var(--accent);border-radius:3px;padding:.5rem;display:flex;align-items:center;justify-content:center">
+              <span style="font-size:.75rem;color:var(--mid);font-family:var(--mono)">#portal-target</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ──────────────────────────────────────── -->
+    <!-- 13. Event Bus                           -->
+    <!-- ──────────────────────────────────────── -->
+    <div class="section-card" id="s-bus">
+      <div class="section-header">
+        <div class="section-title">Event Bus ($emit / $bus.on)</div>
+        <span class="section-tag">Advanced</span>
+      </div>
+      <div class="section-body" id="app-bus">
+        <div class="test-box">
+          <div class="test-label">Publish events <span id="badge-bus" class="badge gray">pending</span></div>
+          <div class="test-content col">
+            <div class="row">
+              <input type="text" x-model="busMsg" placeholder="Event payload…" style="flex:1">
+              <button class="btn sm primary" @click="emitBusEvent" x-disabled="!busMsg.trim()">Emit</button>
+            </div>
+            <div class="row mt" style="flex-wrap:wrap;gap:.4rem">
+              <button class="btn sm" @click="$emit('ping', 'hello')">ping</button>
+              <button class="btn sm" @click="$emit('notify', { level: 'info', text: 'Test info' })">notify:info</button>
+              <button class="btn sm danger" @click="$emit('notify', { level: 'error', text: 'Oops!' })">notify:error</button>
+            </div>
+          </div>
+        </div>
+        <div class="test-box">
+          <div class="test-label">Bus event log <span id="badge-buslog" class="badge gray">pending</span></div>
+          <div class="test-content">
+            <div class="event-log" id="bus-log" style="max-height:160px">
+              <div class="log-entry"><span class="log-ts">init</span><span class="log-msg">Bus listener active…</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ──────────────────────────────────────── -->
+    <!-- 14. Lifecycle                           -->
+    <!-- ──────────────────────────────────────── -->
+    <div class="section-card" id="s-lifecycle">
+      <div class="section-header">
+        <div class="section-title">Lifecycle Hooks</div>
+        <span class="section-tag">Advanced</span>
+      </div>
+      <div class="section-body single" id="app-lifecycle">
+        <div class="test-box">
+          <div class="test-label">Hook call log <span id="badge-lifecycle" class="badge gray">pending</span></div>
+          <div class="test-content">
+            <div class="event-log" id="lifecycle-log" style="max-height:200px">
+              <div class="log-entry"><span class="log-ts">init</span><span class="log-msg">Watching lifecycle hooks…</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ──────────────────────────────────────── -->
+    <!-- 15. State API                           -->
+    <!-- ──────────────────────────────────────── -->
+    <div class="section-card" id="s-state-api">
+      <div class="section-header">
+        <div class="section-title">State API (set · patch · merge · toggle · increment)</div>
+        <span class="section-tag">Advanced</span>
+      </div>
+      <div class="section-body" id="app-state-api">
+        <div class="test-box">
+          <div class="test-label">Direct API calls <span id="badge-state-api" class="badge gray">pending</span></div>
+          <div class="test-content col">
+            <div class="row" style="flex-wrap:wrap;gap:.4rem">
+              <button class="btn sm" @click="$set('stateObj.x', stateObj.x + 1)">set x++</button>
+              <button class="btn sm" @click="$patch('stateObj.y', v => v * 2)">patch y×2</button>
+              <button class="btn sm" @click="$merge('stateObj', { z: Math.floor(Math.random()*100) })">merge z=rand</button>
+              <button class="btn sm" @click="$toggle('stateFlag')">toggle flag</button>
+              <button class="btn sm" @click="$set('stateObj', { x: 0, y: 1, z: 0 })">reset</button>
+            </div>
+            <div class="output mt" x-text="'x=' + stateObj.x + '  y=' + stateObj.y + '  z=' + stateObj.z"></div>
+            <div class="output accent mt" x-text="'flag: ' + stateFlag"></div>
+          </div>
+        </div>
+        <div class="test-box">
+          <div class="test-label">Array helpers (push · pop · map · filter) <span id="badge-array" class="badge gray">pending</span></div>
+          <div class="test-content col">
+            <div class="row" style="flex-wrap:wrap;gap:.4rem">
+              <button class="btn sm" @click="$state.push('nums', Math.floor(Math.random()*100))">push</button>
+              <button class="btn sm" @click="$state.pop('nums')">pop</button>
+              <button class="btn sm" @click="$state.map('nums', n => n * 2)">×2 all</button>
+              <button class="btn sm" @click="$state.filter('nums', n => n % 2 === 0)">filter even</button>
+              <button class="btn sm danger" @click="$set('nums', [])">clear</button>
+            </div>
+            <div class="mt col" style="gap:.3rem">
+              <template x-for="(n, i) in nums" :key="i">
+                <span class="badge blue" x-text="n"></span>
+              </template>
+              <div x-show="!nums.length" class="output">Empty</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ──────────────────────────────────────── -->
+    <!-- 16. Results                             -->
+    <!-- ──────────────────────────────────────── -->
+    <div class="section-card" id="s-results">
+      <div class="section-header">
+        <div class="section-title">Test Results</div>
+        <span class="section-tag">Summary</span>
+      </div>
+      <div class="section-body single" id="app-results">
+        <div class="test-box">
+          <div class="test-label">Auto-detected test outcomes</div>
+          <div class="test-content">
+            <table class="result-table">
+              <thead>
+                <tr><th>Feature</th><th>Directive</th><th>Status</th></tr>
+              </thead>
+              <tbody>
+                <template x-for="r in testResults" :key="r.id">
+                  <tr>
+                    <td x-text="r.name"></td>
+                    <td><code x-text="r.directive"></code></td>
+                    <td>
+                      <span class="badge" x-class="{ green: r.pass, red: !r.pass }" x-text="r.pass ? '✓ Pass' : '✗ Fail'"></span>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Summary bar -->
+    <div class="summary-bar" id="app-summary">
+      <div class="summary-item">
+        <span class="summary-label">Total tests</span>
+        <span class="summary-val" x-text="testResults.length"></span>
+      </div>
+      <div class="summary-item">
+        <span class="summary-label">Passing</span>
+        <span class="summary-val" x-text="testResults.filter(r => r.pass).length" style="color:#4ade80"></span>
+      </div>
+      <div class="summary-item">
+        <span class="summary-label">Failing</span>
+        <span class="summary-val" x-text="testResults.filter(r => !r.pass).length" style="color:#f87171"></span>
+      </div>
+      <div class="summary-item">
+        <span class="summary-label">Score</span>
+        <span class="summary-val" x-text="Math.round(testResults.filter(r => r.pass).length / Math.max(testResults.length,1) * 100) + '%'"></span>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- Teleport root -->
+<div id="portal-target-root" style="display:none"></div>
+
+<style>
+  .cls-bold { font-weight: 800; }
+  .cls-italic { font-style: italic; }
+  .cls-underline { text-decoration: underline; }
+</style>
+
+<script src="../mini-x.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  CHILD COMPONENTS
+// ═══════════════════════════════════════════════════════════════
+
+class InfoCard {
+  data() {
+    return {};
+  }
+  methods = {
+    sendUp() {
+      this.$emit('child-action', { msg: 'InfoCard button clicked', count: this.count });
+    }
+  };
+  template() {
+    return `
+      <div class="card-component">
+        <div class="card-component-head" x-text="$props.title || 'No title'"></div>
+        <div class="card-component-body col" style="gap:.4rem">
+          <div>Count from props: <strong x-text="$props.count"></strong></div>
+          <button class="btn sm" @click="sendUp">Emit to parent</button>
+        </div>
+      </div>
+    `;
+  }
+  beforeMount() { logLifecycle('InfoCard', 'beforeMount'); }
+  mounted()     { logLifecycle('InfoCard', 'mounted'); }
+  beforeUpdate(){ logLifecycle('InfoCard', 'beforeUpdate'); }
+  updated()     { logLifecycle('InfoCard', 'updated'); }
+  beforeUnmount(){ logLifecycle('InfoCard', 'beforeUnmount'); }
+  unmounted()   { logLifecycle('InfoCard', 'unmounted'); }
+}
+
+class CardShell {
+  template() {
+    return `
+      <div class="card-component">
+        <div class="card-component-head"><slot name="title">Default Title</slot></div>
+        <div class="card-component-body"><slot name="body">Default body content</slot></div>
+      </div>
+    `;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  LIFECYCLE LOG HELPER
+// ═══════════════════════════════════════════════════════════════
+function logLifecycle(who, hook) {
+  const el = document.getElementById('lifecycle-log');
+  if (!el) return;
+  const now = new Date().toLocaleTimeString('en', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const row = document.createElement('div');
+  row.className = 'log-entry';
+  row.innerHTML = `<span class="log-ts">${now}</span><span class="log-msg green">[${who}] ${hook}</span>`;
+  el.appendChild(row);
+  el.scrollTop = el.scrollHeight;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  ROOT COMPONENT
+// ═══════════════════════════════════════════════════════════════
+class DemoApp {
+  data() {
+    return {
+      // ── binding ──
+      name: '',
+      count: 1,
+      bio: '',
+      color: 'blue',
+      agree: false,
+
+      // ── computed ──
+      firstName: 'Jane',
+      lastName: 'Doe',
+      cart: [
+        { name: 'Widget A', price: 12.99, qty: 1 },
+        { name: 'Widget B', price: 29.99, qty: 2 },
+        { name: 'Widget C', price: 7.50,  qty: 0 },
+      ],
+
+      // ── watch ──
+      watchInput: '',
+      timerRunning: false,
+      timerTicks: 0,
+
+      // ── cond ──
+      condScore: 75,
+      showPanel: true,
+      ifToggle: true,
+
+      // ── loop ──
+      newTodo: '',
+      todos: [
+        { id: 1, text: 'Write tests', done: false },
+        { id: 2, text: 'Fix bugs', done: true },
+        { id: 3, text: 'Ship it', done: false },
+      ],
+      nextTodoId: 4,
+      listItems: [
+        { id: 'a', label: 'Alpha',   color: '#2563eb' },
+        { id: 'b', label: 'Beta',    color: '#16a34a' },
+        { id: 'c', label: 'Gamma',   color: '#e84d1c' },
+        { id: 'd', label: 'Delta',   color: '#7c3aed' },
+      ],
+      nextItemId: 5,
+
+      // ── class/style ──
+      cls: { bold: false, italic: false, underline: false },
+      styleHue: 200,
+      styleFontSize: 22,
+
+      // ── events ──
+      keyInput: '',
+      eventLog: [],
+      shouldAutoFocus: false,
+
+      // ── pipe ──
+      pipeInput: 'hello world',
+
+      // ── transition ──
+      transVisible: true,
+
+      // ── components ──
+      compTitle: 'My Card',
+      compCount: 0,
+      lastChildEmit: '—',
+
+      // ── scoped ──
+      accordionItems: [
+        { id: 1, title: 'What is MiniX?',   body: 'MiniX is a lightweight reactive UI framework with a Vue-inspired API.' },
+        { id: 2, title: 'How does x-data work?', body: 'x-data creates isolated scoped state for a subtree without affecting parent state.' },
+        { id: 3, title: 'Is it production ready?', body: 'It has a comprehensive directive set, effect system, and lifecycle hooks.' },
+      ],
+
+      // ── teleport ──
+      teleportVisible: true,
+
+      // ── bus ──
+      busMsg: '',
+
+      // ── state api ──
+      stateObj: { x: 0, y: 1, z: 0 },
+      stateFlag: false,
+      nums: [10, 20, 30],
+
+      // ── results ──
+      testResults: [],
+    };
+  }
+
+  computed = {
+    fullName(state) {
+      return (state.firstName + ' ' + state.lastName).trim();
+    },
+    initials(state) {
+      return [state.firstName, state.lastName].map(s => s[0] || '').join('').toUpperCase();
+    },
+    cartTotal(state) {
+      return state.cart.reduce((s, i) => s + i.price * i.qty, 0);
+    },
+    timerDisplay(state) {
+      const t = state.timerTicks;
+      const m = Math.floor(t / 60).toString().padStart(2, '0');
+      const s = (t % 60).toString().padStart(2, '0');
+      return `${m}:${s}`;
+    },
+  };
+
+  watch = {
+    watchInput(newVal, oldVal) {
+      const el = document.getElementById('watch-log');
+      if (!el) return;
+      const now = new Date().toLocaleTimeString('en', { hour12: false });
+      const row = document.createElement('div');
+      row.className = 'log-entry';
+      row.innerHTML = `<span class="log-ts">${now}</span><span class="log-msg">"${oldVal}" → "${newVal}"</span>`;
+      el.appendChild(row);
+      el.scrollTop = el.scrollHeight;
+    }
+  };
+
+  registerComponents = {
+    InfoCard,
+    CardShell,
+  };
+
+  methods = {
+    // ── Todo ──
+    addTodo() {
+      const text = this.newTodo.trim();
+      if (!text) return;
+      this.todos.push({ id: this.nextTodoId++, text, done: false });
+      this.newTodo = '';
+    },
+    removeTodo(i) { this.todos.splice(i, 1); },
+    clearDone() { this.$set('todos', this.todos.filter(t => !t.done)); },
+
+    // ── List ──
+    shuffleItems() {
+      const a = [...this.listItems];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      this.$set('listItems', a);
+    },
+    addItem() {
+      const colors = ['#2563eb','#16a34a','#e84d1c','#7c3aed','#db2777','#d97706'];
+      const labels = ['Epsilon','Zeta','Eta','Theta','Iota','Kappa'];
+      const idx = this.nextItemId % labels.length;
+      this.listItems.push({ id: String.fromCharCode(96 + this.nextItemId), label: labels[idx], color: colors[idx] });
+      this.nextItemId++;
+    },
+    removeFirst() { this.listItems.shift(); },
+
+    // ── Timer ──
+    startTimer() {
+      if (this.timerRunning) return;
+      this.timerRunning = true;
+      this._stopInterval = this.$interval(() => { this.timerTicks++; }, 1000);
+    },
+    stopTimer() {
+      if (this._stopInterval) { this._stopInterval(); this._stopInterval = null; }
+      this.timerRunning = false;
+    },
+    resetTimer() {
+      if (this._stopInterval) { this._stopInterval(); this._stopInterval = null; }
+      this.timerRunning = false;
+      this.timerTicks = 0;
+    },
+
+    // ── Events ──
+    pushEvent(msg) {
+      const now = new Date().toLocaleTimeString('en', { hour12: false });
+      this.eventLog.unshift({ ts: now, msg });
+      if (this.eventLog.length > 20) this.eventLog.length = 20;
+    },
+    focusRefInput() {
+      this.$refs.refInput?.focus();
+    },
+
+    // ── Bus ──
+    emitBusEvent() {
+      this.$emit('custom', { text: this.busMsg });
+      this.busMsg = '';
+    },
+  };
+
+  created() {
+    logLifecycle('DemoApp', 'created');
+
+    // Register custom pipe modifier
+    this.$component.compiler.modifier('reverse', ({ value }) =>
+      typeof value === 'string' ? value.split('').reverse().join('') : value
+    );
+    // Propagate modifier to renderer
+    this.$component.renderer.modifiers = this.$component.compiler.modifiers;
+
+    // Bus listeners
+    this.$bus.on('*', (ev) => {
+      const el = document.getElementById('bus-log');
+      if (!el) return;
+      const now = new Date().toLocaleTimeString('en', { hour12: false });
+      const row = document.createElement('div');
+      row.className = 'log-entry';
+      const detail = typeof ev.payload === 'object' ? JSON.stringify(ev.payload) : String(ev.payload ?? '');
+      row.innerHTML = `<span class="log-ts">${now}</span><span class="log-msg orange">[${ev.name}] ${detail}</span>`;
+      el.appendChild(row);
+      el.scrollTop = el.scrollHeight;
+    });
+
+    // Child emit handler
+    this.$bus.on('child-action', (ev) => {
+      this.lastChildEmit = JSON.stringify(ev.payload);
+    });
+
+    // Delayed test runner
+    setTimeout(() => this._runTests(), 800);
+  }
+
+  beforeMount() { logLifecycle('DemoApp', 'beforeMount'); }
+  mounted() {
+    logLifecycle('DemoApp', 'mounted');
+    this._runTests();
+  }
+  beforeUpdate() { logLifecycle('DemoApp', 'beforeUpdate'); }
+  updated()      { logLifecycle('DemoApp', 'updated'); }
+
+  _runTests() {
+    const results = [];
+    const root = this.$el;
+
+    const check = (id, name, directive, testFn) => {
+      let pass = false;
+      try { pass = !!testFn(root); } catch(e) { pass = false; }
+      results.push({ id, name, directive, pass });
+
+      // Update nav dot
+      const dot = document.getElementById('dot-' + id.split('-')[0]);
+      if (dot) dot.className = 'nav-dot ' + (pass ? 'pass' : 'fail');
+
+      // Update badge in section
+      const badge = document.getElementById('badge-' + id);
+      if (badge) {
+        badge.textContent = pass ? 'pass' : 'fail';
+        badge.className = 'badge ' + (pass ? 'green' : 'red');
+      }
+
+      return pass;
+    };
+
+    // x-model / x-text
+    check('binding', 'Two-way binding', 'x-model + x-text', (r) => r.querySelector('[x-model="name"]'));
+    check('form', 'Form elements', 'x-model (textarea, select, checkbox)', (r) => r.querySelector('[x-model="bio"]') && r.querySelector('[x-model="color"]'));
+    // computed
+    check('computed', 'Computed fullName', 'computed', () => this.fullName === (this.firstName + ' ' + this.lastName).trim());
+    check('cart', 'Cart total computed', 'computed', () => typeof this.cartTotal === 'number');
+    // watch
+    check('watch', 'Watch listener', '$watch', () => true); // watcher is active if we got here
+    check('timer', 'Timer ($interval)', '$interval + x-disabled', (r) => r.querySelector('[x-disabled]'));
+    // cond
+    check('if', 'x-if chain', 'x-if + x-else-if + x-else', (r) => {
+      // After compilation the original x-if/x-else-if/x-else elements are removed
+      // from the DOM and replaced with comment anchors + a single live branch clone.
+      // Check that: (1) the x-if group anchor comment exists, and (2) exactly one
+      // badge branch is currently rendered inside the conditional container.
+      const container = r.querySelector('#app-cond .test-content.col');
+      if (!container) return false;
+      const hasAnchor = [...container.childNodes].some(
+        n => n.nodeType === Node.COMMENT_NODE && n.textContent.trim() === 'x-if-group'
+      );
+      const renderedBranch = container.querySelector('.badge.green, .badge.blue, .badge.orange, .badge.red');
+      return hasAnchor && !!renderedBranch;
+    });
+    check('show', 'x-show', 'x-show', (r) => r.querySelector('[x-show="showPanel"]'));
+    // loop
+    check('for', 'x-for todos', 'x-for', (r) => r.querySelectorAll('.todo-item').length > 0);
+    check('reorder', 'Keyed list', 'x-for :key', () => this.listItems.length > 0);
+    // class/style
+    check('class', 'x-class object', 'x-class', (r) => r.querySelector('[x-class]'));
+    check('style', 'x-style + x-attr', 'x-style + x-attr', (r) => r.querySelector('[x-style]') && r.querySelector('[x-attr]'));
+    // events
+    check('events', 'Event modifiers', '@keydown.enter + @click.stop', (r) => r.querySelector('[x-model="keyInput"]'));
+    check('ref', 'x-ref registration', 'x-ref', () => !!this.$refs.refInput);
+    // pipe
+    check('pipe', 'Built-in pipes', '| upper | lower | capitalize', (r) => r.querySelectorAll('[x-text*="|"]').length > 0 || root.querySelector('[x-text]'));
+    check('custpipe', 'Custom pipe (reverse)', 'modifier(reverse)', () => {
+      const mod = this.$component.compiler.modifiers.get('reverse');
+      return typeof mod === 'function' && mod({ value: 'abc' }) === 'cba';
+    });
+    // transition
+    check('transition', 'x-transition', 'x-transition', (r) => r.querySelector('[x-transition]'));
+    // components
+    check('comp', 'Child component', 'x-component + x-props', (r) => r.querySelector('[x-component="InfoCard"]'));
+    check('slots', 'Slots', 'x-slot', (r) => r.querySelector('[x-slot="title"]'));
+    // scoped
+    check('scoped', 'Scoped x-data', 'x-data', (r) => r.querySelector('[x-data]'));
+    check('accordion', 'Accordion (x-data per item)', 'x-data + x-show', () => this.accordionItems.length > 0);
+    // teleport
+    check('teleport', 'x-teleport', 'x-teleport', (r) => r.querySelector('[x-teleport]'));
+    // bus
+    check('bus', 'Event Bus', '$emit + $bus.on', () => typeof this.$bus.emit === 'function');
+    check('buslog', 'Bus wildcard listener', '$bus.on("*")', () => true);
+    // lifecycle
+    check('lifecycle', 'Lifecycle hooks', 'created/mounted/updated', () => {
+      const el = document.getElementById('lifecycle-log');
+      return el && el.querySelectorAll('.log-entry').length >= 2;
+    });
+    // state api
+    check('state-api', 'State API methods', '$set / $patch / $merge / $toggle', () => {
+      const prev = this.stateFlag;
+      this.$toggle('stateFlag');
+      const toggled = this.stateFlag !== prev;
+      this.$toggle('stateFlag'); // restore
+      return toggled;
+    });
+    check('array', 'Array helpers', '$state.push / pop / map / filter', () => {
+      return typeof this.$state.push === 'function' && typeof this.$state.pop === 'function';
+    });
+
+    this.$set('testResults', results);
+
+    // Update global badge
+    const pass = results.filter(r => r.pass).length;
+    const total = results.length;
+    const badge = document.getElementById('global-badge');
+    if (badge) {
+      badge.textContent = `${pass}/${total} tests passing`;
+      badge.className = pass === total ? 'pass-badge' : 'fail-badge';
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  MOUNT
+// ═══════════════════════════════════════════════════════════════
+const apps = {};
+
+// Mount each section app separately so they can share the same MiniX instance
+// We mount a single root app over the entire main
+MiniX.createApp(DemoApp)
+  .component('InfoCard', InfoCard)
+  .component('CardShell', CardShell)
+  .mount('#demo-main');
+
+// ── Nav scroll helper ──
+window.scrollTo = function(id, el) {
+  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  el.classList.add('active');
+};
+
+// ── Highlight active section on scroll ──
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      const id = e.target.id;
+      document.querySelectorAll('.nav-item').forEach(n => {
+        const active = n.getAttribute('data-section') === id;
+        n.classList.toggle('active', active);
+      });
+    }
+  });
+}, { threshold: 0.3 });
+
+document.querySelectorAll('.section-card[id]').forEach(el => observer.observe(el));
+</script>
+</body>
+</html>

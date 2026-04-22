@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>MiniX Store Plugin · Global state for MiniX apps</title>
+  <!-- Prism.js for beautiful syntax highlighting (dark theme) -->
+  <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg-dark: #0b0e14;
+      --surface-dark: #12141c;
+      --card-dark: #1a1d2b;
+      --border-dark: #262b3f;
+      --accent: #6c8fff;
+      --accent-glow: rgba(108, 143, 255, 0.2);
+      --accent2: #a78bfa;
+      --success: #34d399;
+      --warning: #fbbf24;
+      --text-primary: #edf2f8;
+      --text-secondary: #94a3b8;
+      --code-bg: #0a0c12;
+      --radius-md: 12px;
+      --radius-sm: 8px;
+    }
+
+    body {
+      background: var(--bg-dark);
+      color: var(--text-primary);
+      font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      line-height: 1.5;
+      scroll-behavior: smooth;
+    }
+
+    .container {
+      max-width: 1300px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+    }
+
+    /* header */
+    .doc-header {
+      margin-bottom: 3rem;
+      border-bottom: 1px solid var(--border-dark);
+      padding-bottom: 1.8rem;
+    }
+    .badge-group {
+      display: flex;
+      gap: 0.6rem;
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
+    }
+    .badge {
+      background: var(--surface-dark);
+      border: 1px solid var(--border-dark);
+      border-radius: 40px;
+      padding: 0.2rem 0.8rem;
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+    .badge.accent {
+      background: rgba(108, 143, 255, 0.12);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    h1 {
+      font-size: 2.6rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #ffffff, var(--accent), #c084fc);
+      background-clip: text;
+      -webkit-background-clip: text;
+      color: transparent;
+      margin-bottom: 0.5rem;
+    }
+    .sub {
+      font-size: 1.1rem;
+      color: var(--text-secondary);
+      max-width: 720px;
+    }
+
+    /* grid & cards */
+    .section {
+      margin-bottom: 3.5rem;
+    }
+    .section-title {
+      font-size: 1.8rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .section-title .anchor {
+      color: var(--accent);
+      font-size: 1.2rem;
+    }
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.5rem;
+      margin: 1.5rem 0 1rem;
+    }
+    .api-card {
+      background: var(--card-dark);
+      border: 1px solid var(--border-dark);
+      border-radius: var(--radius-md);
+      padding: 1.3rem 1.4rem;
+      transition: all 0.2s ease;
+    }
+    .api-card:hover {
+      border-color: var(--accent);
+      background: rgba(26, 29, 43, 0.9);
+    }
+    .api-card h3 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 0.75rem;
+      color: var(--accent);
+    }
+    .api-card p, .api-card ul {
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+    }
+    .api-card code {
+      background: var(--code-bg);
+      padding: 0.2rem 0.4rem;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    pre {
+      background: var(--code-bg);
+      border-radius: var(--radius-sm);
+      padding: 1.2rem;
+      overflow-x: auto;
+      margin: 1.2rem 0;
+      border: 1px solid var(--border-dark);
+      font-size: 0.85rem;
+    }
+    code[class*="language-"], pre[class*="language-"] {
+      font-family: 'JetBrains Mono', monospace;
+      text-shadow: none;
+    }
+    .inline-code {
+      background: var(--surface-dark);
+      padding: 0.2rem 0.4rem;
+      border-radius: 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+      color: #e2e8f0;
+      border: 1px solid var(--border-dark);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.2rem 0;
+      background: var(--surface-dark);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+    }
+    th, td {
+      text-align: left;
+      padding: 0.85rem 1rem;
+      border-bottom: 1px solid var(--border-dark);
+    }
+    th {
+      background: rgba(0, 0, 0, 0.3);
+      font-weight: 600;
+      color: var(--accent);
+    }
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    .note {
+      background: rgba(108, 143, 255, 0.08);
+      border-left: 3px solid var(--accent);
+      padding: 1rem 1.2rem;
+      border-radius: 10px;
+      margin: 1.5rem 0;
+      font-size: 0.9rem;
+    }
+
+    footer {
+      margin-top: 4rem;
+      border-top: 1px solid var(--border-dark);
+      padding-top: 2rem;
+      text-align: center;
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    hr {
+      border: none;
+      border-top: 1px solid var(--border-dark);
+      margin: 1.5rem 0;
+    }
+    @media (max-width: 700px) {
+      .container { padding: 1.2rem; }
+      h1 { font-size: 2rem; }
+      .section-title { font-size: 1.5rem; }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <div class="doc-header">
+    <div class="badge-group">
+      <span class="badge accent">v1.1.0</span>
+      <span class="badge">⚡ reactive stores</span>
+      <span class="badge">🔌 MiniX plugin</span>
+      <span class="badge">📦 global state</span>
+    </div>
+    <h1>MiniX Store Plugin</h1>
+    <p class="sub">Declarative, reactive global stores for MiniX — with getters, actions, cross-store communication, and seamless template integration.</p>
+  </div>
+
+  <!-- ========== OVERVIEW ========== -->
+  <div class="section">
+    <div class="section-title">
+      <span>📖</span> 
+      <span>Overview</span>
+    </div>
+    <p><strong>MiniX Store</strong> is a powerful state management plugin built on MiniX's reactive core. It provides a centralized store registry, reactive state, computed getters, actions, and full integration with MiniX components. Use <code class="inline-code">$store('name')</code> anywhere — in templates, lifecycle hooks, or methods — to access reactive stores that automatically trigger UI updates.</p>
+    <div class="note">
+      ✨ <strong>Key features:</strong> reactive state & getters, action batching, undo/redo ready, cross-store calls, watchers, dev-friendly API, and zero boilerplate.
+    </div>
+  </div>
+
+  <!-- ========== INSTALLATION ========== -->
+  <div class="section">
+    <div class="section-title">
+      <span>⚙️</span> 
+      <span>Installation</span>
+    </div>
+    <p>Include the plugin script after <code class="inline-code">mini-x.js</code> (core). The plugin registers itself globally as <code class="inline-code">window.MiniXStore</code>.</p>
+    <pre><code class="language-html">&lt;script src="mini-x.js">&lt;/script&gt;
+&lt;script src="plugin-store.js">&lt;/script&gt;   &lt;!-- MiniXStore available --&gt;</code></pre>
+    <p>Then install the plugin when bootstrapping your MiniX app:</p>
+    <pre><code class="language-javascript">const app = MiniX.createApp(App);
+app.use(MiniXStore.plugin());
+app.mount('#app');</code></pre>
+  </div>
+
+  <!-- ========== DEFINING STORES ========== -->
+  <div class="section">
+    <div class="section-title">
+      <span>🏪</span> 
+      <span>Defining a Store</span>
+    </div>
+    <p>Use <code class="inline-code">MiniXStore.define(name, definition)</code> to create a reactive store. Returns a store proxy that can be imported anywhere.</p>
+    <pre><code class="language-javascript">const counterStore = MiniXStore.define('counter', {
+  state: () => ({
+    count: 0,
+    step: 1
+  }),
+  getters: {
+    doubled: (state) => state.count * 2,
+    sign: (state) => state.count > 0 ? 'positive' : state.count < 0 ? 'negative' : 'zero'
+  },
+  actions: {
+    increment() {
+      this.count += this.step;      // direct mutation (reactive)
+      // or this.$set('count', this.count + this.step)
+    },
+    decrement() { this.count -= this.step; },
+    setStep(step) { this.step = step; }
+  }
+});</code></pre>
+    <p><strong>Inside actions</strong> you can access <code>this.stateKey</code> directly (reactive proxy), or use helper methods: <code>this.$set(path, value)</code>, <code>this.$batch(fn)</code>, <code>this.$patch(path, updater)</code>.</p>
+  </div>
+
+  <!-- ========== USING STORES IN COMPONENTS ========== -->
+  <div class="section">
+    <div class="section-title">
+      <span>🧩</span> 
+      <span>Integration with Components</span>
+    </div>
+    <p>Inside any component (class or object), define a <code class="inline-code">stores()</code> method returning a mapping of store names to store proxies. The plugin then injects <code class="inline-code">this.$store(name)</code> automatically.</p>
+    <pre><code class="language-javascript">class TodoApp {
+  stores() {
+    return {
+      counter: counterStore,   // from define()
+      todos: todosStore,
+      theme: themeStore
+    };
+  }
+  
+  mounted() {
+    console.log(this.$store('counter').count);
+    this.$store('counter').increment();
+    // watchers
+    this.$store('counter').watch('count', (newVal, oldVal) => {
+      console.log(`count changed: ${oldVal} → ${newVal}`);
+    });
+  }
+}</code></pre>
+    <div class="note">
+      💡 The <code>$store(name)</code> method first looks in your component's <code>stores()</code> mapping, then falls back to the global registry (stores defined via <code>MiniXStore.define</code>). Perfect for both local and shared stores.
+    </div>
+  </div>
+
+  <!-- ========== TEMPLATE MAGIC ========== -->
+  <div class="section">
+    <div class="section-title">
+      <span>🎨</span> 
+      <span>Template Expressions</span>
+    </div>
+    <p>Use <code class="inline-code">$store('storeName')</code> directly in your templates — fully reactive with MiniX directives.</p>
+    <pre><code class="language-html">&lt;div&gt;
+  &lt;h2&gt;Counter: {{ $store('counter').count }}&lt;/h2&gt;
+  &lt;p&gt;Doubled: {{ $store('counter').doubled }}&lt;/p&gt;
+  &lt;button @click="$store('counter').increment()"&gt;+&lt;/button&gt;
+  &lt;button @click="$store('counter').decrement()"&gt;-&lt;/button&gt;
+  &lt;input type="range" x-model.number="$store('counter').step" /&gt;
+&lt;/div&gt;</code></pre>
+    <p>Getters automatically recompute when their dependencies change, and all actions are bound to the store instance.</p>
+  </div>
+
+  <!-- ========== CROSS-STORE COMMUNICATION ========== -->
+  <div class="section">
+    <div class="section-title">
+      <span>🔄</span> 
+      <span>Cross‑Store Actions & Logging</span>
+    </div>
+    <p>Because <code>MiniXStore.define</code> returns the actual store proxy, you can import and call other stores inside any action — perfect for audit logs, analytics, or orchestration.</p>
+    <pre><code class="language-javascript">// logStore defined first
+const logStore = MiniXStore.define('log', {
+  state: () => ({ entries: [] }),
+  actions: {
+    push(storeName, msg) { /* ... */ }
+  }
+});
+
+const todosStore = MiniXStore.define('todos', {
+  actions: {
+    add(text) {
+      // ... add todo logic
+      logStore.push('todos', `Added "${text}"`);  // cross-store call
+    }
+  }
+});</code></pre>
+    <p>No string-based lookups, full type safety and direct access. The demo (<code>demo-store.html</code>) shows a live event log that listens to every store change.</p>
+  </div>
+
+  <!-- ========== ADVANCED STORE API ========== -->
+  <div class="section">
+    <div class="section-title">
+      <span>⚡</span> 
+      <span>Store Instance API (inside actions)</span>
+    </div>
+    <div class="card-grid">
+      <div class="api-card"><h3>$set(path, value)</h3><p>Update nested state reactively. <code>this.$set('user.name', 'Alex')</code></p></div>
+      <div class="api-card"><h3>$get(path, fallback?)</h3><p>Safely read nested values. <code>this.$get('items.0.title')</code></p></div>
+      <div class="api-card"><h3>$batch(fn)</h3><p>Batch multiple mutations into a single reactivity update. <code>this.$batch(() => { this.count = 10; this.step = 5; })</code></p></div>
+      <div class="api-card"><h3>$patch(path, updaterFn)</h3><p>Functional update on arrays/objects. <code>this.$patch('items', arr => arr.filter(i => i.active))</code></p></div>
+      <div class="api-card"><h3>$merge(path, partialObj)</h3><p>Deep merge object into state slice. <code>this.$merge('settings', { theme: 'dark' })</code></p></div>
+      <div class="api-card"><h3>$reset()</h3><p>Reset store to initial state defined in <code>state()</code>.</p></div>
+      <div class="api-card"><h3>watch(path, callback)</h3><p>Watch a specific state path. Returns unsubscribe function. <code>this.watch('count', (val, old) => ...)</code></p></div>
+      <div class="api-card"><h3>snapshot()</h3><p>Returns a frozen copy of entire state (debugging).</p></div>
+    </div>
+    <p><strong>Getter caching:</strong> getters are lazily computed and cached until their tracked dependencies change — automatic and efficient.</p>
+  </div>
+
+  <!-- ========== GLOBAL API REFERENCE ========== -->
+  <div class="section">
+    <div class="section-title">
+      <span>🌐</span> 
+      <span>Global API (MiniXStore)</span>
+    </div>
+    <table>
+      <thead><tr><th>Method</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>define(name, definition)</code></td><td>Creates or retrieves a store. Returns store proxy.</td></tr>
+        <tr><td><code>use(name)</code></td><td>Retrieve a store by name from global registry.</td></tr>
+        <tr><td><code>destroy(name)</code></td><td>Stop watchers & remove store from registry.</td></tr>
+        <tr><td><code>destroyAll()</code></td><td>Destroy all registered stores.</td></tr>
+        <tr><td><code>list()</code></td><td>Returns array of registered store names.</td></tr>
+        <tr><td><code>plugin()</code></td><td>Returns plugin object for <code>app.use()</code>.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ========== REACTIVITY & WATCHERS ========== -->
+  <div class="section">
+    <div class="section-title">
+      <span>🔍</span> 
+      <span>Reactivity & Watchers</span>
+    </div>
+    <p>Every store is built on <strong>MiniX_State</strong> and <strong>MiniX_Effect</strong>. Changes to state automatically trigger template updates and watchers.</p>
+    <pre><code class="language-javascript">// inside component
+const unsubscribe = this.$store('counter').watch('count', (newCount, oldCount) => {
+  console.log(`Counter moved from ${oldCount} to ${newCount}`);
+  if (newCount >= 10) alert('Milestone!');
+});
+
+// later: unsubscribe() to stop watching</code></pre>
+    <p>You can also watch deeply nested paths like <code>'user.profile.email'</code>. Watchers run after mutations and respect batching.</p>
+  </div>
+
+  <!-- ========== FULL EXAMPLE (SNIPPET) ========== -->
+  <div class="section">
+    <div class="section-title">
+      <span>📦</span> 
+      <span>Complete Demo Pattern</span>
+    </div>
+    <p>The <code>demo-store.html</code> showcases four integrated stores: counter (with undo), todos, theme picker, and event log. Below is a minimal but complete counter + log example.</p>
+    <pre><code class="language-javascript">// 1. Define stores
+const logStore = MiniXStore.define('log', {
+  state: () => ({ events: [] }),
+  actions: { record(msg) { this.events = [msg, ...this.events].slice(0, 20); } }
+});
+
+const counter = MiniXStore.define('counter', {
+  state: () => ({ value: 0 }),
+  actions: {
+    inc() { this.value++; logStore.record(`inc → ${this.value}`); },
+    dec() { this.value--; logStore.record(`dec → ${this.value}`); }
+  }
+});
+
+// 2. App & plugin
+class MyApp {
+  stores() { return { counter, log: logStore }; }
+  mounted() { console.log('ready', this.$store('counter').value); }
+}
+
+MiniX.createApp(MyApp)
+  .use(MiniXStore.plugin())
+  .mount('#app');</code></pre>
+    <p>Then in your template: <code>{{ $store('counter').value }}</code> and <code>@click="$store('counter').inc()"</code> — everything just works.</p>
+  </div>
+
+  <!-- ========== BEST PRACTICES ========== -->
+  <div class="section">
+    <div class="section-title">
+      <span>✅</span> 
+      <span>Best Practices</span>
+    </div>
+    <ul style="margin-left: 1.8rem; color: var(--text-secondary);">
+      <li>Define stores in dedicated modules and export the store proxy for reuse.</li>
+      <li>Use <code>$batch()</code> for multiple state changes to reduce renders.</li>
+      <li>Prefer getters over derived state in templates for better caching and readability.</li>
+      <li>Use <code>watch</code> for side effects, not for mutating other state directly — prefer actions for orchestration.</li>
+      <li>Destroy stores that are no longer needed (e.g., in large SPAs) via <code>MiniXStore.destroy(name)</code>.</li>
+      <li>Leverage cross-store calls for logging or analytics without tight coupling.</li>
+    </ul>
+    <div class="note">
+      💡 The plugin automatically injects <code>$store</code> into component instances before <code>created()</code> and adds it to the template scope. No extra setup needed.
+    </div>
+  </div>
+
+  <!-- ========== API REFERENCE TABLE ========== -->
+  <div class="section">
+    <div class="section-title">
+      <span>📋</span> 
+      <span>Complete Store Definition Schema</span>
+    </div>
+    <table>
+      <thead><tr><th>Property</th><th>Type</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>state</code></td><td><code>() => Object | Object</code></td><td>Initial state. Function is recommended for fresh state on reset.</td></tr>
+        <tr><td><code>getters</code></td><td><code>{ [key]: (state) => any }</code></td><td>Computed properties, cached, reactive.</td></tr>
+        <tr><td><code>actions</code></td><td><code>{ [key]: function }</code></td><td>Methods that can mutate state and call other actions. <code>this</code> provides state + helpers.</td></tr>
+      </tbody>
+    </table>
+    <p><strong>Action context helpers recap:</strong> <code class="inline-code">this.$set</code>, <code class="inline-code">this.$get</code>, <code class="inline-code">this.$batch</code>, <code class="inline-code">this.$patch</code>, <code class="inline-code">this.$merge</code>, <code class="inline-code">this.$reset</code>, <code class="inline-code">this.watch</code>, <code class="inline-code">this.snapshot</code>, and direct property access (<code>this.count</code>).</p>
+  </div>
+
+  <!-- ========== TROUBLESHOOTING ========== -->
+  <div class="section">
+    <div class="section-title">
+      <span>🧰</span> 
+      <span>Common Pitfalls & Solutions</span>
+    </div>
+    <ul style="margin-left: 1.8rem; color: var(--text-secondary);">
+      <li><strong>Store not reactive in template?</strong> Ensure you installed plugin via <code>app.use(MiniXStore.plugin())</code> before mounting.</li>
+      <li><strong>Missing $store?</strong> Your component must either have a <code>stores()</code> method returning a mapping or the store must be globally registered. <code>$store(name)</code> checks both.</li>
+      <li><strong>Getter not updating?</strong> Getters only recompute when accessed and dependencies (state accessed inside them) change. Avoid side effects inside getters.</li>
+      <li><strong>Cross-store circular dependency?</strong> Use separate files and import store proxies after definition; order matters but works because stores are lazy.</li>
+      <li><strong>Destroying a store stops all watchers and effects, including those used by components.</strong> Only destroy when the store is no longer needed (e.g., on app teardown).</li>
+    </ul>
+  </div>
+
+  <!-- ========== LINKS & REFERENCE ========== -->
+  <div class="section">
+    <div class="section-title">
+      <span>🔗</span> 
+      <span>Additional Resources</span>
+    </div>
+    <p>📁 The plugin source is fully documented inside <code>plugin-store.js</code>. The demo file <code>demo-store.html</code> provides a working kitchen-sink example with a counter (undo/redo), todo list, theme switcher, and live event log. Use it as a blueprint for real-world apps.</p>
+    <p>⚡ MiniX core reactivity powers the store — every store action automatically triggers UI patches and keeps getters in sync.</p>
+    <div class="note">
+      🚀 Ready to supercharge your MiniX apps? Install the plugin, define your stores, and enjoy reactive global state with zero friction.
+    </div>
+  </div>
+
+  <footer>
+    <p>MiniX Store Plugin v1.1.0 — Built with ❤️ on MiniX reactive core. MIT Licensed.</p>
+    <p style="margin-top: 0.5rem;">🔌 Seamless global stores · Reactive by nature · Full MiniX integration</p>
+  </footer>
+</div>
+
+<!-- Prism.js for syntax highlighting -->
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-javascript.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-markup.min.js"></script>
+<script>
+  // ensure code blocks highlight after load
+  document.querySelectorAll('pre code').forEach((block) => {
+    if (window.Prism) Prism.highlightElement(block);
+  });
+</script>
+</body>
+</html>

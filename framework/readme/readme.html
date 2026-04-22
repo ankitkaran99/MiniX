@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>MiniX · Complete API Reference & Deep Documentation</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, 'Inter', 'Segoe UI', 'Helvetica Neue', sans-serif;
+      background: #f4f8fe;
+      color: #1a2a3f;
+      line-height: 1.5;
+    }
+
+    .docs-container {
+      display: flex;
+      max-width: 1500px;
+      margin: 0 auto;
+      background: #ffffff;
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.05);
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: 300px;
+      background: #f9fbfe;
+      border-right: 1px solid #e2edf2;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      padding: 2rem 1.2rem;
+      font-size: 0.9rem;
+    }
+
+    .sidebar h2 {
+      font-size: 1.5rem;
+      margin-bottom: 0.75rem;
+      background: linear-gradient(135deg, #1e3c72, #2a5298);
+      background-clip: text;
+      -webkit-background-clip: text;
+      color: transparent;
+    }
+
+    .sidebar nav ul {
+      list-style: none;
+      margin-top: 1rem;
+    }
+
+    .sidebar nav li {
+      margin: 0.6rem 0;
+    }
+
+    .sidebar nav a {
+      text-decoration: none;
+      color: #2c4f7c;
+      font-weight: 500;
+      transition: 0.2s;
+      display: block;
+      padding: 0.2rem 0;
+    }
+
+    .sidebar nav a:hover {
+      color: #0a2b44;
+      text-decoration: underline;
+    }
+
+    .sidebar .badge {
+      background: #e4edf5;
+      font-size: 0.7rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 20px;
+      margin-left: 0.5rem;
+      font-weight: normal;
+    }
+
+    /* Main content */
+    .content {
+      flex: 1;
+      padding: 2rem 2.5rem;
+      overflow-x: auto;
+    }
+
+    h1 {
+      font-size: 2.6rem;
+      font-weight: 700;
+      background: linear-gradient(145deg, #133f6b, #1b4f82);
+      background-clip: text;
+      -webkit-background-clip: text;
+      color: transparent;
+      margin-bottom: 0.5rem;
+    }
+
+    h2 {
+      font-size: 1.9rem;
+      font-weight: 600;
+      margin: 1.8rem 0 1rem 0;
+      padding-bottom: 0.5rem;
+      border-bottom: 3px solid #d9e6f2;
+    }
+
+    h3 {
+      font-size: 1.45rem;
+      font-weight: 600;
+      margin: 1.5rem 0 0.8rem 0;
+      color: #1e4a76;
+    }
+
+    h4 {
+      font-size: 1.2rem;
+      font-weight: 600;
+      margin: 1.2rem 0 0.5rem;
+      color: #1f5680;
+    }
+
+    p {
+      margin: 0.8rem 0;
+    }
+
+    code {
+      background: #eef3fc;
+      padding: 0.2rem 0.4rem;
+      border-radius: 8px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 0.85rem;
+      color: #1b4c7c;
+    }
+
+    pre {
+      background: #0f1b2a;
+      color: #e4f0fb;
+      padding: 1rem;
+      border-radius: 16px;
+      overflow-x: auto;
+      margin: 1rem 0;
+      font-size: 0.85rem;
+      line-height: 1.45;
+    }
+
+    pre code {
+      background: none;
+      color: inherit;
+      padding: 0;
+    }
+
+    .directive-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+      gap: 0.75rem;
+      margin: 1rem 0;
+    }
+
+    .directive-card {
+      background: #f8fafc;
+      border-left: 4px solid #2a6f9c;
+      padding: 0.7rem 1rem;
+      border-radius: 14px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+    }
+
+    .api-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #ffffff;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+      margin: 1rem 0;
+    }
+
+    .api-table th, .api-table td {
+      text-align: left;
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid #e4edf2;
+    }
+
+    .api-table th {
+      background: #eef3fa;
+      font-weight: 600;
+      color: #1a4c74;
+    }
+
+    .note {
+      background: #eef6ff;
+      padding: 0.8rem 1.2rem;
+      border-radius: 20px;
+      border-left: 5px solid #2c7cb6;
+      margin: 1rem 0;
+    }
+
+    .tip {
+      background: #eafff0;
+      border-left-color: #2c9e5c;
+    }
+
+    footer {
+      margin-top: 3rem;
+      font-size: 0.8rem;
+      text-align: center;
+      color: #6c86a3;
+      border-top: 1px solid #e2edf2;
+      padding-top: 2rem;
+    }
+
+    @media (max-width: 780px) {
+      .docs-container { flex-direction: column; }
+      .sidebar { width: 100%; height: auto; position: relative; border-right: none; border-bottom: 1px solid #e2edf2; }
+      .content { padding: 1.5rem; }
+    }
+  </style>
+</head>
+<body>
+<div class="docs-container">
+  <aside class="sidebar">
+    <h2>⚡ MiniX <span style="font-size:0.8rem;">Deep API</span></h2>
+    <p style="font-size:0.85rem; margin-bottom:1rem;">Reactive core · components · compiler · HTTP client</p>
+    <nav>
+      <ul>
+        <li><a href="#core-reactivity">🔁 Core Reactivity (State & Effects)</a></li>
+        <li><a href="#state-api">📘 MiniX_State — full API</a></li>
+        <li><a href="#effect-system">⚡ MiniX_Effect & Batching</a></li>
+        <li><a href="#directives">🎛️ Directive Reference (all x-*)</a></li>
+        <li><a href="#component-system">🧩 Component System (lifecycle, props, slots)</a></li>
+        <li><a href="#global-scope">🌍 Global State & Scope Injection</a></li>
+        <li><a href="#compiler-internals">⚙️ Compiler & Templating (fast-for, blueprints)</a></li>
+        <li><a href="#request-client">🌐 MiniX_Request — HTTP client</a></li>
+        <li><a href="#additional-apis">🔌 Additional APIs (Bus, Provider, Sanitizer)</a></li>
+        <li><a href="#plugins">🧩 Plugins & Extensibility</a></li>
+        <li><a href="#security">🛡️ Security Model</a></li>
+        <li><a href="#performance">⚡ Performance Optimizations</a></li>
+        <li><a href="#examples">📘 Advanced Examples</a></li>
+      </ul>
+    </nav>
+    <div style="margin-top: 2rem; font-size:0.75rem; color:#6a7f9b;">
+      Version 5.6+ · fine‑grained reactivity · zero build
+    </div>
+  </aside>
+  <main class="content">
+    <h1 id="intro">MiniX · Deep Documentation<br><span style="font-size:1rem; font-weight:normal;">Every API, every directive, every optimization</span></h1>
+    <p>MiniX is a lightweight, production‑ready reactive framework with a <strong>Vue/Alpine-inspired</strong> developer experience but a completely independent reactivity engine (<code>MiniX_State</code> + <code>MiniX_Effect</code>). It provides a powerful DOM compiler, class‑based components with lifecycle, scoped state (<code>x-data</code>), event delegation, and a full HTTP client (<code>MiniX_Request</code>). This document covers every internal API, directive modifier, component hook, and performance strategy.</p>
+
+    <h2 id="core-reactivity">🔁 Core Reactivity: MiniX_State & Effect Tracking</h2>
+    <p><code>MiniX_State</code> creates deeply reactive proxies that intercept <strong>get</strong> and <strong>set</strong> operations, building dependency graphs automatically. It supports nested objects, arrays, <code>Map</code>, <code>Set</code>, and <code>markRaw</code> for escape hatches. Changes are batched via <code>queueMicrotask</code> and notify effects and watchers.</p>
+    <pre><code>const state = new MiniX_State({ user: { name: "Alice" }, todos: [] });
+state.watch("user.name", (newVal) => console.log(newVal));
+state.set("user.name", "Bob");
+state.push("todos", "learn MiniX");
+console.log(state.get("todos.0")); // "learn MiniX"</code></pre>
+
+    <h3 id="state-api">📘 MiniX_State — Complete API reference</h3>
+    <table class="api-table">
+      <thead><tr><th>Method</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>get(path, fallback?)</code></td><td>Retrieve value from reactive tree, tracks dependencies if inside effect.</td></tr>
+        <tr><td><code>set(path, value)</code></td><td>Update value and notify watchers/effects (batched).</td></tr>
+        <tr><td><code>delete(path)</code></td><td>Delete property from state (works with arrays/objects/maps).</td></tr>
+        <tr><td><code>toggle(path)</code></td><td>Flip boolean value.</td></tr>
+        <tr><td><code>increment(path, amount=1)</code></td><td>Adds numeric amount.</td></tr>
+        <tr><td><code>push(path, ...items)</code></td><td>Reactive array push.</td></tr>
+        <tr><td><code>pop(path)</code></td><td>Reactive pop.</td></tr>
+        <tr><td><code>map(path, fn)</code></td><td>Map array and set result.</td></tr>
+        <tr><td><code>filter(path, fn)</code></td><td>Filter array and set result.</td></tr>
+        <tr><td><code>merge(path, object)</code></td><td>Shallow merge with existing object.</td></tr>
+        <tr><td><code>patch(path, updaterFn)</code></td><td>Functional update: <code>current => newValue</code>.</td></tr>
+        <tr><td><code>reset(nextState)</code></td><td>Replace entire state tree.</td></tr>
+        <tr><td><code>watch(path, callback)</code></td><td>Observe changes; returns disposer function.</td></tr>
+        <tr><td><code>snapshot()</code></td><td>Deep clone current state (no reactivity).</td></tr>
+        <tr><td><code>raw()</code></td><td>Return the internal reactive proxy (used for scope injection).</td></tr>
+        <tr><td><code>has(path)</code></td><td>Check existence.</td></tr>
+        <tr><td><code>batch(fn)</code></td><td>Group multiple mutations, triggers one notification.</td></tr>
+        <tr><td><code>enableDev(label?)</code> / <code>getHistory()</code></td><td>Dev mode: logs every mutation with stack traces.</td></tr>
+        <tr><td><code>markRaw(value)</code> (static)</td><td>Prevent object from being wrapped by proxy.</td></tr>
+      </tbody>
+    </table>
+    <div class="note"><strong>Map/Set support:</strong> <code>size</code>, <code>get</code>, <code>set</code>, <code>delete</code>, <code>clear</code> are reactive. Iteration (<code>entries</code>, <code>forEach</code>) triggers <code>ITERATE_KEY</code> dependency.</div>
+
+    <h3 id="effect-system">⚡ MiniX_Effect — fine‑grained scheduler</h3>
+    <p>Effects track every reactive access and re-run when dependencies change. Features: lazy execution, priority, flush timing (<code>pre</code>, <code>post</code>, <code>frame</code>), and batch depth.</p>
+    <pre><code>const effect = new MiniX_Effect(() => {
+  console.log(state.get("counter"));
+}, { flush: "post", lazy: true });
+effect.run(); // initial run
+// automatically re‑runs when counter changes</code></pre>
+    <table class="api-table">
+      <thead><tr><th>Option</th><th>Default</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>lazy</code></td><td>false</td><td>If true, effect does not run immediately.</td></tr>
+        <tr><td><code>scheduler</code></td><td>null</td><td>Custom scheduling function.</td></tr>
+        <tr><td><code>flush</code></td><td>'pre'</td><td>'pre' (microtask before DOM), 'post' (after DOM), 'frame' (animation frame).</td></tr>
+        <tr><td><code>priority</code></td><td>0</td><td>Higher priority runs first within same flush queue.</td></tr>
+      </tbody>
+    </table>
+    <p><strong>Batch API:</strong> <code>MiniX_Effect._beginBatch()</code> / <code>_endBatch()</code> (exposed via <code>state.batch(fn)</code>). Prevents intermediate updates.</p>
+
+    <h2 id="directives">🎛️ Directives Reference (DOM compiler)</h2>
+    <p>MiniX walks the DOM and processes <code>x-*</code>, <code>@event</code>, <code>:bind</code> attributes. All directives are reactive and automatically cleaned up.</p>
+    <div class="directive-grid">
+      <div class="directive-card"><strong>x-text</strong> – innerText reactive</div>
+      <div class="directive-card"><strong>x-html</strong> – sanitized innerHTML</div>
+      <div class="directive-card"><strong>x-show</strong> – toggles display (supports x-transition)</div>
+      <div class="directive-card"><strong>x-model</strong> – two-way binding with modifiers <code>.lazy</code>, <code>.number</code>, <code>.trim</code></div>
+      <div class="directive-card"><strong>x-bind / :attr</strong> – reactive attribute</div>
+      <div class="directive-card"><strong>x-class</strong> – object/array/string class binding (efficient diff)</div>
+      <div class="directive-card"><strong>x-style</strong> – object style binding (camelCase → kebab)</div>
+      <div class="directive-card"><strong>x-attr</strong> – bind multiple attributes via object</div>
+      <div class="directive-card"><strong>x-if / x-else-if / x-else</strong> – conditional blocks (structural)</div>
+      <div class="directive-card"><strong>x-for</strong> – loops with <code>(item, index) in items</code> + <code>:key</code>; optimized fast‑path</div>
+      <div class="directive-card"><strong>x-component</strong> – dynamic child component + <code>x-props</code></div>
+      <div class="directive-card"><strong>x-teleport / x-portal</strong> – moves element to another DOM target</div>
+      <div class="directive-card"><strong>x-data</strong> – scoped inline reactive state (creates isolated state)</div>
+      <div class="directive-card"><strong>x-ref</strong> – registers element in <code>$refs</code> (array inside x-for)</div>
+      <div class="directive-card"><strong>x-init</strong> – runs expression once after element initialization</div>
+      <div class="directive-card"><strong>x-focus</strong> – reactive focus control</div>
+      <div class="directive-card"><strong>x-disabled</strong> – reactive disabled attribute</div>
+      <div class="directive-card"><strong>x-value</strong> – one‑way value binding for inputs</div>
+      <div class="directive-card"><strong>x-transition</strong> – enter/leave classes with duration</div>
+      <div class="directive-card"><strong>x-cloak</strong> – removed after compilation</div>
+      <div class="directive-card"><strong>x-ignore</strong> – skip compilation inside subtree</div>
+      <div class="directive-card"><strong>x-once</strong> – render once, never update</div>
+    </div>
+    <h3>Event modifiers & key filters</h3>
+    <p><code>@click.prevent</code>, <code>@keyup.enter</code>, <code>@click.stop</code>, <code>.self</code>, <code>.once</code>, <code>.capture</code>. Key filters include <code>enter</code>, <code>escape</code>, <code>tab</code>, <code>space</code>, <code>arrow-up</code>, etc.</p>
+    <pre><code>&lt;button @click.prevent="submit"&gt;Send&lt;/button&gt;
+&lt;input @keyup.enter="search"&gt;</code></pre>
+
+    <h2 id="component-system">🧩 Component System (Class‑based)</h2>
+    <p>Components are ES6 classes with built‑in reactivity, props, slots, and lifecycle. Register globally via <code>MiniX_Component.register(name, Class)</code> or locally via <code>registerComponents()</code>.</p>
+    <pre><code>class Counter {
+  data() { return { count: 0 }; }
+  methods = { inc() { this.count++; } };
+  computed = { double() { return this.count * 2; } };
+  template() { return `&lt;button @click="inc"&gt;{{ count }} / {{ double }}&lt;/button&gt;`; }
+}
+MiniX.createApp(Counter).mount("#app");</code></pre>
+    <h3>Component Instance APIs (available as <code>this.$xxx</code>)</h3>
+    <table class="api-table">
+      <tr><td><code>$state</code></td><td>Underlying MiniX_State instance</td></tr>
+      <tr><td><code>$props</code></td><td>Readonly reactive props</td></tr>
+      <tr><td><code>$refs</code></td><td>Elements marked with <code>x-ref</code></td></tr>
+      <tr><td><code>$emit(name, payload)</code></td><td>Emit event on global bus</td></tr>
+      <tr><td><code>$watch(path, cb)</code></td><td>Component‑scoped watcher</td></tr>
+      <tr><td><code>$effect(fn)</code></td><td>Auto‑cleaned reactive effect</td></tr>
+      <tr><td><code>$computed(name, getter)</code></td><td>Dynamic computed property</td></tr>
+      <tr><td><code>$nextTick(cb)</code></td><td>After DOM update</td></tr>
+      <tr><td><code>$listen / $timeout / $interval</code></td><td>Auto‑cleanup helpers</td></tr>
+      <tr><td><code>$fetch(url, options)</code></td><td>HTTP request via configured MiniX_Request (returns parsed data)</td></tr>
+      <tr><td><code>$provide / $inject</code></td><td>Dependency injection</td></tr>
+      <tr><td><code>$set / $batch / $patch / $merge / $toggle</code></td><td>State shortcuts</td></tr>
+      <tr><td><code>$snapshot()</code></td><td>Deep clone component state</td></tr>
+      <tr><td><code>$addScope(factory)</code></td><td>Add template scope factory dynamically</td></tr>
+      <tr><td><code>$addInstanceAPI(factory)</code></td><td>Add instance methods/properties</td></tr>
+    </table>
+    <h3>Lifecycle hooks (order)</h3>
+    <p><code>created</code> → <code>beforeMount</code> → <code>mounted</code> → <code>beforeUpdate</code> → <code>updated</code> → <code>beforeUnmount</code> → <code>unmounted</code>. Each receives a payload with component context.</p>
+
+    <h2 id="global-scope">🌍 Global State & Scope Injection</h2>
+    <p>MiniX templates evaluate inside a <strong>sandboxed scope</strong> (prototype chain ends at <code>null</code>). To share reactive data across components, use <code>app.addScope()</code> to inject variables into every component’s template scope.</p>
+    <pre><code>const globalStore = new MiniX_State({ theme: "dark" });
+const app = MiniX.createApp(Root)
+  .addScope(() => ({ store: globalStore.raw() }))
+  .mount("#app");
+
+// In any template: {{ store.theme }}
+// Update: globalStore.set("theme", "light")</code></pre>
+    <p>To add methods directly to component instances (<code>this.$store.get()</code>), use <code>app.addInstanceAPI(factory)</code>.</p>
+    <div class="note">⚠️ Always pass <code>globalStore.raw()</code> (the reactive proxy) – not the raw internal object – to preserve reactivity.</div>
+
+    <h2 id="compiler-internals">⚙️ Compiler & Templating Deep Dive</h2>
+    <p><code>MiniX_Compiler</code> walks the DOM, caches directives, and generates reactive effects. It supports <strong>fast‑path x-for</strong> for simple loops (single element, static attributes, one text binding) using VNode diffing and keyed moves. Complex loops use a blueprint system to avoid re‑compilation.</p>
+    <ul>
+      <li><strong>Fast‑path detection:</strong> <code>_isSimpleLoopTemplate()</code> checks for no nested directives, single text binding.</li>
+      <li><strong>Blueprint loops:</strong> <code>_createBlueprintLoopBlock</code> precomputes bindings and updates via bitmask dependency tracking.</li>
+      <li><strong>Interpolation hoisting:</strong> Text nodes with <code>{{ }}</code> are hoisted and updated via a single effect per component.</li>
+      <li><strong>Event delegation:</strong> <code>click</code>, <code>input</code>, <code>change</code> events are delegated to root for better performance.</li>
+    </ul>
+    <p>Pipes (modifiers) are supported: <code>{{ value | trim | number }}</code>. Built‑in: <code>trim</code>, <code>number</code>, <code>lower</code>, <code>upper</code>, <code>capitalize</code>, <code>json</code>, <code>boolean</code>. Custom via <code>compiler.modifier(name, handler)</code>.</p>
+
+    <h2 id="request-client">🌐 MiniX_Request – Full HTTP Client</h2>
+    <p>Fluent HTTP client with interceptors, retries, caching, progress events, and parallel helpers. Available globally and injected into components as <code>$fetch</code>.</p>
+    <pre><code>const api = new MiniX_Request('https://api.example.com', { timeout: 5000 });
+api.get('/users').json().then(users => ...);
+api.post('/item', { name: "test" }).retry(2).cache(5000).json();
+
+// Component usage:
+this.$fetch('/profile').then(data => this.user = data);
+this.$fetch('/post', { method: 'POST', body: { title: "Hello" } });</code></pre>
+    <h3>Key features</h3>
+    <ul>
+      <li><strong>Builder methods:</strong> <code>.header()</code>, <code>.query()</code>, <code>.body()</code>, <code>.retry(times, delay, factor)</code>, <code>.cache(ms)</code>.</li>
+      <li><strong>Interceptors:</strong> <code>addRequestInterceptor</code>, <code>addResponseInterceptor</code>, <code>addErrorInterceptor</code>.</li>
+      <li><strong>Progress:</strong> <code>.onUploadProgress()</code> and <code>.onDownloadProgress()</code> (XHR fallback).</li>
+      <li><strong>Static helpers:</strong> <code>MiniX_Request.all()</code>, <code>allSettled()</code>, <code>waterfall()</code>, <code>pool(requests, limit)</code>.</li>
+      <li><strong>Abort:</strong> <code>.abort()</code>, <code>abortAll()</code>.</li>
+      <li><strong>Cache invalidation:</strong> <code>invalidate(url, params)</code>, <code>clearCache()</code>.</li>
+    </ul>
+
+    <h2 id="additional-apis">🔌 Additional Core APIs</h2>
+    <p><strong>MiniX_Event_Bus</strong> – global pub/sub: <code>on(name, cb)</code>, <code>once()</code>, <code>emit(name, payload)</code>, wildcard <code>'*'</code> support.<br>
+    <strong>MiniX_Provider</strong> – hierarchical DI: <code>provide(key, value)</code>, <code>inject(key, fallback)</code>, <code>createChild()</code>.<br>
+    <strong>MiniX_Sanitizer</strong> – HTML sanitization (uses DOMPurify if available, else fallback). Configurable allowed tags/attributes.<br>
+    <strong>MiniX_Listener</strong> – used internally for <code>$watch</code>, <code>$computed</code>, event binding, auto cleanup.</p>
+
+    <h2 id="plugins">🧩 Plugins & Extensibility</h2>
+    <p>Plugins can extend the framework by adding global methods, directives, or instance APIs. Define a plugin with <code>install(app)</code> and use <code>MiniX.use(plugin)</code>.</p>
+    <pre><code>const loggerPlugin = {
+  install(app) {
+    app.addInstanceAPI((component, instance) => ({
+      $log: (msg) => console.log(`[${component.ComponentClass.name}]`, msg)
+    }));
+  }
+};
+MiniX.createApp(App).use(loggerPlugin).mount("#app");</code></pre>
+
+    <h2 id="security">🛡️ Security Model</h2>
+    <p>All template expressions (<code>{{ }}</code>, directive values) are evaluated inside a <code>with(__scope__)</code> where <code>__scope__</code> has a <strong>null prototype</strong>. This prevents access to <code>window</code>, <code>document</code>, <code>eval</code>, or any global object. HTML is sanitized via <code>MiniX_Sanitizer</code> before insertion (<code>x-html</code>).</p>
+
+    <h2 id="performance">⚡ Performance Optimizations</h2>
+    <ul>
+      <li><strong>Effect batching:</strong> All state mutations inside <code>state.batch()</code> trigger one flush.</li>
+      <li><strong>Fast‑path x-for:</strong> Simple loops use VNode diffing (keyed) without compiling directives per item.</li>
+      <li><strong>Blueprint loops:</strong> Complex loops pre‑analyze directive dependencies and update via bitmask.</li>
+      <li><strong>Event delegation:</strong> Global listeners for high‑frequency events (<code>click</code>, <code>input</code>).</li>
+      <li><strong>WeakMap caching:</strong> Proxy path maps, directive signatures, and template meta are cached.</li>
+      <li><strong>Microtask queue:</strong> Updates are scheduled via <code>queueMicrotask</code> to avoid cascading sync reflows.</li>
+    </ul>
+
+    <h2 id="examples">📘 Advanced Examples</h2>
+    <h3>1. Global store with addScope</h3>
+    <pre><code>const store = new MiniX_State({ count: 0 });
+const app = MiniX.createApp({
+  template: `&lt;button @click="store.set('count', store.get('count')+1)"&gt;{{ store.count }}&lt;/button&gt;`
+}).addScope(() => ({ store: store.raw() })).mount("#app");</code></pre>
+    <h3>2. Scoped x-data with nested component</h3>
+    <pre><code>&lt;div x-data="{ open: false }"&gt;
+  &lt;button @click="open = !open"&gt;Toggle&lt;/button&gt;
+  &lt;div x-show="open" x-transition.duration.300&gt;Content&lt;/div&gt;
+&lt;/div&gt;</code></pre>
+    <h3>3. Using $fetch with retry and loading state</h3>
+    <pre><code>class UserProfile {
+  data() { return { user: null, loading: false }; }
+  async mounted() {
+    this.loading = true;
+    this.user = await this.$fetch('/api/user', { retry: 2 });
+    this.loading = false;
+  }
+  template() { return `&lt;div&gt;&lt;div x-show="loading"&gt;Loading...&lt;/div&gt;&lt;pre x-text="JSON.stringify(user, null, 2)"&gt;&lt;/pre&gt;&lt;/div&gt;`; }
+}</code></pre>
+    <h3>4. Custom directive: x-click-outside</h3>
+    <pre><code>MiniX.directive('x-click-outside', ({ el, expression, component }) => {
+  const handler = (e) => {
+    if (!el.contains(e.target)) component.compiler._evaluate(expression, component._createRenderScope());
+  };
+  document.addEventListener('click', handler);
+  return () => document.removeEventListener('click', handler);
+});</code></pre>
+    <div class="note tip">💡 <strong>Tip:</strong> Use <code>state.batch()</code> when updating multiple paths to reduce rendering overhead. For extremely large lists, provide stable <code>:key</code> in <code>x-for</code> for optimal DOM patching.</div>
+
+    <footer>
+      MiniX v5.6+ · Full source coverage: MiniX_State, MiniX_Effect, MiniX_Compiler, MiniX_Component, MiniX_Request, MiniX_Event_Bus, MiniX_Sanitizer, MiniX_Provider, MiniX_Plugin.<br>
+      Comprehensive documentation generated from source code & design docs.
+    </footer>
+  </main>
+</div>
+</body>
+</html>

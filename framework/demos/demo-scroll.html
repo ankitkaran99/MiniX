@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MiniX Scroll Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+
+        .feed {
+            height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 8px;
+        }
+
+        .feed-item {
+            padding: 10px 12px;
+            margin-bottom: 8px;
+            background: #f7f7f7;
+            border-radius: 6px;
+        }
+
+        .loading {
+            padding: 10px 12px;
+            text-align: center;
+            color: #666;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <div id="feed-scroll">
+            <div class="feed" x-scroll="loadMore" x-scroll-direction="bottom" x-scroll-threshold="20">
+                <div class="feed-item" x-for="item in items" :key="item">{{ item }}</div>
+                <div class="loading" x-show="isLoading">Loading more items...</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="../mini-x.js"></script>
+    <script src="../plugin-scroll.js"></script>
+    <script>
+        class MyComponent {
+            data() {
+                return {
+                    page: 1,
+                    isLoading: false,
+                    items: []
+                };
+            }
+
+            mounted() {
+                this.loadMore();
+            }
+
+            loadMore(el, ctx) {
+                this.isLoading = true;
+
+                const page = this.page;
+                const newItems = Array.from(
+                    { length: 20 },
+                    (_, i) => `Item ${(page - 1) * 20 + i + 1}`
+                );
+
+                this.items.push(...newItems);
+                this.page++;
+                this.isLoading = false;
+
+                ctx.done(); // this is the important bit
+            }
+        }
+
+        MiniX.createApp(MyComponent)
+            .use(MiniXScrollPlugin)
+            .mount('#app');
+    </script>
+</body>
+
+</html>
