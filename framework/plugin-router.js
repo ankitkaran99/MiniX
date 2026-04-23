@@ -15,6 +15,22 @@
 		return String(str).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 	}
 
+	function setOwn(target, key, value) {
+		Object.defineProperty(target, key, {
+			value,
+			writable: true,
+			enumerable: true,
+			configurable: true
+		});
+	}
+
+	function copyOwnObject(value) {
+		const out = {};
+		if (!value || typeof value !== "object") return out;
+		for (const key of Object.keys(value)) setOwn(out, key, value[key]);
+		return out;
+	}
+
 	function stripTrailingSlash(path) {
 		if (!path || path.length <= 1) return "/";
 		return path.replace(/\/+$/, "") || "/";
@@ -26,6 +42,15 @@
 		if (!out.startsWith("/")) out = "/" + out;
 		out = out.replace(/\/{2,}/g, "/");
 		return stripTrailingSlash(out);
+	}
+
+	function stripHistoryBase(path, base) {
+		const normalizedPath = normalizePath(path || "/");
+		const normalizedBase = stripTrailingSlash(normalizePath(base || "/"));
+		if (normalizedBase === "/") return normalizedPath;
+		if (normalizedPath === normalizedBase) return "/";
+		if (normalizedPath.startsWith(normalizedBase + "/")) return normalizePath(normalizedPath.slice(normalizedBase.length) || "/");
+		return normalizedPath;
 	}
 
 	function joinPaths(parent, child) {
@@ -44,9 +69,9 @@
 		for (const [key, value] of new URLSearchParams(raw).entries()) {
 			if (Object.prototype.hasOwnProperty.call(out, key)) {
 				if (Array.isArray(out[key])) out[key].push(value);
-				else out[key] = [out[key], value];
+				else setOwn(out, key, [out[key], value]);
 			} else {
-				out[key] = value;
+				setOwn(out, key, value);
 			}
 		}
 		return out;
@@ -80,7 +105,9 @@
 	function mergeMeta(matched) {
 		const out = {};
 		for (const record of matched || []) {
-			if (record && isPlainObject(record.meta)) Object.assign(out, record.meta);
+			if (record && isPlainObject(record.meta)) {
+				for (const key of Object.keys(record.meta)) setOwn(out, key, record.meta[key]);
+			}
 		}
 		return out;
 	}
@@ -90,10 +117,10 @@
 			fullPath: route.fullPath,
 			path: route.path,
 			name: route.name || null,
-			params: { ...(route.params || {}) },
-			query: { ...(route.query || {}) },
+			params: copyOwnObject(route.params),
+			query: copyOwnObject(route.query),
 			hash: route.hash || "",
-			meta: { ...(route.meta || {}) },
+			meta: copyOwnObject(route.meta),
 			matched: Array.isArray(route.matched) ? route.matched.slice() : [],
 			redirectedFrom: route.redirectedFrom || null
 		};
@@ -123,15 +150,22 @@
 			return { path: "/", keys, exactRegex: /^\/$/, prefixRegex: /^\// };
 		}
 
-		const parts = normalized
-		.split("/")
-		.filter(Boolean)
-		.map((segment) => {
+		const segments = normalized.split("/").filter(Boolean);
+		const parts = segments.map((segment, index) => {
 			if (segment.startsWith(":")) {
-				const optional = segment.endsWith("?");
-				const name = segment.slice(1).replace(/\?$/, "");
-				keys.push({ name, optional });
+				const catchAllMatch = segment.match(/^:([^()]+)\(\.\*\)$/);
+				const optional = !catchAllMatch && segment.endsWith("?");
+				const name = catchAllMatch ? catchAllMatch[1] : segment.slice(1).replace(/\?$/, "").replace(/\*$/, "");
+				const catchAll = Boolean(catchAllMatch) ||
+					(index === segments.length - 1 && (segment.endsWith("*") || name === "anything" || name === "pathMatch" || name === "catchAll"));
+				keys.push({ name, optional, catchAll, zeroOrMore: Boolean(catchAllMatch) });
+				if (catchAllMatch) return "(?:/(.*))?";
+				if (catchAll) return "/(.+)";
 				return optional ? "(?:/([^/]+))?" : "/([^/]+)";
+			}
+			if (segment === "*") {
+				keys.push({ name: "pathMatch", optional: false, catchAll: true, zeroOrMore: false });
+				return "/(.+)";
 			}
 			return "/" + escapeRegex(segment);
 		});
@@ -152,7 +186,15 @@
 		let groupIndex = 1;
 		for (const key of record.keys) {
 			const value = match[groupIndex++];
-			if (value != null) params[key.name] = decodeURIComponent(value);
+			if (value == null && key.catchAll) {
+				setOwn(params, key.name, "");
+			} else if (value != null) {
+				try {
+					setOwn(params, key.name, decodeURIComponent(value));
+				} catch (_) {
+					setOwn(params, key.name, value);
+				}
+			}
 		}
 		return params;
 	}
@@ -162,12 +204,21 @@
 	function getRouteRank(record) {
 		if (_rankCache.has(record)) return _rankCache.get(record);
 		const segments = record.fullPath.split("/").filter(Boolean);
-		let staticCount = 0, dynamicCount = 0;
+		let staticCount = 0, dynamicCount = 0, catchAllCount = 0, optionalCount = 0;
+		let keyIndex = 0;
 		for (const segment of segments) {
-			if (segment.startsWith(":")) dynamicCount++;
-			else staticCount++;
+			if (segment.startsWith(":")) {
+				const key = record.keys[keyIndex++] || {};
+				dynamicCount++;
+				if (key.catchAll) catchAllCount++;
+				if (key.optional) optionalCount++;
+			} else if (segment === "*") {
+				catchAllCount++;
+			} else {
+				staticCount++;
+			}
 		}
-		const rank = { depth: record.depth, staticCount, dynamicCount, length: record.fullPath.length };
+		const rank = { depth: record.depth, staticCount, dynamicCount, catchAllCount, optionalCount, length: record.fullPath.length };
 		_rankCache.set(record, rank);
 		return rank;
 	}
@@ -180,12 +231,12 @@
 			mode: "history",
 			base,
 			getCurrentLocation() {
-				let path = global.location.pathname || "/";
-				if (base !== "/" && path.startsWith(base)) path = path.slice(base.length) || "/";
+				const location = global.location || {};
+				let path = location.pathname || "/";
 				return {
-					path: normalizePath(path),
-					query: parseQuery(global.location.search),
-					hash: global.location.hash || ""
+					path: stripHistoryBase(path, base),
+					query: parseQuery(location.search),
+					hash: location.hash || ""
 				};
 			},
 			href(to) {
@@ -193,24 +244,37 @@
 				return (base === "/" ? "" : base) + path + stringifyQuery(to.query) + normalizeHash(to.hash);
 			},
 			push(to) {
-				if (global.location.protocol === "file:") {
+				const location = global.location || {};
+				if (location.protocol === "file:") {
 					global.location.hash = normalizePath(to.path || "/") + stringifyQuery(to.query) + normalizeHash(to.hash);
 					return;
 				}
-				global.history.pushState({}, "", this.href(to));
+				if (global.history && typeof global.history.pushState === "function") {
+					global.history.pushState({}, "", this.href(to));
+				}
 			},
 			replace(to) {
-				if (global.location.protocol === "file:") {
+				const location = global.location || {};
+				if (location.protocol === "file:") {
 					const nextHash = normalizePath(to.path || "/") + stringifyQuery(to.query) + normalizeHash(to.hash);
-					global.history.replaceState({}, "", global.location.pathname + global.location.search + "#" + nextHash);
+					if (global.history && typeof global.history.replaceState === "function") {
+						global.history.replaceState({}, "", (location.pathname || "/") + (location.search || "") + "#" + nextHash);
+					} else {
+						global.location.hash = nextHash;
+					}
 					return;
 				}
-				global.history.replaceState({}, "", this.href(to));
+				if (global.history && typeof global.history.replaceState === "function") {
+					global.history.replaceState({}, "", this.href(to));
+				}
 			},
 			listen(callback) {
 				const handler = () => callback(this.getCurrentLocation());
+				if (typeof global.addEventListener !== "function") return () => {};
 				global.addEventListener("popstate", handler);
-				return () => global.removeEventListener("popstate", handler);
+				return () => {
+					if (typeof global.removeEventListener === "function") global.removeEventListener("popstate", handler);
+				};
 			}
 		};
 	}
@@ -221,12 +285,12 @@
 			mode: "hash",
 			base,
 			getCurrentLocation() {
-				const raw = global.location.hash.replace(/^#/, "") || "/";
+				const location = global.location || {};
+				const raw = String(location.hash || "").replace(/^#/, "") || "/";
 				const url = new URL(raw.startsWith("/") ? raw : "/" + raw, "http://localhost/");
 				let path = url.pathname || "/";
-				if (base !== "/" && path.startsWith(base)) path = path.slice(base.length) || "/";
 				return {
-					path: normalizePath(path),
+					path: stripHistoryBase(path, base),
 					query: parseQuery(url.search),
 					hash: url.hash || ""
 				};
@@ -236,15 +300,22 @@
 				return "#" + (base === "/" ? "" : base) + path + stringifyQuery(to.query) + normalizeHash(to.hash);
 			},
 			push(to) {
-				global.location.hash = this.href(to).slice(1);
+				if (global.location) global.location.hash = this.href(to).slice(1);
 			},
 			replace(to) {
-				global.history.replaceState({}, "", this.href(to));
+				if (global.history && typeof global.history.replaceState === "function") {
+					global.history.replaceState({}, "", this.href(to));
+				} else if (global.location) {
+					global.location.hash = this.href(to).slice(1);
+				}
 			},
 			listen(callback) {
 				const handler = () => callback(this.getCurrentLocation());
+				if (typeof global.addEventListener !== "function") return () => {};
 				global.addEventListener("hashchange", handler);
-				return () => global.removeEventListener("hashchange", handler);
+				return () => {
+					if (typeof global.removeEventListener === "function") global.removeEventListener("hashchange", handler);
+				};
 			}
 		};
 	}
@@ -409,6 +480,8 @@
 		let routerViewRefreshScheduled = false;
 		let pendingRouterViewFromRoute = null;
 		let activeLinkRefreshScheduled = false;
+		let navigationId = 0;
+		let installed = false;
 
 		const RouteState = global.MiniX_State || null;
 		const currentRoute = RouteState
@@ -496,6 +569,7 @@
 		// ── Route record normalization ─────────────────────────────────────────
 
 		function normalizeRouteRecord(route, parent, parentPath) {
+			if (!route || typeof route !== "object") return null;
 			const path = route.path == null ? "" : String(route.path);
 			const fullPath = path === "" ? normalizePath(parentPath || "/") : joinPaths(parentPath || "/", path);
 			const compiled = compileRoutePattern(fullPath);
@@ -521,7 +595,8 @@
 			if (record.name) recordsByName.set(record.name, record);
 
 			for (const child of (Array.isArray(route.children) ? route.children : [])) {
-				record.children.push(normalizeRouteRecord(child, record, record.fullPath));
+				const childRecord = normalizeRouteRecord(child, record, record.fullPath);
+				if (childRecord) record.children.push(childRecord);
 			}
 
 			return record;
@@ -532,9 +607,11 @@
 		records.sort((a, b) => {
 			const ra = getRouteRank(a);
 			const rb = getRouteRank(b);
-			if (rb.depth !== ra.depth) return rb.depth - ra.depth;
 			if (rb.staticCount !== ra.staticCount) return rb.staticCount - ra.staticCount;
+			if (ra.catchAllCount !== rb.catchAllCount) return ra.catchAllCount - rb.catchAllCount;
+			if (ra.optionalCount !== rb.optionalCount) return ra.optionalCount - rb.optionalCount;
 			if (ra.dynamicCount !== rb.dynamicCount) return ra.dynamicCount - rb.dynamicCount;
+			if (rb.depth !== ra.depth) return rb.depth - ra.depth;
 			return rb.length - ra.length;
 		});
 
@@ -557,10 +634,37 @@
 			const parts = record.fullPath.split("/").filter(Boolean);
 			const built = parts
 			.map((part) => {
+				if (part === "*") {
+					const key = "pathMatch";
+					if (!params || !Object.prototype.hasOwnProperty.call(params, key) || params[key] == null || String(params[key]) === "") {
+						throw new Error('[MiniXRouter] Missing param "' + key + '" for route "' + (record.name || record.fullPath) + '"');
+					}
+					return String(params[key])
+					.split("/")
+					.filter(Boolean)
+					.map((segment) => encodeURIComponent(segment))
+					.join("/");
+				}
 				if (!part.startsWith(":")) return part;
-				const optional = part.endsWith("?");
-				const key = part.slice(1).replace(/\?$/, "");
-				if (params && params[key] != null) return encodeURIComponent(String(params[key]));
+				const catchAllMatch = part.match(/^:([^()]+)\(\.\*\)$/);
+				const optional = !catchAllMatch && part.endsWith("?");
+				const key = catchAllMatch ? catchAllMatch[1] : part.slice(1).replace(/\?$/, "").replace(/\*$/, "");
+				const keyInfo = record.keys.find((entry) => entry.name === key);
+				const hasParam = !!(params && Object.prototype.hasOwnProperty.call(params, key) && params[key] != null);
+				if (hasParam) {
+					if (keyInfo && keyInfo.catchAll) {
+						const rawValue = String(params[key]);
+						if (!rawValue && !keyInfo.zeroOrMore) {
+							throw new Error('[MiniXRouter] Missing param "' + key + '" for route "' + (record.name || record.fullPath) + '"');
+						}
+						return rawValue
+						.split("/")
+						.filter(Boolean)
+						.map((segment) => encodeURIComponent(segment))
+						.join("/");
+					}
+					return encodeURIComponent(String(params[key]));
+				}
 				if (optional) return null;
 				throw new Error('[MiniXRouter] Missing param "' + key + '" for route "' + (record.name || record.fullPath) + '"');
 			})
@@ -570,7 +674,11 @@
 
 		function normalizeRawTarget(input) {
 			if (typeof input === "string") {
-				return buildLocationFromUrlish(input, global.location && global.location.href);
+				const trimmed = input.trim();
+				const baseHref = (trimmed.startsWith("?") || trimmed.startsWith("#"))
+				? buildRouterRelativeBaseHref()
+				: global.location && global.location.href;
+				return buildLocationFromUrlish(input, baseHref);
 			}
 			if (!input || typeof input !== "object") {
 				return { path: "/", query: {}, hash: "" };
@@ -580,14 +688,21 @@
 				if (!record) throw new Error('[MiniXRouter] Unknown route name: "' + input.name + '"');
 				return {
 					path: buildPathFromNamedRoute(record, input.params || {}),
-					query: input.query || {},
+					query: copyOwnObject(input.query || {}),
 					hash: normalizeHash(input.hash || "")
 				};
 			}
+			const rawPath = input.path || "/";
+			const trimmedPath = typeof rawPath === "string" ? rawPath.trim() : "";
+			const parsedPath = buildLocationFromUrlish(
+				rawPath,
+				(trimmedPath.startsWith("?") || trimmedPath.startsWith("#")) ? buildRouterRelativeBaseHref() : global.location && global.location.href
+			);
+			const hasHash = Object.prototype.hasOwnProperty.call(input, "hash");
 			return {
-				path: normalizePath(input.path || "/"),
-				query: input.query || {},
-				hash: normalizeHash(input.hash || "")
+				path: parsedPath.path,
+				query: { ...copyOwnObject(parsedPath.query), ...copyOwnObject(input.query || {}) },
+				hash: hasHash ? normalizeHash(input.hash || "") : parsedPath.hash
 			};
 		}
 
@@ -617,7 +732,10 @@
 			return resolve(redirected, redirectedFrom || fullTargetKey, debug, seen);
 			}
 			const params = {};
-			for (const record of matched) Object.assign(params, extractParams(record, target.path));
+			for (const record of matched) {
+				const recordParams = extractParams(record, target.path);
+				for (const key of Object.keys(recordParams)) setOwn(params, key, recordParams[key]);
+			}
 			const route = {
 				fullPath: target.path + stringifyQuery(target.query) + normalizeHash(target.hash),
 				path: target.path,
@@ -639,14 +757,57 @@
 
 		// ── Route synchronization ──────────────────────────────────────────────
 
+		function getHistoryLocation() {
+			if (history && typeof history.getCurrentLocation === "function") return history.getCurrentLocation();
+			if (history && typeof history.getLocation === "function") return history.getLocation();
+			return "/";
+		}
+
+		function normalizeHistoryLocation(location) {
+			if (typeof location === "string") return buildLocationFromUrlish(location, global.location && global.location.href);
+			if (location && typeof location === "object") {
+				if (location.fullPath && !location.path) return buildLocationFromUrlish(location.fullPath, global.location && global.location.href);
+				return {
+					path: normalizePath(location.path || "/"),
+					query: copyOwnObject(location.query || {}),
+					hash: normalizeHash(location.hash || "")
+				};
+			}
+			return { path: "/", query: {}, hash: "" };
+		}
+
+		function buildRouterRelativeBaseHref() {
+			const location = currentRoute && currentRoute.fullPath !== "/"
+			? currentRoute
+			: normalizeHistoryLocation(getHistoryLocation());
+			return "http://localhost" + normalizePath(location.path || "/") + stringifyQuery(location.query) + normalizeHash(location.hash);
+		}
+
+		function writeHistory(to, replace) {
+			if (!history) return;
+			const method = replace ? "replace" : "push";
+			if (typeof history[method] === "function") return history[method](to);
+		}
+
+		function suppressHistoryEventOnce(fn) {
+			suppressNextHistoryEvent = true;
+			try {
+				fn();
+			} finally {
+				queueMicrotask(() => {
+					if (suppressNextHistoryEvent) suppressNextHistoryEvent = false;
+				});
+			}
+		}
+
 		function syncRoute(next) {
 			currentRoute.fullPath = next.fullPath;
 			currentRoute.path = next.path;
 			currentRoute.name = next.name;
-			currentRoute.params = { ...(next.params || {}) };
-			currentRoute.query = { ...(next.query || {}) };
+			currentRoute.params = copyOwnObject(next.params);
+			currentRoute.query = copyOwnObject(next.query);
 			currentRoute.hash = next.hash || "";
-			currentRoute.meta = { ...(next.meta || {}) };
+			currentRoute.meta = copyOwnObject(next.meta);
 			currentRoute.matched = Array.isArray(next.matched) ? next.matched.slice() : [];
 			currentRoute.redirectedFrom = next.redirectedFrom || null;
 
@@ -722,7 +883,8 @@
 			}
 		}
 
-		async function navigate(input, replace, _depth = 0) {
+		async function navigate(input, replace, _depth = 0, navId = null) {
+			if (navId == null) navId = ++navigationId;
 			if (_depth > 20) {
 				throw new Error("[MiniXRouter] Navigation redirect loop detected (>20 redirects).");
 			}
@@ -730,26 +892,34 @@
 			const to = resolve(input, null, debugEnabled);
 			emitDebug("navigation:start", { to, from, replace: !!replace });
 			const globalResult = await runGuardList(beforeEachHooks, to, from, "beforeEach");
+			if (navId !== navigationId) {
+				emitDebug("navigation:cancelled", { reason: "superseded", to, from });
+				return false;
+			}
 			if (globalResult === false) {
 				emitDebug("navigation:aborted", { source: "beforeEach", to, from });
 				return false;
 			}
 			if (globalResult !== true) {
 				emitDebug("navigation:redirect", { source: "beforeEach", to, from, target: globalResult });
-				return navigate(globalResult, replace, _depth + 1);
+				return navigate(globalResult, replace, _depth + 1, navId);
 			}
 			const routeResult = await runRouteBeforeEnter(to, from);
+			if (navId !== navigationId) {
+				emitDebug("navigation:cancelled", { reason: "superseded", to, from });
+				return false;
+			}
 			if (routeResult === false) {
 				emitDebug("navigation:aborted", { source: "beforeEnter", to, from });
 				return false;
 			}
 			if (routeResult !== true) {
 				emitDebug("navigation:redirect", { source: "beforeEnter", to, from, target: routeResult });
-				return navigate(routeResult, replace, _depth + 1);
+				return navigate(routeResult, replace, _depth + 1, navId);
 			}
-			suppressNextHistoryEvent = true;
-			if (replace) history.replace(to);
-			else history.push(to);
+			suppressHistoryEventOnce(() => {
+				writeHistory(to, replace);
+			});
 			syncRoute(to);
 			const toClone = cloneRoute(to);
 			await runHookList(afterEachHooks, { to: toClone, from }, "afterEach");
@@ -758,7 +928,8 @@
 		}
 
 		function href(target) {
-			return history.href(resolve(target));
+			const route = resolve(target);
+			return history && typeof history.href === "function" ? history.href(route) : route.fullPath;
 		}
 
 		// ── View helpers with integrated loader support ─────────────────────────
@@ -835,9 +1006,9 @@
 			const propsConfig = record.components && isPlainObject(record.props)
 			? record.props[viewName]
 			: record.props;
-			if (propsConfig === true) return { ...route.params };
+			if (propsConfig === true) return copyOwnObject(route.params);
 			if (typeof propsConfig === "function") return propsConfig(cloneRoute(route)) || {};
-			if (isPlainObject(propsConfig)) return { ...propsConfig };
+			if (isPlainObject(propsConfig)) return copyOwnObject(propsConfig);
 			return {};
 		}
 
@@ -852,10 +1023,13 @@
 		}
 
 		function shouldIgnoreClick(event) {
+			const el = event.currentTarget;
 			return (
 				event.defaultPrevented ||
 				event.metaKey || event.ctrlKey || event.shiftKey || event.altKey ||
-				event.button !== 0
+				event.button !== 0 ||
+				(el && el.hasAttribute && el.hasAttribute("download")) ||
+				(el && el.getAttribute && el.getAttribute("target") && el.getAttribute("target") !== "_self")
 			);
 		}
 
@@ -875,12 +1049,64 @@
 			});
 		}
 
+		function attachHistoryListener() {
+			if (unlisten || !history || typeof history.listen !== "function") return;
+			async function handleHistoryNavigation(location) {
+				if (suppressNextHistoryEvent) { suppressNextHistoryEvent = false; return; }
+				const navId = ++navigationId;
+				const from = cloneRoute(currentRoute);
+				const normalizedLocation = normalizeHistoryLocation(location);
+				const rawLocation = normalizedLocation.path + stringifyQuery(normalizedLocation.query) + normalizeHash(normalizedLocation.hash);
+				const next = resolve(rawLocation, null, debugEnabled);
+				const guardResult = await runGuardList(beforeEachHooks, next, from, "beforeEach");
+				if (navId !== navigationId) {
+					emitDebug("navigation:cancelled", { reason: "superseded", to: next, from });
+					return;
+				}
+				if (guardResult === false) {
+					suppressHistoryEventOnce(() => writeHistory(from, true));
+					emitDebug("navigation:aborted", { source: "beforeEach", to: next, from });
+					return;
+				}
+				if (guardResult !== true) {
+					suppressHistoryEventOnce(() => writeHistory(from, true));
+					navigate(guardResult, true).catch(() => {});
+					return;
+				}
+				const routeResult = await runRouteBeforeEnter(next, from);
+				if (navId !== navigationId) {
+					emitDebug("navigation:cancelled", { reason: "superseded", to: next, from });
+					return;
+				}
+				if (routeResult === false) {
+					suppressHistoryEventOnce(() => writeHistory(from, true));
+					emitDebug("navigation:aborted", { source: "beforeEnter", to: next, from });
+					return;
+				}
+				if (routeResult !== true) {
+					suppressHistoryEventOnce(() => writeHistory(from, true));
+					navigate(routeResult, true).catch(() => {});
+					return;
+				}
+				syncRoute(next);
+				await runHookList(afterEachHooks, { to: cloneRoute(next), from }, "afterEach");
+				emitDebug("navigation:external", { to: next, from });
+			}
+			unlisten = history.listen(function (location) {
+				Promise.resolve(handleHistoryNavigation(location)).catch((error) => {
+					emitDebug("navigation:error", { source: "history", error: String(error?.message || error), location });
+				});
+			});
+		}
+
 		// ── Router object ──────────────────────────────────────────────────────
 
 		const router = {
 			currentRoute,
 
 			install(app) {
+				if (installed) return app;
+				installed = true;
 				appRef = app;
 				app.provide("router", router);
 
@@ -944,8 +1170,10 @@
 						try {
 							const to = getTarget();
 							router._emitDebug("link:click", { type: "x-link", to, text: (el.textContent || "").trim(), href: el.getAttribute("href") });
-							if (replaceMode) router.replace(to);
-							else router.push(to);
+							const nav = replaceMode ? router.replace(to) : router.push(to);
+							if (nav && typeof nav.catch === "function") nav.catch((error) => {
+								console.warn("[MiniXRouter] x-link navigation failed:", error);
+							});
 						} catch (error) {
 							console.warn("[MiniXRouter] x-link navigation failed:", error);
 						}
@@ -1020,8 +1248,10 @@
 						try {
 							const to = parseTarget();
 							router._emitDebug("link:click", { type: "x-route", to, text: (el.textContent || "").trim(), href: el.getAttribute("href") });
-							if (replaceMode) router.replace(to);
-							else router.push(to);
+							const nav = replaceMode ? router.replace(to) : router.push(to);
+							if (nav && typeof nav.catch === "function") nav.catch((error) => {
+								console.warn("[MiniXRouter] x-route navigation failed:", error);
+							});
 						} catch (error) {
 							console.warn("[MiniXRouter] x-route navigation failed:", error);
 						}
@@ -1238,41 +1468,26 @@
 					};
 				});
 
-				unlisten = history.listen(async function (location) {
-					if (suppressNextHistoryEvent) { suppressNextHistoryEvent = false; return; }
-					const from = cloneRoute(currentRoute);
-					const next = resolve(
-						location.path + stringifyQuery(location.query) + normalizeHash(location.hash),
-						null, debugEnabled
-					);
-					const guardResult = await runGuardList(beforeEachHooks, next, from, "beforeEach");
-					if (guardResult === false) {
-						suppressNextHistoryEvent = true;
-						history.replace(from);
-						emitDebug("navigation:aborted", { source: "beforeEach", to: next, from });
-						return;
-					}
-					if (guardResult !== true) {
-						suppressNextHistoryEvent = true;
-						history.replace(from);
-						navigate(guardResult, true).catch(() => {});
-						return;
-					}
-					syncRoute(next);
-					await runHookList(afterEachHooks, { to: cloneRoute(next), from }, "afterEach");
-					emitDebug("navigation:external", { to: next, from });
-				});
-
-				syncRoute(resolve(history.getCurrentLocation(), null, false));
+				attachHistoryListener();
+				syncRoute(resolve(getHistoryLocation(), null, false));
 				return app;
 			},
 
 			resolve,
 			push(to) { return navigate(to, false); },
 			replace(to) { return navigate(to, true); },
-			back() { global.history.back(); },
-			forward() { global.history.forward(); },
-			go(n) { global.history.go(n); },
+			back() {
+				if (history && typeof history.back === "function") return history.back();
+				if (global.history && typeof global.history.back === "function") return global.history.back();
+			},
+			forward() {
+				if (history && typeof history.forward === "function") return history.forward();
+				if (global.history && typeof global.history.forward === "function") return global.history.forward();
+			},
+			go(n) {
+				if (history && typeof history.go === "function") return history.go(n);
+				if (global.history && typeof global.history.go === "function") return global.history.go(n);
+			},
 			href,
 
 			beforeEach(fn) { if (typeof fn === "function") beforeEachHooks.push(fn); return router; },
@@ -1316,7 +1531,8 @@
 			},
 
 			start() {
-				syncRoute(resolve(history.getCurrentLocation(), null, debugEnabled));
+				attachHistoryListener();
+				syncRoute(resolve(getHistoryLocation(), null, debugEnabled));
 				return router;
 			},
 

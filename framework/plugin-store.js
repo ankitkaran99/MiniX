@@ -89,6 +89,16 @@ const MiniXStore = (() => {
     return raw === undefined ? proxy : raw;
   };
 
+  function _stateObject(value) {
+    return value && typeof value === 'object' ? value : {};
+  }
+
+  function _definitionObject(value) {
+    if (!value || typeof value !== 'object') return {};
+    const proto = Object.getPrototypeOf(value);
+    return proto === Object.prototype || proto === null ? value : {};
+  }
+
   function _emitDebug(type, detail) {
     if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') return;
     try {
@@ -136,7 +146,7 @@ const MiniXStore = (() => {
 
   function _createStore(name, def) {
     // 1. Reactive state
-    const rawState = (typeof def.state === 'function' ? def.state() : def.state) || {};
+    const rawState = _stateObject(typeof def.state === 'function' ? def.state() : def.state);
     const state = new MiniX_State(rawState);
     let stateProxy = state.raw();
 
@@ -151,6 +161,15 @@ const MiniXStore = (() => {
     // 3. Action context — "this" inside every action
     const actionCtx = Object.create(null);
     const _wiredStateKeys = new Set();
+    const _actions = {};
+    const _actionDefs = _definitionObject(def.actions);
+    const _getterDefs = _definitionObject(def.getters);
+    const _BUILTIN_KEYS = new Set([
+      '$state', '$name', '$reset', '$set', '$get', '$batch', '$patch', '$merge',
+      'watch', 'snapshot',
+    ]);
+    const _getterCache = new Map();
+    let _RESERVED = null;
 
     // Memoised ownKeys result — invalidated by _syncStateGetters whenever the
     // top-level state shape changes. Avoids allocating three arrays + a Set on
@@ -164,10 +183,19 @@ const MiniXStore = (() => {
     // all proxy trap handlers can share the same reference.
     let _stateRaw = _raw(stateProxy) || {};
     let _builtins = null;
+    const _hasOwn = (obj, prop) => Object.prototype.hasOwnProperty.call(obj, prop);
+    const _hasStateKey = (prop) => _hasOwn(_stateRaw, prop);
+    const _isGetterKey = (prop) => (
+      typeof prop === 'string' &&
+      !_BUILTIN_KEYS.has(prop) &&
+      _hasOwn(_getterDefs, prop) &&
+      typeof _getterDefs[prop] === 'function'
+    );
 
     const _refreshStateRefs = () => {
       stateProxy = state.raw();
       _stateRaw = _raw(stateProxy) || {};
+      actionCtx.$state = stateProxy;
       if (_builtins) _builtins.$state = stateProxy;
       _ownKeysCache = null;
     };
@@ -194,7 +222,12 @@ const MiniXStore = (() => {
         // installed on actionCtx. Public proxy resolution still exposes the
         // state key via store[key], but inside actions reserved/action names
         // keep their higher-priority meaning.
-        if (Object.prototype.hasOwnProperty.call(actionCtx, key)) continue;
+        if (
+          _hasOwn(actionCtx, key) ||
+          _BUILTIN_KEYS.has(key) ||
+          _hasOwn(_actionDefs, key) ||
+          _isGetterKey(key)
+        ) continue;
 
         shaped = true;
         Object.defineProperty(actionCtx, key, {
@@ -229,7 +262,12 @@ const MiniXStore = (() => {
       const dot = path.indexOf('.');
       const root = dot === -1 ? path : path.slice(0, dot);
       if (!root || _wiredStateKeys.has(root)) return;
-      if (Object.prototype.hasOwnProperty.call(actionCtx, root)) return;
+      if (
+        _hasOwn(actionCtx, root) ||
+        _BUILTIN_KEYS.has(root) ||
+        _hasOwn(_actionDefs, root) ||
+        _isGetterKey(root)
+      ) return;
       Object.defineProperty(actionCtx, root, {
         get: ()  => stateProxy[root],
         set: (v) => { stateProxy[root] = v; },
@@ -240,17 +278,27 @@ const MiniXStore = (() => {
       _ownKeysCache = null;
     };
 
+    const _topLevelPathKey = (path) => {
+      if (typeof path !== 'string') return undefined;
+      const dot = path.indexOf('.');
+      return dot === -1 ? path : path.slice(0, dot);
+    };
+
     // Core helpers available as this.$xxx inside actions
     actionCtx.$name  = name;
+    actionCtx.$state = stateProxy;
     // OPT: helpers are inlined rather than wrapped via _withSync's variadic
     // (...args) spread — each call now passes arguments positionally with zero
     // intermediate array allocation.
     actionCtx.$set   = (path, val) => {
+      const root = _topLevelPathKey(path);
+      const hadKey = root ? _hasStateKey(root) : true;
       try {
         _preSyncTopLevelPath(path);
         return state.set(path, val);
       } finally {
         _syncStateGetters();
+        if (root && !hadKey && _hasStateKey(root)) _invalidateGetterCache();
       }
     };
     actionCtx.$get   = (path, fb)  => state.get(path, fb);
@@ -262,23 +310,29 @@ const MiniXStore = (() => {
       }
     };
     actionCtx.$patch = (path, fn) => {
+      const root = _topLevelPathKey(path);
+      const hadKey = root ? _hasStateKey(root) : true;
       try {
         _preSyncTopLevelPath(path);
         return state.patch(path, fn);
       } finally {
         _syncStateGetters();
+        if (root && !hadKey && _hasStateKey(root)) _invalidateGetterCache();
       }
     };
     actionCtx.$merge = (path, obj) => {
+      const root = _topLevelPathKey(path);
+      const hadKey = root ? _hasStateKey(root) : true;
       try {
         _preSyncTopLevelPath(path);
         return state.merge(path, obj);
       } finally {
         _syncStateGetters();
+        if (root && !hadKey && _hasStateKey(root)) _invalidateGetterCache();
       }
     };
     actionCtx.$reset = () => {
-      const initial = (typeof def.state === 'function' ? def.state() : def.state) || {};
+      const initial = _stateObject(typeof def.state === 'function' ? def.state() : def.state);
       state.reset(initial);
       _refreshStateRefs();
       // Mark all cached getters stale so the next read recomputes against
@@ -287,19 +341,101 @@ const MiniXStore = (() => {
       _syncStateGetters();
     };
 
+    const _invalidateGetterCache = () => {
+      if (_destroyed) return;
+      for (const entry of _getterCache.values()) {
+        entry.fresh = false;
+        const subs = [];
+        for (const eff of entry.subscribers) subs.push(eff);
+        for (const eff of subs) {
+          if (!eff.active) {
+            entry.subscribers.delete(eff);
+            continue;
+          }
+          if (!eff._scheduled) eff.schedule();
+        }
+      }
+    };
+
+    const _isProtectedKey = (prop) => {
+      if (typeof prop !== 'string') return false;
+      return Boolean(
+        (_RESERVED && _RESERVED.has(prop)) ||
+        _hasOwn(_actions, prop) ||
+        _isGetterKey(prop)
+      );
+    };
+
+    const actionThis = new Proxy(actionCtx, {
+      get(target, prop) {
+        if (_hasOwn(target, prop)) return target[prop];
+        if (_isGetterKey(prop)) {
+          return _readGetter(prop);
+        }
+        if (_hasStateKey(prop)) return stateProxy[prop];
+        return undefined;
+      },
+
+      set(target, prop, value) {
+        if (_isProtectedKey(prop)) {
+          console.warn(`[MiniXStore "${name}"] Ignoring write to protected property "${String(prop)}".`);
+          return true;
+        }
+        if (_hasOwn(target, prop)) {
+          return Reflect.set(target, prop, value);
+        }
+        if (typeof prop !== 'string') {
+          const hadKey = _hasStateKey(prop);
+          const oldVal = hadKey ? stateProxy[prop] : undefined;
+          stateProxy[prop] = value;
+          if (!hadKey && _hasStateKey(prop)) _ownKeysCache = null;
+          if (!Object.is(oldVal, value)) _invalidateGetterCache();
+          return true;
+        }
+        const hadKey = _hasStateKey(prop);
+        _preSyncTopLevelPath(prop);
+        stateProxy[prop] = value;
+        _syncStateGetters();
+        if (!hadKey && _hasStateKey(prop)) _invalidateGetterCache();
+        return true;
+      },
+
+      deleteProperty(target, prop) {
+        const isWiredStateKey = typeof prop === 'string' && _wiredStateKeys.has(prop);
+        if (_isProtectedKey(prop) || (_hasOwn(target, prop) && !isWiredStateKey)) {
+          console.warn(`[MiniXStore "${name}"] Ignoring delete for protected property "${String(prop)}".`);
+          return true;
+        }
+        if (_hasStateKey(prop)) {
+          if (typeof prop === 'symbol') {
+            delete stateProxy[prop];
+            _invalidateGetterCache();
+            _ownKeysCache = null;
+          } else {
+            state.delete(prop);
+            _invalidateGetterCache();
+          }
+          _syncStateGetters();
+        }
+        return true;
+      },
+    });
+
     // 4. Bound actions
-    const _actions = {};
     // OPT: Object.keys + for...of is faster than for...in for plain objects
     // (no prototype chain walk; V8 can use a more direct codepath).
-    const _actionDefs = def.actions || {};
     for (const key of Object.keys(_actionDefs)) {
+      if (_BUILTIN_KEYS.has(key)) {
+        console.warn(`[MiniXStore "${name}"] Ignoring action "${key}" because it conflicts with a built-in store helper.`);
+        continue;
+      }
       const fn = _actionDefs[key];
       if (typeof fn !== 'function') continue;
       const bound = (...args) => {
         const debug = _canEmitDebug();
         if (debug) _emitDebug('action:start', { store: name, action: key, args: _debugClone(args) });
         try {
-          const result = fn.apply(actionCtx, args);
+          const result = fn.apply(actionThis, args);
           if (result && typeof result.then === 'function') {
             return result.then(
               (value) => {
@@ -339,8 +475,6 @@ const MiniXStore = (() => {
     //    _onDepChanged guards against a stopped effect (destroyed store) and
     //    snapshots entry.subscribers before iterating so mid-loop deletions
     //    never cause entries to be skipped.
-    const _getterCache = new Map();
-
     const _buildGetter = (key, fn) => {
       const entry = { value: undefined, fresh: false, subscribers: new Set() };
       const _onDepChanged = () => {
@@ -389,7 +523,7 @@ const MiniXStore = (() => {
           // Pass the reactive proxy to the getter fn, not the raw object.
           // The proxy's get trap calls _trackTargetEffect, so the effect
           // auto-subscribes to exactly the state keys the getter reads.
-          entry.value = fn.call(actionCtx, stateProxy);
+          entry.value = fn.call(actionThis, stateProxy);
         },
         { lazy: true, scheduler: _onDepChanged }
       );
@@ -398,9 +532,8 @@ const MiniXStore = (() => {
       return entry;
     };
 
-    const _getterDefs = def.getters || {};
-
     const _ensureGetter = (key) => {
+      if (_BUILTIN_KEYS.has(key)) return undefined;
       // OPT: one Map lookup instead of has() + get() on cache hit (common path).
       const cached = _getterCache.get(key);
       if (cached !== undefined) return cached;
@@ -410,6 +543,17 @@ const MiniXStore = (() => {
     };
 
     const _readGetter = (key) => {
+      if (_destroyed) {
+        const fn = _getterDefs[key];
+        if (typeof fn !== 'function') return undefined;
+        try {
+          return fn.call(actionThis, stateProxy);
+        } catch (err) {
+          console.error(`[MiniXStore "${name}"] Getter "${key}" threw during read.`, err);
+          return undefined;
+        }
+      }
+
       const entry = _ensureGetter(key);
       if (!entry) return undefined;
 
@@ -464,6 +608,10 @@ const MiniXStore = (() => {
     function _storeWatch(path, callback) {
       if (typeof callback !== 'function')
         throw new Error(`[MiniXStore "${name}"] watch() requires a callback function`);
+      if (_destroyed) {
+        console.warn(`[MiniXStore "${name}"] Ignoring watch() on destroyed store.`);
+        return () => {};
+      }
 
       let innerCleanup = state.watch(path, callback);
 
@@ -480,6 +628,17 @@ const MiniXStore = (() => {
       _watcherCleanups.add(cleanup);
       return cleanup;
     }
+
+    Object.defineProperty(actionCtx, 'watch', {
+      value: _storeWatch,
+      enumerable: true,
+      configurable: true,
+    });
+    Object.defineProperty(actionCtx, 'snapshot', {
+      value: () => state.snapshot(),
+      enumerable: true,
+      configurable: true,
+    });
 
     // 6. Public proxy  (action → getter → state → helpers)
     //
@@ -502,42 +661,49 @@ const MiniXStore = (() => {
       watch:    _storeWatch,
       snapshot: () => state.snapshot(), // factory: each call gets a fresh snap
     };
-    const _RESERVED = new Set(Object.keys(_builtins));
+    _RESERVED = new Set(Object.keys(_builtins));
 
     const _proxy = new Proxy(Object.create(null), {
       get(_, prop) {
-        if (prop in _actions)       return _actions[prop];
-        if (typeof prop === 'string' && prop in _getterDefs) return _readGetter(prop);
+        if (_hasOwn(_actions, prop)) return _actions[prop];
+        if (_isGetterKey(prop)) return _readGetter(prop);
 
         // Read through the reactive proxy so MiniX_Effect.activeEffect is
         // registered as a subscriber — state.get() bypasses the proxy and
         // never calls _trackTargetEffect, breaking template reactivity.
-        if (prop in _stateRaw) return stateProxy[prop];
-
         // Direct value lookup — no thunk call.
         if (_RESERVED.has(prop)) return _builtins[prop];
+
+        if (_hasStateKey(prop)) return stateProxy[prop];
 
         return undefined;
       },
 
       set(_, prop, value) {
-        if (_RESERVED.has(prop)) {
-          console.warn(`[MiniXStore "${name}"] Ignoring write to reserved property "${prop}".`);
+        if (_isProtectedKey(prop)) {
+          console.warn(`[MiniXStore "${name}"] Ignoring write to protected property "${String(prop)}".`);
           return true; // must return true to avoid a strict-mode TypeError
         }
+        const hadKey = _hasStateKey(prop);
+        const oldVal = hadKey ? stateProxy[prop] : undefined;
         if (typeof prop === 'string') _preSyncTopLevelPath(prop);
         stateProxy[prop] = value;
         _syncStateGetters();
+        if (!hadKey && _hasStateKey(prop)) {
+          _ownKeysCache = null;
+          _invalidateGetterCache();
+        }
+        if (typeof prop === 'symbol' && !Object.is(oldVal, value)) _invalidateGetterCache();
         return true;
       },
 
       has(_, prop) {
-        if (prop in _actions)       return true;
+        if (_hasOwn(_actions, prop)) return true;
         // OPT: check _getterDefs only — _getterCache entries are always a
         // subset of _getterDefs so the redundant _getterCache.has() is removed.
-        if (typeof prop === 'string' && prop in _getterDefs) return true;
+        if (_isGetterKey(prop)) return true;
         if (_RESERVED.has(prop)) return true;
-        return prop in _stateRaw;
+        return _hasStateKey(prop);
       },
 
       ownKeys() {
@@ -546,9 +712,12 @@ const MiniXStore = (() => {
         // _RESERVED blocks state keys from overwriting builtins;
         // actions and getters are separate namespaces from state.
         // Build result directly without an intermediate seen-Set or closure.
-        const stateKeys   = Object.keys(_stateRaw);
+        const stateKeys   = Reflect.ownKeys(_stateRaw).filter((key) => {
+          const desc = Object.getOwnPropertyDescriptor(_stateRaw, key);
+          return desc && desc.enumerable;
+        });
         const actionKeys  = Object.keys(_actions);
-        const getterKeys  = Object.keys(_getterDefs);
+        const getterKeys  = Object.keys(_getterDefs).filter(_isGetterKey);
         const reservedArr = [..._RESERVED];
         // Deduplicate only across boundaries — state vs the rest.
         const seen = new Set();
@@ -565,25 +734,39 @@ const MiniXStore = (() => {
       },
 
       deleteProperty(_, prop) {
-        if (_RESERVED.has(prop) || prop in _actions || (typeof prop === 'string' && prop in _getterDefs)) {
+        if (_isProtectedKey(prop)) {
           console.warn(`[MiniXStore "${name}"] Ignoring delete for protected property "${String(prop)}".`);
           return true;
         }
-        if (!(prop in _stateRaw)) return true;
-        state.delete(prop);
+        if (!_hasStateKey(prop)) return true;
+        if (typeof prop === 'symbol') {
+          delete stateProxy[prop];
+          _invalidateGetterCache();
+        } else {
+          state.delete(prop);
+          _invalidateGetterCache();
+        }
         _syncStateGetters();
+        _ownKeysCache = null;
         return true;
       },
 
       getOwnPropertyDescriptor(_, prop) {
-        if (prop in _actions)
+        if (_hasOwn(_actions, prop))
           return { configurable: true, enumerable: true, writable: true, value: _actions[prop] };
-        if (typeof prop === 'string' && prop in _getterDefs)
+        if (_isGetterKey(prop))
           return { configurable: true, enumerable: true, writable: true, value: _readGetter(prop) };
         if (_RESERVED.has(prop))
           return { configurable: true, enumerable: false, writable: false, value: _builtins[prop] };
-        if (prop in _stateRaw)
-          return { configurable: true, enumerable: true, writable: true, value: stateProxy[prop] };
+        if (_hasStateKey(prop)) {
+          const desc = Object.getOwnPropertyDescriptor(_stateRaw, prop) || {};
+          return {
+            configurable: true,
+            enumerable: Boolean(desc.enumerable),
+            writable: desc.writable !== false,
+            value: stateProxy[prop],
+          };
+        }
         return undefined;
       },
     });
@@ -692,7 +875,7 @@ const MiniXStore = (() => {
         // The factory receives (component, instance) and returns an object whose
         // keys are Object.assign-ed onto the instance — exactly like $watch,
         // $nextTick, and every other built-in $ property.
-        app.addInstanceAPI((component, instance) => {
+        if (typeof app.addInstanceAPI === 'function') app.addInstanceAPI((component, instance) => {
           // Cache the stores() map lazily — evaluated at most once per instance.
           // Uses a boolean sentinel rather than a null check so that a stores()
           // returning null doesn't cause infinite re-evaluation.
@@ -734,7 +917,7 @@ const MiniXStore = (() => {
         // Scope factories run during rendering (after created()), but by then
         // $store is already on the instance from addInstanceAPI above.
         // We re-expose it here so {{ $store('x').y }} works in templates.
-        app.addScope((component) => {
+        if (typeof app.addScope === 'function') app.addScope((component) => {
           const instance = component && component.instance;
           // OPT: $store closes over _getLocalMap and _registry directly and
           // never reads `this`, so .bind(instance) only wastes a new function
