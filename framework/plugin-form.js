@@ -764,30 +764,25 @@
                     let validationFailed   = false;
 
                     try {
-                        // If submitGuard (capture phase) is already running a validation
-                        // for this submit event, _validating is true when x-ajax runs
-                        // synchronously in the bubble phase — skip the redundant call.
-                        const alreadyValidating = formApi?.isValidating === true;
+                        // Always validate here too; capture-phase async validation
+                        // cannot stop the bubble-phase ajax handler before it awaits.
+                        const validator =
+                            (formApi && typeof formApi.validate === 'function' ? formApi.validate : null) ||
+                            (typeof instance.$validate     === 'function' ? instance.$validate     : null) ||
+                            (typeof instance.$validateForm === 'function' ? instance.$validateForm : null);
 
-                        if (!alreadyValidating) {
-                            const validator =
-                                (formApi && typeof formApi.validate === 'function' ? formApi.validate : null) ||
-                                (typeof instance.$validate     === 'function' ? instance.$validate     : null) ||
-                                (typeof instance.$validateForm === 'function' ? instance.$validateForm : null);
-
-                            if (validator) {
-                                // [FIX-41] Wrap in try/catch so a throwing validator is
-                                // treated as validation failure, not a network/fetch error.
-                                let valid;
-                                try {
-                                    valid = await validator();
-                                } catch (validatorError) {
-                                    console.warn('[x-ajax] validator() threw:', validatorError);
-                                    validationFailed = true;
-                                    return;
-                                }
-                                if (!valid) { validationFailed = true; return; }
+                        if (validator) {
+                            // [FIX-41] Wrap in try/catch so a throwing validator is
+                            // treated as validation failure, not a network/fetch error.
+                            let valid;
+                            try {
+                                valid = await validator();
+                            } catch (validatorError) {
+                                console.warn('[x-ajax] validator() threw:', validatorError);
+                                validationFailed = true;
+                                return;
                             }
+                            if (!valid) { validationFailed = true; return; }
                         }
 
                         // [FIX-30] Mark loader as requested BEFORE the await so that if

@@ -130,11 +130,15 @@
       ...(out.interpolation || {})
     };
 
-    const userBackend = out.backend || {};
-    out.backend = {
-      loadPath: base + '/{{lng}}/{{ns}}.json',
-      ...userBackend
-    };
+    const userBackend = out.backend;
+    if (userBackend === false) {
+      delete out.backend;
+    } else if (userBackend || !out.resources) {
+      out.backend = {
+        loadPath: base + '/{{lng}}/{{ns}}.json',
+        ...(userBackend || {})
+      };
+    }
 
     const detected = detectInitialLanguage(out);
     if (detected && out.lng == null) out.lng = detected;
@@ -144,6 +148,13 @@
 
   function hasBackend(i18n) {
     return !!(i18n && i18n.modules && i18n.modules.backend);
+  }
+
+  function shouldUseFetchBackend(options, initOptions, i18n) {
+    if (hasBackend(i18n)) return false;
+    if (initOptions.backend === false || options.backend === false) return false;
+    if (initOptions.resources || options.resources) return false;
+    return true;
   }
 
   function makeReactiveVersion() {
@@ -185,6 +196,11 @@
   function parseStaticTarget(raw) {
     const match = String(raw || '').trim().match(/^\[([a-zA-Z0-9_:-]+)\]\s*(.+)$/);
     return match ? { attr: match[1], key: match[2].trim() } : null;
+  }
+
+  function isSafeAttributeName(value) {
+    const name = String(value || '');
+    return /^[A-Za-z_:][A-Za-z0-9_:.-]*$/.test(name) && !/^on/i.test(name);
   }
 
   function readDirectiveBinding(el, expression, component, compiler) {
@@ -239,6 +255,7 @@
   function writeTranslation(el, binding, text, component) {
     const value = text == null ? '' : String(text);
     if (binding.attr) {
+      if (!isSafeAttributeName(binding.attr)) return;
       el.setAttribute(binding.attr, value);
       return;
     }
@@ -335,7 +352,7 @@
         if (result) configured = result;
       }
 
-      if (!hasBackend(configured)) {
+      if (shouldUseFetchBackend(options, initOptions, configured)) {
         configured.use(resolveFetchBackend(options));
       }
 

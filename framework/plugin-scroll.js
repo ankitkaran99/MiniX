@@ -88,7 +88,10 @@ const MiniXScrollPlugin = (() => {
 
   function afterDomPaint(fn) {
     const raf = global.requestAnimationFrame || ((cb) => setTimeout(cb, 0));
-    queueMicrotask(() => {
+    const microtask = typeof queueMicrotask === 'function'
+      ? queueMicrotask
+      : (cb) => Promise.resolve().then(cb);
+    microtask(() => {
       raf(() => {
         raf(fn);
       });
@@ -162,6 +165,10 @@ const MiniXScrollPlugin = (() => {
 
           if (!isInside) {
             wasInside = false;
+            return;
+          }
+
+          if (reason !== 'initial' && wasInside) {
             return;
           }
 

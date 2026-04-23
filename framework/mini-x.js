@@ -7,7 +7,7 @@ class MiniX_State {
 	static _scheduleCallbackFlush() {
 		if (MiniX_State._callbackFlushPending || MiniX_Effect._batchDepth > 0 || MiniX_State._pendingCallbackQueue.size === 0) return;
 		MiniX_State._callbackFlushPending = true;
-		queueMicrotask(() => {
+		MiniX_State._scheduleMicrotask(() => {
 			MiniX_State._callbackFlushPending = false;
 			if (MiniX_Effect._batchDepth > 0) {
 				MiniX_State._scheduleCallbackFlush();
@@ -24,6 +24,13 @@ class MiniX_State {
 			}
 		});
 	}
+	static _scheduleMicrotask(callback) {
+		if (typeof queueMicrotask === "function") {
+			queueMicrotask(callback);
+			return;
+		}
+		Promise.resolve().then(callback);
+	}
 	static markRaw(value) {
 		if (value && typeof value === "object") {
 			try { Object.defineProperty(value, MiniX_State.RAW_FLAG, { value: true, configurable: true }); } catch (_) { value[MiniX_State.RAW_FLAG] = true; }
@@ -34,6 +41,7 @@ class MiniX_State {
 		this._watchers = new Map();
 		this._globalWatchers = new Set();
 		this._targetWatchers = new WeakMap();
+		this._targetWatcherTargetCount = 0;
 		this._effectTargetRunnerMap = new WeakMap();
 		this._trackedEffects = new Set();
 		this._proxyPathMap = new WeakMap();
@@ -466,23 +474,47 @@ class MiniX_State {
 	_linkTarget(target, basePath = '') {
 		const pathKey = typeof basePath === 'string' ? basePath : this._pathString(basePath);
 		if (!target || !pathKey) return;
+		if (typeof target !== 'object' && typeof target !== 'function') return;
 		const splitAt = pathKey.lastIndexOf('.');
 		const parentPath = splitAt === -1 ? '' : pathKey.slice(0, splitAt);
 		const parentKey = splitAt === -1 ? pathKey : pathKey.slice(splitAt + 1);
 		const rawState = this._state?.__raw || this._state;
 		const parentTarget = parentPath ? this._get(rawState, parentPath) : rawState;
-		if (parentTarget && (typeof parentTarget === 'object' || typeof parentTarget === 'function')) {
-			let links = this._parentLinks.get(target);
-			if (!links) {
-				links = [];
-				this._parentLinks.set(target, links);
-			}
-			for (let i = 0; i < links.length; i++) {
-				const link = links[i];
-				if (link.parentTarget === parentTarget && link.parentKey === parentKey) return;
-			}
-			links.push({ parentTarget, parentKey });
+		this._linkTargetToParent(target, parentTarget, parentKey);
+	}
+
+	_linkTargetToParent(target, parentTarget, parentKey) {
+		target = this._unwrapProxy(target);
+		parentTarget = this._unwrapProxy(parentTarget);
+		if (!target || (typeof target !== 'object' && typeof target !== 'function')) return;
+		if (!parentTarget || (typeof parentTarget !== 'object' && typeof parentTarget !== 'function')) return;
+		let links = this._parentLinks.get(target);
+		if (!links) {
+			links = [];
+			this._parentLinks.set(target, links);
 		}
+		for (let i = 0; i < links.length; i++) {
+			const link = links[i];
+			if (link.parentTarget === parentTarget && link.parentKey === parentKey) return;
+		}
+		links.push({ parentTarget, parentKey });
+	}
+
+	_unlinkTargetFromParent(target, parentTarget, parentKey) {
+		target = this._unwrapProxy(target);
+		parentTarget = this._unwrapProxy(parentTarget);
+		if (!target || (typeof target !== 'object' && typeof target !== 'function')) return;
+		if (!parentTarget || (typeof parentTarget !== 'object' && typeof parentTarget !== 'function')) return;
+		const links = this._parentLinks.get(target);
+		if (!links || !links.length) return;
+		let write = 0;
+		for (let read = 0; read < links.length; read++) {
+			const link = links[read];
+			if (link.parentTarget === parentTarget && Object.is(link.parentKey, parentKey)) continue;
+			links[write++] = link;
+		}
+		links.length = write;
+		if (!links.length) this._parentLinks.delete(target);
 	}
 
 	_getTargetWatcherSet(target, prop, create = false) {
@@ -492,6 +524,7 @@ class MiniX_State {
 			if (!create) return null;
 			propMap = new Map();
 			this._targetWatchers.set(target, propMap);
+			this._targetWatcherTargetCount++;
 		}
 		let watchers = propMap.get(prop);
 		if (!watchers && create) {
@@ -501,10 +534,21 @@ class MiniX_State {
 		return watchers || null;
 	}
 
+	_removeTargetWatcher(target, prop, runner) {
+		const propMap = this._targetWatchers.get(target);
+		const watchers = propMap?.get(prop);
+		if (!watchers) return;
+		watchers.delete(runner);
+		if (watchers.size === 0) propMap.delete(prop);
+		if (propMap && propMap.size === 0) {
+			this._targetWatchers.delete(target);
+			if (this._targetWatcherTargetCount > 0) this._targetWatcherTargetCount--;
+		}
+	}
+
 	_trackTargetEffect(target, prop) {
 		const effect = MiniX_Effect.activeEffect;
 		if (!effect || !target || (typeof target !== 'object' && typeof target !== 'function')) return;
-		this._trackedEffects.add(effect);
 		let effectTargets = this._effectTargetRunnerMap.get(effect);
 		if (!effectTargets) {
 			effectTargets = new WeakMap();
@@ -523,6 +567,7 @@ class MiniX_State {
 			existing.__dep._trackedVersion = tv;
 			return;
 		}
+		this._trackedEffects.add(effect);
 		const watchers = this._getTargetWatcherSet(target, prop, true);
 		const runner = () => effect.schedule();
 		runner.__minix_effect__ = effect;
@@ -548,12 +593,13 @@ class MiniX_State {
 
 	_notifyGlobalWatchers(newVal, oldVal, prop, meta = {}) {
 		if (!this._globalWatchers.size) return;
-		const propStr = typeof prop === 'symbol' ? String(prop) : String(prop ?? '');
+		let propStr = null;
 		for (const cb of this._globalWatchers) {
 			const effect = cb.__minix_effect__;
 			if (effect) {
 				if (!effect._scheduled) effect.schedule();
 			} else {
+				if (propStr === null) propStr = typeof prop === 'symbol' ? String(prop) : String(prop ?? '');
 				this._queuePlainCallback(cb, newVal, oldVal, propStr, meta);
 			}
 		}
@@ -567,18 +613,16 @@ class MiniX_State {
 
 		const direct = propMap.get(prop);
 		const metaType = meta.type || '';
-		
-		
-		const structural = metaType !== 'set' && metaType !== 'set:path' && (
-			(meta.structural === true)
+		let structural = false;
+		if (metaType !== 'set' && metaType !== 'set:path') {
+			structural = (meta.structural === true)
 				|| MiniX_State._STRUCTURAL_TYPES.has(metaType)
 				|| (metaType.length > 5
 					&& (metaType.charCodeAt(0) === 97  || metaType.charCodeAt(0) === 109 )
 					&& (metaType.startsWith('array:') || metaType.startsWith('map:')))
-				|| (metaType.length > 4 && metaType.charCodeAt(0) === 115 
-					&& metaType !== 'set:path'
-					&& (metaType === 'set:add' || metaType === 'set:delete' || metaType === 'set:clear'))
-		);
+				|| (metaType.length > 4 && metaType.charCodeAt(0) === 115
+					&& (metaType === 'set:add' || metaType === 'set:delete' || metaType === 'set:clear'));
+		}
 		const iterate = (structural || prop === MiniX_State.ITERATE_KEY) ? propMap.get(MiniX_State.ITERATE_KEY) : null;
 		const lengthWatchers = Array.isArray(target) && (prop === 'length' || (meta.affectsLength === true))
 			? propMap.get('length')
@@ -588,17 +632,20 @@ class MiniX_State {
 		
 		
 		if (direct && !iterate && !lengthWatchers) {
-			const propStr = typeof prop === 'symbol' ? String(prop) : (prop == null ? '' : String(prop));
+			let propStr = null;
 			for (const cb of direct) {
 				const eff = cb.__minix_effect__;
 				if (eff) { if (!eff._scheduled) eff.schedule(); }
-				else this._queuePlainCallback(cb, newVal, oldVal, propStr, meta);
+				else {
+					if (propStr === null) propStr = typeof prop === 'symbol' ? String(prop) : (prop == null ? '' : String(prop));
+					this._queuePlainCallback(cb, newVal, oldVal, propStr, meta);
+				}
 			}
 			return;
 		}
 
 		
-		const propStr = typeof prop === 'symbol' ? String(prop) : (prop == null ? '' : String(prop));
+		let propStr = null;
 		const queue = MiniX_State._notifyQueue;
 		queue.clear();
 		if (direct) for (const cb of direct) queue.add(cb);
@@ -607,7 +654,10 @@ class MiniX_State {
 		for (const cb of queue) {
 			const eff = cb.__minix_effect__;
 			if (eff) { if (!eff._scheduled) eff.schedule(); }
-			else this._queuePlainCallback(cb, newVal, oldVal, propStr, meta);
+			else {
+				if (propStr === null) propStr = typeof prop === 'symbol' ? String(prop) : (prop == null ? '' : String(prop));
+				this._queuePlainCallback(cb, newVal, oldVal, propStr, meta);
+			}
 		}
 		queue.clear();
 	}
@@ -629,10 +679,14 @@ class MiniX_State {
 			if (propMap && propMap.size > 0) {
 				const direct = propMap.get(prop);
 				if (direct) {
+					let propStr = null;
 					for (const cb of direct) {
 						const eff = cb.__minix_effect__;
 						if (eff) { if (!eff._scheduled) eff.schedule(); }
-						else this._queuePlainCallback(cb, newVal, oldVal, typeof prop === 'symbol' ? String(prop) : String(prop ?? ''), meta);
+						else {
+							if (propStr === null) propStr = typeof prop === 'symbol' ? String(prop) : String(prop ?? '');
+							this._queuePlainCallback(cb, newVal, oldVal, propStr, meta);
+						}
 					}
 				}
 			}
@@ -642,16 +696,18 @@ class MiniX_State {
 				if (hasGlobal) this._notifyGlobalWatchers(newVal, oldVal, prop, meta);
 				return;
 			}
-			if (!hasGlobal && this._targetWatchers.size <= 1) return;
+			if (!hasGlobal && this._targetWatcherTargetCount <= 1) return;
 			
 			const stack = [];
 			for (let i = 0; i < parentLinks.length; i++) {
 				const link = parentLinks[i];
-				stack.push({ currentProp: link.parentKey, currentParent: link.parentTarget, depth: 0 });
+				stack.push(link.parentTarget, link.parentKey, 0);
 			}
 			let structuralMeta = null;
 			while (stack.length) {
-				const { currentProp, currentParent, depth } = stack.pop();
+				const depth = stack.pop();
+				const currentProp = stack.pop();
+				const currentParent = stack.pop();
 				if (!currentParent || depth >= 64) continue;
 				if (this._hasWatchersForTarget(currentParent)) {
 					if (!structuralMeta) structuralMeta = { ...meta, structural: true };
@@ -661,7 +717,7 @@ class MiniX_State {
 				if (links && links.length) {
 					for (let i = 0; i < links.length; i++) {
 						const link = links[i];
-						stack.push({ currentProp: link.parentKey, currentParent: link.parentTarget, depth: depth + 1 });
+						stack.push(link.parentTarget, link.parentKey, depth + 1);
 					}
 				}
 			}
@@ -680,17 +736,19 @@ class MiniX_State {
 		
 		
 		
-		if (!hasGlobal && this._targetWatchers.size <= 1) return;
+		if (!hasGlobal && this._targetWatcherTargetCount <= 1) return;
 		
 		
 		let structuralMeta = null;
 		const stack = [];
 		for (let i = 0; i < parentLinks.length; i++) {
 			const link = parentLinks[i];
-			stack.push({ currentProp: link.parentKey, currentParent: link.parentTarget, depth: 0 });
+			stack.push(link.parentTarget, link.parentKey, 0);
 		}
 		while (stack.length) {
-			const { currentProp, currentParent, depth } = stack.pop();
+			const depth = stack.pop();
+			const currentProp = stack.pop();
+			const currentParent = stack.pop();
 			if (!currentParent || depth >= 64) continue;
 			if (this._hasWatchersForTarget(currentParent)) {
 				
@@ -701,7 +759,7 @@ class MiniX_State {
 			if (links && links.length) {
 				for (let i = 0; i < links.length; i++) {
 					const link = links[i];
-					stack.push({ currentProp: link.parentKey, currentParent: link.parentTarget, depth: depth + 1 });
+					stack.push(link.parentTarget, link.parentKey, depth + 1);
 				}
 			}
 		}
@@ -732,14 +790,14 @@ class MiniX_State {
 				}
 				if (prop === 'get') {
 					return (key) => {
-						self._trackEffect(self._joinPath(basePath, key), obj, key);
+						self._trackEffect('', obj, key);
 						const value = obj.get(key);
 						return self._isWrappable(value) ? self._wrap(value, self._joinPath(basePath, key)) : value;
 					};
 				}
 				if (prop === 'has') {
 					return (key) => {
-						self._trackEffect(self._joinPath(basePath, key), obj, key);
+						self._trackEffect('', obj, key);
 						return obj.has(key);
 					};
 				}
@@ -786,6 +844,7 @@ class MiniX_State {
 							const oldSize = obj.size;
 							const wrapped = self._isWrappable(value) ? self._wrap(value, childPath) : value;
 							if (hadKey && Object.is(oldVal, wrapped)) return receiver;
+							if (hadKey) self._unlinkTargetFromParent(oldVal, obj, String(key));
 							obj.set(key, wrapped);
 							self._devCapture('map:set', childPath, oldVal, wrapped, { type: 'map:set' });
 							self._bubbleTargetNotify(obj, key, wrapped, oldVal, { type: 'map:set' });
@@ -805,6 +864,7 @@ class MiniX_State {
 						const oldVal = obj.get(key);
 						const deleted = obj.delete(key);
 						if (deleted) {
+							self._unlinkTargetFromParent(oldVal, obj, String(key));
 							self._devCapture('map:delete', childPath, oldVal, undefined, { type: 'map:delete' });
 							self._bubbleTargetNotify(obj, key, undefined, oldVal, { type: 'map:delete' });
 							self._bubbleTargetNotify(obj, MiniX_State.SIZE_KEY, obj.size, obj.size + 1, { type: 'map:delete' });
@@ -816,6 +876,7 @@ class MiniX_State {
 					return () => {
 						if (!obj.size) return undefined;
 						const oldVal = new Map(obj);
+						oldVal.forEach((value, key) => self._unlinkTargetFromParent(value, obj, String(key)));
 						obj.clear();
 						self._devCapture('map:clear', basePath, oldVal, obj, { type: 'map:clear' });
 						self._bubbleTargetNotify(obj, MiniX_State.ITERATE_KEY, obj, oldVal, { type: 'map:clear' });
@@ -876,11 +937,9 @@ class MiniX_State {
 				if (prop === 'add') {
 					return (value) => {
 						value = self._unwrapProxy(value);
-						const wrapped = self._isWrappable(value) ? self._wrap(value, basePath) : value;
-						
-						
-						
-						const had = obj.has(wrapped);
+						const canWrap = self._isWrappable(value);
+						const wrapped = canWrap ? self._wrap(value, basePath) : value;
+						const had = canWrap ? (obj.has(value) || obj.has(wrapped)) : obj.has(value);
 						obj.add(wrapped);
 						if (!had) {
 							self._devCapture('set:add', basePath, undefined, wrapped, { type: 'set:add', value: wrapped });
@@ -893,9 +952,9 @@ class MiniX_State {
 				if (prop === 'delete') {
 					return (value) => {
 						value = self._unwrapProxy(value);
-						const wrapped = self._isWrappable(value) ? self._getCachedProxy(value, basePath) : null;
 						const hasValue = obj.has(value);
-						const hasWrapped = !hasValue && wrapped ? obj.has(wrapped) : false;
+						const wrapped = (!hasValue && self._isWrappable(value)) ? self._getCachedProxy(value, basePath) : null;
+						const hasWrapped = wrapped ? obj.has(wrapped) : false;
 						const storedValue = hasValue ? value : wrapped;
 						const deleted = (hasValue || hasWrapped) && obj.delete(storedValue);
 						if (deleted) {
@@ -964,11 +1023,25 @@ class MiniX_State {
 							const oldSnapshot = obj.slice();
 							let nextArgs = args;
 							if (prop === 'push' || prop === 'unshift') {
-								nextArgs = args.map((value) => this._unwrapProxy(value));
+								for (let i = 0; i < args.length; i++) args[i] = this._unwrapProxy(args[i]);
 							} else if (prop === 'splice' && args.length > 2) {
-								nextArgs = [args[0], args[1], ...args.slice(2).map((value) => this._unwrapProxy(value))];
+								for (let i = 2; i < args.length; i++) args[i] = this._unwrapProxy(args[i]);
 							}
 							const result = Array.prototype[prop].apply(obj, nextArgs);
+							if (prop === 'push') {
+								for (let i = oldSnapshot.length; i < obj.length; i++) {
+									this._linkTargetToParent(obj[i], obj, String(i));
+								}
+							} else if (prop === 'pop') {
+								this._unlinkTargetFromParent(oldSnapshot[oldSnapshot.length - 1], obj, String(oldSnapshot.length - 1));
+							} else {
+								for (let i = 0; i < oldSnapshot.length; i++) {
+									this._unlinkTargetFromParent(oldSnapshot[i], obj, String(i));
+								}
+								for (let i = 0; i < obj.length; i++) {
+									this._linkTargetToParent(obj[i], obj, String(i));
+								}
+							}
 							this._devCapture(`array:${prop}`, basePath, oldSnapshot, obj.slice(), { type: `array:${prop}` });
 							this._bubbleTargetNotify(obj, MiniX_State.ITERATE_KEY, proxy, oldSnapshot, { type: `array:${prop}` });
 							this._bubbleTargetNotify(obj, 'length', obj.length, oldSnapshot.length, { type: `array:${prop}` });
@@ -989,17 +1062,22 @@ class MiniX_State {
 			},
 			set: (obj, prop, value) => {
 				value = this._unwrapProxy(value);
+				const hadKey = Object.prototype.hasOwnProperty.call(obj, prop);
 				const oldVal = obj[prop];
 				const isWrap = this._isWrappable(value);
 				
 				const wrapped = isWrap ? this._wrap(value, this._joinPath(basePath, prop), true) : value;
-				if (Object.is(oldVal, wrapped)) return true;
+				if (hadKey && Object.is(oldVal, wrapped)) return true;
+				if (hadKey) this._unlinkTargetFromParent(oldVal, obj, String(prop));
 				obj[prop] = wrapped;
 				if (this._dev) this._devCapture('set', this._joinPath(basePath, prop), oldVal, wrapped, { type: 'set' });
 				
 				this._bubbleTargetNotify(obj, prop, wrapped, oldVal, isArray && prop === 'length'
 					? { type: 'set', affectsLength: true }
 					: MiniX_State._META_SET);
+				if (!hadKey && !isArray) {
+					this._bubbleTargetNotify(obj, MiniX_State.ITERATE_KEY, obj, obj, { type: 'set', structural: true });
+				}
 				return true;
 			},
 			deleteProperty: (obj, prop) => {
@@ -1007,14 +1085,23 @@ class MiniX_State {
 				if (isArray && this._isArrayIndex(prop) && prop in obj) {
 					const oldSnapshot = obj.slice();
 					Array.prototype.splice.call(obj, Number(prop), 1);
+					for (let i = 0; i < oldSnapshot.length; i++) {
+						this._unlinkTargetFromParent(oldSnapshot[i], obj, String(i));
+					}
+					for (let i = 0; i < obj.length; i++) {
+						this._linkTargetToParent(obj[i], obj, String(i));
+					}
 					if (this._dev) this._devCapture('array:delete', this._joinPath(basePath, prop), oldVal, undefined, { type: 'array:delete' });
 					this._bubbleTargetNotify(obj, prop, undefined, oldVal, { type: 'array:delete' });
 					this._bubbleTargetNotify(obj, MiniX_State.ITERATE_KEY, proxy, oldSnapshot, { type: 'array:delete' });
 					this._bubbleTargetNotify(obj, 'length', obj.length, oldSnapshot.length, { type: 'array:delete' });
 					return true;
 				}
+				const hadKey = Object.prototype.hasOwnProperty.call(obj, prop);
+				if (!hadKey) return true;
 				const ok = delete obj[prop];
 				if (ok) {
+					this._unlinkTargetFromParent(oldVal, obj, String(prop));
 					if (this._dev) this._devCapture('delete', this._joinPath(basePath, prop), oldVal, undefined, { type: 'delete' });
 					this._bubbleTargetNotify(obj, prop, undefined, oldVal, { type: 'delete' });
 				}
@@ -1081,11 +1168,16 @@ class MiniX_State {
 		if (!segments.length) throw new Error('Path is required');
 
 		if (isSimple) {
+			const hadKey = Object.prototype.hasOwnProperty.call(rawState, last);
 			const oldVal = rawState[last];
-			if (Object.is(oldVal, value)) return value;
+			if (hadKey && Object.is(oldVal, value)) return value;
+			if (hadKey) this._unlinkTargetFromParent(oldVal, rawState, String(last));
 			rawState[last] = value;
 			if (this._dev) this._devCapture('set', raw, oldVal, value, { type: 'set:path', api: 'set()' });
 			this._bubbleTargetNotify(rawState, last, value, oldVal, MiniX_State._META_SET_PATH);
+			if (!hadKey && !Array.isArray(rawState)) {
+				this._bubbleTargetNotify(rawState, MiniX_State.ITERATE_KEY, rawState, rawState, { type: 'set:path', structural: true });
+			}
 			return value;
 		}
 
@@ -1116,15 +1208,20 @@ class MiniX_State {
 			}
 		}
 
+		const hadKey = parent instanceof Map ? parent.has(last) : Object.prototype.hasOwnProperty.call(parent, last);
 		const oldVal = parent instanceof Map ? parent.get(last) : parent[last];
-		if (Object.is(oldVal, value)) return value;
+		if (hadKey && Object.is(oldVal, value)) return value;
 
+		if (hadKey) this._unlinkTargetFromParent(oldVal, parent, String(last));
 		if (parent instanceof Map) parent.set(last, value);
 		else parent[last] = value;
 
 		this._invalidateProxyCache(raw, segments);
 		if (this._dev) this._devCapture('set', raw, oldVal, value, { type: 'set:path', api: 'set()' });
 		this._bubbleTargetNotify(parent, last, value, oldVal, MiniX_State._META_SET_PATH);
+		if (!hadKey && !(parent instanceof Map) && !Array.isArray(parent)) {
+			this._bubbleTargetNotify(parent, MiniX_State.ITERATE_KEY, parent, parent, { type: 'set:path', structural: true });
+		}
 		return value;
 	}
 	delete(path) {
@@ -1143,6 +1240,7 @@ class MiniX_State {
 			const oldVal = parent.get(last);
 			const ok = parent.delete(last);
 			if (ok) {
+				this._unlinkTargetFromParent(oldVal, parent, String(last));
 				this._devCapture('delete', raw, oldVal, undefined, { type: 'delete:path', api: 'delete()' });
 				this._bubbleTargetNotify(parent, last, undefined, oldVal, { type: 'delete:path' });
 			}
@@ -1154,11 +1252,17 @@ class MiniX_State {
 		
 		
 		const rawParent = (parent && typeof parent === 'object' && parent.__raw) ? parent.__raw : parent;
-		if (!rawParent || !(last in rawParent)) return false;
+		if (!rawParent || !Object.prototype.hasOwnProperty.call(rawParent, last)) return false;
 		if (Array.isArray(rawParent) && this._isArrayIndex(last)) {
 			const oldSnapshot = rawParent.slice();
 			const oldVal = rawParent[last];
 			Array.prototype.splice.call(rawParent, Number(last), 1);
+			for (let i = 0; i < oldSnapshot.length; i++) {
+				this._unlinkTargetFromParent(oldSnapshot[i], rawParent, String(i));
+			}
+			for (let i = 0; i < rawParent.length; i++) {
+				this._linkTargetToParent(rawParent[i], rawParent, String(i));
+			}
 			this._devCapture('array:delete', raw, oldVal, undefined, { type: 'array:delete', api: 'delete()' });
 			this._bubbleTargetNotify(rawParent, last, undefined, oldVal, { type: 'array:delete' });
 			this._bubbleTargetNotify(rawParent, MiniX_State.ITERATE_KEY, rawParent, oldSnapshot, { type: 'array:delete' });
@@ -1168,8 +1272,12 @@ class MiniX_State {
 		const oldVal = rawParent[last];
 		const ok = delete rawParent[last];
 		if (ok) {
+			this._unlinkTargetFromParent(oldVal, rawParent, String(last));
 			this._devCapture('delete', raw, oldVal, undefined, { type: 'delete:path', api: 'delete()' });
 			this._bubbleTargetNotify(rawParent, last, undefined, oldVal, { type: 'delete:path' });
+			if (!Array.isArray(rawParent)) {
+				this._bubbleTargetNotify(rawParent, MiniX_State.ITERATE_KEY, rawParent, rawParent, { type: 'delete:path', structural: true });
+			}
 		}
 		return ok;
 	}
@@ -1227,6 +1335,7 @@ class MiniX_State {
 		this._proxyPathMap = new WeakMap();
 		this._proxyPathMapDirty = false;
 		this._targetWatchers = new WeakMap();
+		this._targetWatcherTargetCount = 0;
 		this._effectTargetRunnerMap = new WeakMap();
 		this._parentLinks = new WeakMap();
 		
@@ -1337,10 +1446,23 @@ function _minix_createEvalScope(scope) {
 	let proxy = _minix_scopeProxyCache.get(scope);
 	if (proxy) return proxy;
 	proxy = new Proxy(scope, {
-		has() { return true; },
+		has(target, prop) {
+			if (prop in target) return true;
+			if (typeof globalThis !== 'undefined' && prop in globalThis) return false;
+			return true;
+		},
 		get(target, prop, receiver) {
 			if (prop === Symbol.unscopables) return undefined;
-			return prop in target ? Reflect.get(target, prop, receiver) : undefined;
+			if (prop in target) return Reflect.get(target, prop, receiver);
+			if (typeof prop === 'string') {
+				const stateProxy = target.__minix_state_proxy__;
+				if (stateProxy && typeof target.__minix_track_state_shape__ === 'function') {
+					target.__minix_track_state_shape__();
+					const value = stateProxy[prop];
+					if (value !== undefined) return value;
+				}
+			}
+			return undefined;
 		},
 		set(target, prop, value, receiver) {
 			if (prop in target) return Reflect.set(target, prop, value, receiver);
@@ -2216,8 +2338,9 @@ class MiniX_Signal {
 
 	set(path, value) {
 		const key = typeof path === 'string' ? path : String(path || '');
+		const hadKey = Object.prototype.hasOwnProperty.call(this._state, key);
 		const oldVal = this._state[key];
-		if (Object.is(oldVal, value)) return value;
+		if (hadKey && Object.is(oldVal, value)) return value;
 		this._state[key] = value;
 		this._notify(key, value, oldVal, MiniX_State._META_SET);
 		return value;
@@ -2323,9 +2446,7 @@ class MiniX_Effect {
 				
 				if (dep.depType === 'target') {
 					targetStates.add(dep.state);
-					const propMap = dep.state._targetWatchers?.get(dep.target);
-					const set = propMap?.get(dep.prop);
-					if (set) set.delete(dep.runner);
+					dep.state._removeTargetWatcher?.(dep.target, dep.prop, dep.runner);
 					
 					const etm = dep.state._effectTargetRunnerMap;
 					if (etm) {
@@ -2422,14 +2543,16 @@ class MiniX_Effect {
 		
 		
 		
-		const items = MiniX_Effect._sortQueue(queue).slice();
+		const items = MiniX_Effect._sortQueue(queue);
 		queue.clear();
-		for (const effect of items) {
+		for (let i = 0; i < items.length; i++) {
+			const effect = items[i];
 			if (effect.active) {
 				try { effect.run(); }
 				catch (err) { console.error('[MiniX] Effect threw during flush:', err); }
 			}
 		}
+		items.length = 0;
 	}
 
 	static _flushAll() {
@@ -2455,7 +2578,7 @@ class MiniX_Effect {
 		for (const dep of this.deps) {
 			if (dep.depType === 'target') {
 				targetStates.add(dep.state);
-				dep.state._targetWatchers?.get(dep.target)?.get(dep.prop)?.delete(dep.runner);
+				dep.state._removeTargetWatcher?.(dep.target, dep.prop, dep.runner);
 				dep.state._effectTargetRunnerMap?.get(this)?.get(dep.target)?.delete(dep.prop);
 			} else if (dep.state._watchers) {
 				dep.state._watchers.get(dep.key)?.delete(dep.runner);
@@ -6191,27 +6314,37 @@ class MiniX_Component {
 			enumerable: true,
 			configurable: true
 		});
+		Object.defineProperty(scope, '__minix_state_proxy__', {
+			value: stateProxy,
+			enumerable: false,
+			configurable: true
+		});
+		Object.defineProperty(scope, '__minix_track_state_shape__', {
+			value: () => this.state._trackTargetEffect(stateRaw, MiniX_State.ITERATE_KEY),
+			enumerable: false,
+			configurable: true
+		});
 	
 		scope.$state = this._createStateAPI();
 		scope.$component = instance;
 	
-		scope.$set = (path, val) => this.state.set(path, val);
+		scope.$set = (path, val) => scope.$state.set(path, val);
 		scope.$batch = (fn) => this.state.batch(fn);
 	
 		scope.$patch = (path, fn) => {
 			const current = this.state.get(path);
 			const next = typeof fn === 'function' ? fn(current) : fn;
-			return this.state.set(path, next);
+			return scope.$state.set(path, next);
 		};
 	
 		scope.$merge = (path, obj) => {
 			const current = this.state.get(path) || {};
-			return this.state.set(path, { ...current, ...obj });
+			return scope.$state.set(path, { ...current, ...obj });
 		};
 	
 		scope.$toggle = (path) => {
 			const current = !!this.state.get(path);
-			return this.state.set(path, !current);
+			return scope.$state.set(path, !current);
 		};
 	
 		scope.$emit = (name, payload = null, meta = {}) =>
@@ -6276,29 +6409,47 @@ class MiniX_Component {
 	}
 
 	_createStateAPI() {
+		const topLevelPathKey = (path) => {
+			const raw = String(path || '');
+			const dot = raw.indexOf('.');
+			const bracket = raw.indexOf('[');
+			const end = dot === -1 ? (bracket === -1 ? raw.length : bracket) : (bracket === -1 ? dot : Math.min(dot, bracket));
+			return raw.slice(0, end);
+		};
+		const markShapeDirty = () => {
+			this._baseScopeCache = null;
+			if (typeof MiniX_Compiler !== 'undefined') MiniX_Compiler._scopeGen = (MiniX_Compiler._scopeGen || 0) + 1;
+		};
+		const setAndRefreshShape = (path, val) => {
+			const root = topLevelPathKey(path);
+			const hadRoot = root ? this.state.has(root) : true;
+			const result = this.state.set(path, val);
+			if (root && !hadRoot && this.state.has(root)) markShapeDirty();
+			return result;
+		};
 		return {
 			get: (path) => this.state.get(path),
-			set: (path, val) => this.state.set(path, val),
+			set: setAndRefreshShape,
 			batch: (fn) => this.state.batch(fn),
 
 			push: (path, val) => {
 				const arr = this.state.get(path) || [];
-				this.state.set(path, [...arr, val]);
+				setAndRefreshShape(path, [...arr, val]);
 			},
 
 			pop: (path) => {
 				const arr = this.state.get(path) || [];
-				this.state.set(path, arr.slice(0, -1));
+				setAndRefreshShape(path, arr.slice(0, -1));
 			},
 
 			map: (path, fn) => {
 				const arr = this.state.get(path) || [];
-				this.state.set(path, arr.map(fn));
+				setAndRefreshShape(path, arr.map(fn));
 			},
 
 			filter: (path, fn) => {
 				const arr = this.state.get(path) || [];
-				this.state.set(path, arr.filter(fn));
+				setAndRefreshShape(path, arr.filter(fn));
 			}
 		};
 	}
@@ -6324,6 +6475,7 @@ class MiniX_Component {
 
 	_bindCoreAPIs() {
 		const target = this.instance;
+		const stateApi = this._createStateAPI();
 		target.$component = this;
 		target.$refs = {};
 		target.$parent = this.parent?.instance || null;
@@ -6419,7 +6571,7 @@ class MiniX_Component {
 			this.mountChild(name, element, props, meta);
 	
 		target.$destroy = () => this.destroy();
-		target.$refresh = (meta = {}) => this.update({ reason: 'manual-refresh', ...meta });
+		target.$refresh = (meta = {}) => this.rerender({ reason: 'manual-refresh', ...meta });
 		target.$setProps = (props = {}, options = {}) => this.updateProps(props, options);
 	
 		target.$fetch = (url, options = {}) => {
@@ -6445,21 +6597,21 @@ class MiniX_Component {
 			return request._builder(method, url, body, requestOptions);
 		};
 
-		target.$state = this._createStateAPI();
+		target.$state = stateApi;
 		target.$get = (path, fallback) => this.state.get(path, fallback);
-		target.$set = (path, val) => this.state.set(path, val);
+		target.$set = (path, val) => stateApi.set(path, val);
 		target.$patch = (path, fn) => {
 			const current = this.state.get(path);
 			const next = typeof fn === 'function' ? fn(current) : fn;
-			return this.state.set(path, next);
+			return stateApi.set(path, next);
 		};
 		target.$merge = (path, obj) => {
 			const current = this.state.get(path) || {};
-			return this.state.set(path, { ...current, ...obj });
+			return stateApi.set(path, { ...current, ...obj });
 		};
 		target.$toggle = (path) => {
 			const current = !!this.state.get(path);
-			return this.state.set(path, !current);
+			return stateApi.set(path, !current);
 		};
 		target.$batch = (fn) => this.state.batch(fn);
 		target.$snapshot = () => this.state.snapshot();
@@ -6515,6 +6667,7 @@ class MiniX_Component {
 		
 		const stateRef = this.state;
 		const rawInstance = this.instance;
+		const componentRef = this;
 		this.instance = new Proxy(rawInstance, {
 			get(target, prop, receiver) {
 				
@@ -6543,6 +6696,8 @@ class MiniX_Component {
 						configurable: true,
 						enumerable: true
 					});
+					componentRef._baseScopeCache = null;
+					if (typeof MiniX_Compiler !== 'undefined') MiniX_Compiler._scopeGen = (MiniX_Compiler._scopeGen || 0) + 1;
 					return true;
 				}
 				return Reflect.set(target, prop, value, receiver);
@@ -6554,7 +6709,9 @@ class MiniX_Component {
 			}
 		});
 
-		this.instance.$state = this.state;
+		if (!this.instance.$state || typeof this.instance.$state.set !== 'function' || typeof this.instance.$state.get !== 'function') {
+			this.instance.$state = this.state;
+		}
 	}
 
 	_setupMethods() {
@@ -6786,6 +6943,7 @@ class MiniX_Component {
 
 	_shouldRerenderForProps(previousProps = {}, nextProps = {}, options = {}) {
 		if (options.forceRerender === true) return true;
+		if (options.forceRerender === false) return false;
 		if (options.soft === true) return false;
 
 		if (typeof this.instance.shouldUpdateProps === 'function') {
@@ -7054,41 +7212,49 @@ class MiniX_Component {
 	updateProps(nextProps = {}, options = {}) {
 		const previous = { ...(this._propsSource || {}) };
 		const next = this._resolveProps(nextProps || {}, previous, { phase: 'update', ...options });
+		const propsChanged = !this._shallowEqual(previous, next);
 
-		if (this._shallowEqual(previous, next)) {
+		if (propsChanged) {
+			for (const key in previous) {
+				if (!Object.prototype.hasOwnProperty.call(previous, key)) continue;
+				if (!Object.prototype.hasOwnProperty.call(next, key)) {
+					this.propsState.delete(key);
+				}
+			}
+
+			for (const key in next) {
+				if (!Object.prototype.hasOwnProperty.call(next, key)) continue;
+				this.propsState.set(key, next[key]);
+			}
+			this._syncPropsToState(next);
+		}
+
+		const liveNextProps = propsChanged ? { ...(this._propsSource || {}) } : previous;
+		const shouldRerender = this._shouldRerenderForProps(previous, liveNextProps, options);
+		if (!propsChanged && !shouldRerender) {
 			return this;
 		}
-	
-		
-		for (const key in previous) {
-			if (!Object.prototype.hasOwnProperty.call(previous, key)) continue;
-			if (!Object.prototype.hasOwnProperty.call(next, key)) {
-				this.propsState.delete(key);
-			}
-		}
-	
-		
-		for (const key in next) {
-			if (!Object.prototype.hasOwnProperty.call(next, key)) continue;
-			this.propsState.set(key, next[key]);
-		}
-		this._syncPropsToState(next);
-	
-		
+
 		this._baseScopeCache = null;
 	
 		if (!this.isMounted || this.isDestroyed) {
 			return this;
 		}
-	
-		const liveNextProps = { ...(this._propsSource || {}) };
-	
-		return this.update({
+
+		const payload = {
 			reason: 'props',
 			previousProps: previous,
 			nextProps: liveNextProps,
 			...options
-		});
+		};
+	
+		if (shouldRerender) {
+			return options.immediate === true
+				? this.rerender(payload)
+				: this._queueRerender(payload);
+		}
+
+		return this.update(payload);
 	}
 
 	use(plugin) {
@@ -7365,7 +7531,13 @@ class MiniX_Request {
 		},
 		query(params) { Object.assign(this._params, params); return this; },
 		body(value) { this._body = value; return this; },
-		as(type) { this._responseType = type; return this; },
+		as(type) {
+			if (this._promise && this._sentResponseType !== type) {
+				throw new Error('[MiniX.Request] Response type cannot be changed after the request has started.');
+			}
+			this._responseType = type;
+			return this;
+		},
 		timeout(ms) { this._timeout = ms; return this; },
 		signal(sig) { this._signal = sig; return this; },
 		retry(times, delay = 300, factor = 2) {
@@ -7375,14 +7547,25 @@ class MiniX_Request {
 		cache(ms) { this._cacheTime = ms; return this; },
 		onUploadProgress(fn) { this._onUploadProgress = fn; return this; },
 		onDownloadProgress(fn) { this._onDownloadProgress = fn; return this; },
-		json() { this._responseType = 'json'; return this._instance._fire(this); },
-		text() { this._responseType = 'text'; return this._instance._fire(this); },
-		blob() { this._responseType = 'blob'; return this._instance._fire(this); },
-		arrayBuffer() { this._responseType = 'arrayBuffer'; return this._instance._fire(this); },
-		response() { this._responseType = 'response'; return this._instance._fire(this); },
-		then(resolve, reject) { return this._instance._fire(this).then(resolve, reject); },
-		catch(reject) { return this._instance._fire(this).catch(reject); },
-		finally(fn) { return this._instance._fire(this).finally(fn); },
+		_send(type) {
+			if (type && this._promise && this._sentResponseType !== type) {
+				return Promise.reject(new Error('[MiniX.Request] Response type cannot be changed after the request has started.'));
+			}
+			if (!this._promise) {
+				if (type) this._responseType = type;
+				this._sentResponseType = this._responseType;
+				this._promise = this._instance._fire(this);
+			}
+			return this._promise;
+		},
+		json() { return this._send('json'); },
+		text() { return this._send('text'); },
+		blob() { return this._send('blob'); },
+		arrayBuffer() { return this._send('arrayBuffer'); },
+		response() { return this._send('response'); },
+		then(resolve, reject) { return this._send().then(resolve, reject); },
+		catch(reject) { return this._send().catch(reject); },
+		finally(fn) { return this._send().finally(fn); },
 	};
 
 	_builder(method, url, bodyOrOptions, options = {}) {
@@ -7443,7 +7626,7 @@ class MiniX_Request {
 		const id = ++this._idCounter;
 		this._lastFiredId = id;
 
-		const canUseCache = desc._cacheTime > 0;
+		const canUseCache = desc._cacheTime > 0 && desc._responseType !== 'response';
 		let cacheKey = null;
 		const url = this._resolveURL(desc._url, desc._params);
 
@@ -7476,7 +7659,12 @@ class MiniX_Request {
 		const requestUrl = reqContext.url || url;
 		const requestMethod = String(reqContext.method || '').toUpperCase();
 		reqContext.method = requestMethod;
-		cacheKey = canUseCache && (requestMethod === 'GET' || requestMethod === 'HEAD') ? `${requestMethod}:${requestUrl}` : null;
+		cacheKey = canUseCache && (requestMethod === 'GET' || requestMethod === 'HEAD') ? this._cacheKey({
+			_method: requestMethod,
+			_resolvedURL: requestUrl,
+			_params: null,
+			_responseType: desc._responseType
+		}) : null;
 		if (cacheKey) {
 			const hit = this._cache.get(cacheKey);
 			if (hit) {
@@ -7650,8 +7838,10 @@ class MiniX_Request {
 	}
 
 	invalidate(url, params = {}) {
-		const key = this._cacheKey({ _method: 'GET', _url: url, _params: params });
-		this._cache.delete(key);
+		const prefix = this._cacheKey({ _method: 'GET', _url: url, _params: params, _responseType: '' });
+		for (const key of this._cache.keys()) {
+			if (key.startsWith(prefix)) this._cache.delete(key);
+		}
 		return this;
 	}
 
@@ -7665,7 +7855,9 @@ class MiniX_Request {
 	}
 
 	_cacheKey(desc) {
-		return `${desc._method}:${this._resolveURL(desc._url, desc._params)}`;
+		const type = desc._responseType == null ? '' : String(desc._responseType);
+		const url = desc._resolvedURL || this._resolveURL(desc._url, desc._params || {});
+		return `${desc._method}:${url}:${type}`;
 	}
 
 	abort() {

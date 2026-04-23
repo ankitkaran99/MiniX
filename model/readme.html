@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Model + Collection Documentation</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --panel-2: #1f2937;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --accent: #60a5fa;
+      --accent-2: #22c55e;
+      --border: #334155;
+      --code-bg: #0b1220;
+      --warn: #f59e0b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      line-height: 1.6;
+      color: var(--text);
+      background: linear-gradient(180deg, #020617 0%, #0f172a 100%);
+    }
+    .wrap {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 32px 20px 80px;
+    }
+    .hero {
+      background: linear-gradient(135deg, rgba(96,165,250,.18), rgba(34,197,94,.12));
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 28px;
+      margin-bottom: 24px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.25);
+    }
+    h1, h2, h3 { line-height: 1.2; }
+    h1 { margin: 0 0 12px; font-size: 2.2rem; }
+    h2 {
+      margin-top: 36px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+      font-size: 1.5rem;
+    }
+    h3 { margin-top: 26px; font-size: 1.1rem; }
+    p, li { color: var(--text); }
+    .muted { color: var(--muted); }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+      margin: 18px 0;
+    }
+    .card {
+      background: rgba(17,24,39,.82);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .02em;
+      margin-right: 8px;
+      background: rgba(96,165,250,.14);
+      border: 1px solid rgba(96,165,250,.4);
+      color: #bfdbfe;
+    }
+    .badge.ok {
+      background: rgba(34,197,94,.12);
+      border-color: rgba(34,197,94,.35);
+      color: #bbf7d0;
+    }
+    .badge.warn {
+      background: rgba(245,158,11,.12);
+      border-color: rgba(245,158,11,.35);
+      color: #fde68a;
+    }
+    pre {
+      margin: 14px 0;
+      background: var(--code-bg);
+      border: 1px solid #1e293b;
+      color: #dbeafe;
+      border-radius: 14px;
+      padding: 16px;
+      overflow: auto;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0 24px;
+      background: rgba(17,24,39,.75);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+    th, td {
+      text-align: left;
+      vertical-align: top;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    th {
+      background: rgba(30,41,59,.8);
+      color: #cbd5e1;
+      font-weight: 700;
+    }
+    tr:last-child td { border-bottom: 0; }
+    .toc a {
+      color: #bfdbfe;
+      text-decoration: none;
+    }
+    .toc li { margin: 6px 0; }
+    .callout {
+      border-left: 4px solid var(--accent);
+      background: rgba(96,165,250,.1);
+      padding: 14px 16px;
+      border-radius: 10px;
+      margin: 14px 0;
+    }
+    .warnbox {
+      border-left-color: var(--warn);
+      background: rgba(245,158,11,.1);
+    }
+    .footer {
+      margin-top: 40px;
+      color: var(--muted);
+      font-size: 14px;
+      border-top: 1px solid var(--border);
+      padding-top: 16px;
+    }
+    a.inline { color: #93c5fd; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <div>
+        <span class="badge">Reactive</span>
+        <span class="badge ok">Model + Collection</span>
+        <span class="badge warn">MiniX_State Friendly</span>
+      </div>
+      <h1>Model + Collection Documentation</h1>
+      <p class="muted">
+        Documentation for the combined usage of the <strong>Model</strong> and <strong>Collection</strong> classes.
+        This setup gives you an Eloquent-style API in JavaScript while still binding cleanly to standalone data,
+        <code>MiniX_State</code>, or store-backed state.
+      </p>
+      <div class="callout">
+        Goal: keep the nice flow like <code>user.name</code>, <code>user.profile.city</code>, and
+        <code>user.roles.pushModel(...)</code> without making the store cry in a corner.
+      </div>
+    </section>
+
+    <section class="card toc">
+      <h2 style="margin-top:0;border-bottom:0;padding-bottom:0;">Contents</h2>
+      <ol>
+        <li><a href="#overview">Overview</a></li>
+        <li><a href="#requirements">Requirements</a></li>
+        <li><a href="#quick-start">Quick Start</a></li>
+        <li><a href="#model">Model Class</a></li>
+        <li><a href="#collection">Collection Class</a></li>
+        <li><a href="#relations">Relations</a></li>
+        <li><a href="#state-binding">Binding to State and Store</a></li>
+        <li><a href="#examples">Examples</a></li>
+        <li><a href="#caveats">Caveats and Limitations</a></li>
+        <li><a href="#best-practices">Best Practices</a></li>
+      </ol>
+    </section>
+
+    <h2 id="overview">Overview</h2>
+    <p>
+      The two classes are designed to work together:
+    </p>
+    <div class="grid">
+      <div class="card">
+        <h3>Model</h3>
+        <p>Represents a single object. It exposes data with property access, supports defaults, relations, serialization, and binding to reactive state paths.</p>
+      </div>
+      <div class="card">
+        <h3>Collection</h3>
+        <p>Represents an array of model items. It supports helpers like <code>findById</code>, <code>pushModel</code>, <code>resetModels</code>, <code>removeById</code>, and more.</p>
+      </div>
+      <div class="card">
+        <h3>Reactive Source</h3>
+        <p>Both classes can bind to <code>MiniX_State</code>-like sources so updates write through the same path instead of mutating disconnected local copies.</p>
+      </div>
+    </div>
+
+    <h2 id="requirements">Requirements</h2>
+    <ul>
+      <li><code>MiniX_State</code> must exist if you want standalone reactive models.</li>
+      <li>For state/store binding, the source should expose: <code>get</code>, <code>set</code>, <code>has</code>, <code>delete</code>, and optionally <code>watch</code>.</li>
+      <li><code>Collection</code> should be loaded after or alongside <code>Model</code> in environments where you use relations returning collections.</li>
+    </ul>
+
+    <h2 id="quick-start">Quick Start</h2>
+    <pre><code>class UserProfile extends Model {}
+class Role extends Model {}
+
+class User extends Model {
+    defaults() {
+        return {
+            name: '',
+            profile: null,
+            roles: []
+        };
+    }
+
+    relations() {
+        return {
+            profile: this.hasOne(UserProfile),
+            roles: this.hasMany(Role)
+        };
+    }
+
+    getId() {
+        return this.id;
+    }
+}
+
+const user = new User({
+    id: 1,
+    name: 'Ankit',
+    profile: { city: 'Jaipur' },
+    roles: [
+        { id: 1, name: 'Admin' },
+        { id: 2, name: 'Editor' }
+    ]
+});
+
+user.name = 'Ankit Karan';
+user.profile.city = 'Kota';
+user.roles.pushModel({ id: 3, name: 'Viewer' });
+user.roles.findById(2).name = 'Content Editor';</code></pre>
+
+    <h2 id="model">Model Class</h2>
+    <p>
+      <strong>Model</strong> is a proxy-backed wrapper around object-shaped data. It can create its own reactive backing state,
+      or bind to an existing state/store path.
+    </p>
+
+    <h3>Core responsibilities</h3>
+    <ul>
+      <li>Property-style access: <code>user.name</code></li>
+      <li>Defaults through <code>defaults()</code></li>
+      <li>Relations through <code>relations()</code></li>
+      <li>Serialization through <code>toJSON()</code></li>
+      <li>Reactive path binding through <code>fromState()</code> and <code>fromStore()</code></li>
+    </ul>
+
+    <h3>Main instance methods</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Method</th>
+          <th>Purpose</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>get(attr, fallback)</code></td>
+          <td>Read a field safely.</td>
+          <td>Useful when you want fallback logic instead of direct property access.</td>
+        </tr>
+        <tr>
+          <td><code>peek(attr, fallback)</code></td>
+          <td>Read directly from the source without relation wrapping.</td>
+          <td>Handy when you want raw values.</td>
+        </tr>
+        <tr>
+          <td><code>set(attr, value)</code></td>
+          <td>Set a field value.</td>
+          <td>Equivalent to property assignment for data fields.</td>
+        </tr>
+        <tr>
+          <td><code>fill(data)</code></td>
+          <td>Bulk-assign fields.</td>
+          <td>Batches writes when the state source supports batching.</td>
+        </tr>
+        <tr>
+          <td><code>assign(data)</code></td>
+          <td>Alias of <code>fill()</code>.</td>
+          <td>Mostly for ergonomic preference.</td>
+        </tr>
+        <tr>
+          <td><code>watch(attr, callback)</code></td>
+          <td>Watch a bound path.</td>
+          <td>Only works when the source supports <code>watch()</code>.</td>
+        </tr>
+        <tr>
+          <td><code>raw()</code></td>
+          <td>Return the current raw object-shaped data.</td>
+          <td>Throws if the bound state path is not object-shaped.</td>
+        </tr>
+        <tr>
+          <td><code>clone()</code></td>
+          <td>Create a detached clone.</td>
+          <td>Uses <code>toJSON()</code>.</td>
+        </tr>
+        <tr>
+          <td><code>cloneWith(data)</code></td>
+          <td>Clone with overrides.</td>
+          <td>Useful for immutable-style updates.</td>
+        </tr>
+        <tr>
+          <td><code>toJSON()</code></td>
+          <td>Serialize model data to plain JSON-safe objects.</td>
+          <td>Recursively serializes nested models and collections.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Static methods</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Method</th>
+          <th>Purpose</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>make(data, options)</code></td>
+          <td>Create a new model instance.</td>
+        </tr>
+        <tr>
+          <td><code>fromState(state, path)</code></td>
+          <td>Bind a model to a <code>MiniX_State</code>-like path.</td>
+        </tr>
+        <tr>
+          <td><code>fromStore(store, path)</code></td>
+          <td>Bind a model using a store object that exposes a state-like API or state manager.</td>
+        </tr>
+        <tr>
+          <td><code>bind(source, path)</code></td>
+          <td>Auto-bind to state or store depending on the input.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2 id="collection">Collection Class</h2>
+    <p>
+      <strong>Collection</strong> wraps arrays of model data. It can work as a standalone collection or bind directly to
+      a reactive array path inside state.
+    </p>
+
+    <h3>Core responsibilities</h3>
+    <ul>
+      <li>Model-aware array helpers</li>
+      <li>Conversion from plain arrays to model collections</li>
+      <li>Reactive write-through when backed by state</li>
+      <li>Convenient helpers for lookup, mutation, and serialization</li>
+    </ul>
+
+    <h3>Main methods</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Method</th>
+          <th>Purpose</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>Collection.from(ModelClass, items)</code></td>
+          <td>Create a standalone collection from array data.</td>
+          <td>Converts array items to models lazily when accessed.</td>
+        </tr>
+        <tr>
+          <td><code>at(index)</code></td>
+          <td>Return the model at the given index.</td>
+          <td>Reactive collections create wrappers against index paths.</td>
+        </tr>
+        <tr>
+          <td><code>first()</code>, <code>last()</code></td>
+          <td>Convenient accessors.</td>
+          <td>Return a model or <code>null</code>.</td>
+        </tr>
+        <tr>
+          <td><code>push(item)</code>, <code>unshift(item)</code></td>
+          <td>Add plain data or model instances.</td>
+          <td>Serializes values before writing.</td>
+        </tr>
+        <tr>
+          <td><code>pushModel(data)</code>, <code>unshiftModel(data)</code></td>
+          <td>Add plain object data and normalize it to model instances.</td>
+          <td>Great for nicer DX.</td>
+        </tr>
+        <tr>
+          <td><code>reset(items)</code></td>
+          <td>Replace the full collection using plain items.</td>
+          <td>Expects an array.</td>
+        </tr>
+        <tr>
+          <td><code>resetModels(items)</code></td>
+          <td>Replace using model data or plain object items.</td>
+          <td>Converts each item through the model class.</td>
+        </tr>
+        <tr>
+          <td><code>findBy(field, value)</code></td>
+          <td>Find an item by a field.</td>
+          <td>Optimized to scan raw data first, then wrap only the match.</td>
+        </tr>
+        <tr>
+          <td><code>findById(id)</code></td>
+          <td>Shortcut for id lookup.</td>
+          <td>Uses <code>id</code> by default.</td>
+        </tr>
+        <tr>
+          <td><code>removeBy(field, value)</code>, <code>removeById(id)</code></td>
+          <td>Remove matching items.</td>
+          <td>Returns removed wrapped models.</td>
+        </tr>
+        <tr>
+          <td><code>updateAt(index, patch)</code></td>
+          <td>Patch a model at an index.</td>
+          <td>Patch must be a plain object.</td>
+        </tr>
+        <tr>
+          <td><code>updateBy(field, value, patch)</code></td>
+          <td>Patch a found model by field.</td>
+          <td>Returns the updated model or <code>null</code>.</td>
+        </tr>
+        <tr>
+          <td><code>toArray()</code></td>
+          <td>Return all items as models.</td>
+          <td>Good for iteration and display.</td>
+        </tr>
+        <tr>
+          <td><code>toJSON()</code></td>
+          <td>Serialize collection items.</td>
+          <td>Returns plain array data.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2 id="relations">Relations</h2>
+    <p>Define relations inside your model using <code>hasOne()</code> and <code>hasMany()</code>.</p>
+    <pre><code>class User extends Model {
+    relations() {
+        return {
+            profile: this.hasOne(UserProfile),
+            roles: this.hasMany(Role)
+        };
+    }
+}</code></pre>
+
+    <div class="grid">
+      <div class="card">
+        <h3>hasOne</h3>
+        <p>Returns a nested model instance or <code>null</code>. This is cached by relation key for stable repeated access.</p>
+      </div>
+      <div class="card">
+        <h3>hasMany</h3>
+        <p>Returns a <code>Collection</code>. Items are wrapped by index path when reactive, so array structure changes matter.</p>
+      </div>
+    </div>
+
+    <h2 id="state-binding">Binding to State and Store</h2>
+    <h3>Bind to state</h3>
+    <pre><code>const user = User.fromState(state, 'user');
+user.name = 'Updated';
+user.profile.city = 'Jaipur';
+user.roles.pushModel({ id: 3, name: 'Viewer' });</code></pre>
+
+    <h3>Bind to store</h3>
+    <pre><code>const user = User.fromStore(store, 'user');
+user.name = 'Updated through store binding';</code></pre>
+
+    <p>
+      Store binding works when the store exposes a state-like object directly or through fields such as
+      <code>$stateManager</code>, <code>$store</code>, or <code>state</code>.
+    </p>
+
+    <div class="callout">
+      The binding is path-based. The model does not copy data and then try to sync later. It writes through to the bound source.
+    </div>
+
+    <h2 id="examples">Examples</h2>
+
+    <h3>Standalone model</h3>
+    <pre><code>const user = new User({
+    id: 1,
+    name: 'Ankit',
+    profile: { city: 'Jaipur' },
+    roles: [
+        { id: 1, name: 'Admin' },
+        { id: 2, name: 'Editor' }
+    ]
+});
+
+user.name = 'Ankit Karan';
+user.profile.city = 'Kota';
+user.roles.pushModel({ id: 3, name: 'Viewer' });</code></pre>
+
+    <h3>Standalone collection</h3>
+    <pre><code>const roles = Collection.from(Role, [
+    { id: 1, name: 'Admin' },
+    { id: 2, name: 'Editor' }
+]);
+
+roles.pushModel({ id: 3, name: 'Viewer' });
+roles.updateById(2, { name: 'Content Editor' });
+console.log(roles.findById(2)?.name);</code></pre>
+
+    <h3>Reset collection from plain array data</h3>
+    <pre><code>user.roles.resetModels([
+    { id: 10, name: 'Owner' },
+    { id: 11, name: 'Manager' }
+]);</code></pre>
+
+    <h3>Iteration</h3>
+    <pre><code>for (const role of user.roles) {
+    console.log(role.name);
+}
+
+const names = user.roles.pluck('name');</code></pre>
+
+    <h2 id="caveats">Caveats and Limitations</h2>
+    <div class="callout warnbox">
+      <strong>Important:</strong> <code>hasMany</code> items are index-path based in reactive mode.
+      If you keep a saved reference like <code>const role = user.roles.at(0)</code> and later call
+      <code>unshift</code>, <code>splice</code>, <code>sort</code>, or remove items, that old reference can become stale.
+    </div>
+
+    <ul>
+      <li>Property access can still collide with model method names. Example: a data field named <code>clone</code> will be shadowed by the method.</li>
+      <li>Collection numeric access like <code>roles[0]</code> is supported for reading, not for array-like assignment magic.</li>
+      <li><code>raw()</code> expects object-shaped state for models. If the bound path is not an object, the model throws instead of pretending everything is fine.</li>
+      <li>Collection patch methods such as <code>updateAt</code> and <code>updateBy</code> require plain object patches.</li>
+    </ul>
+
+    <h2 id="best-practices">Best Practices</h2>
+    <ul>
+      <li>Use <code>findById()</code> or fresh <code>at()</code> lookups after structural array changes instead of holding long-lived child references.</li>
+      <li>Use <code>cloneWith()</code> when you want detached immutable-style copies.</li>
+      <li>Use <code>resetModels()</code> when replacing a relation from plain data and you want model normalization.</li>
+      <li>Use <code>peek()</code> when you need raw source values without relation wrapping.</li>
+      <li>Keep relation data object-shaped for <code>hasOne</code> and array-shaped for <code>hasMany</code>.</li>
+    </ul>
+
+    <h3>Suggested file structure</h3>
+    <pre><code>/core/Model.js
+/core/Collection.js
+/models/User.js
+/models/UserProfile.js
+/models/Role.js</code></pre>
+
+    <div class="footer">
+      Generated documentation for the current patched <strong>Model</strong> and <strong>Collection</strong> classes.
+      Clean API, reactive guts, and just enough warnings to stop future-you from rage-debugging arrays at 2 AM.
+    </div>
+  </div>
+</body>
+</html>

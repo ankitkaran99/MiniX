@@ -52,6 +52,16 @@
         .replace(/>/g, '&gt;');
     }
 
+    function safeTagName(value) {
+        const tag = String(value || 'div').trim().toLowerCase();
+        return /^[a-z][a-z0-9-]*$/.test(tag) ? tag : 'div';
+    }
+
+    function isSafeAttrName(value) {
+        const name = String(value || '');
+        return /^[A-Za-z_:][A-Za-z0-9_:.-]*$/.test(name) && !/^on/i.test(name);
+    }
+
     function encodeCellData(value) {
         if (value == null) return '';
         try {
@@ -219,14 +229,18 @@
                    return cellData == null ? '' : cellData;
                }
 
-               const tag = entry.options.tag || 'div';
+               const tag = safeTagName(entry.options.tag);
                const className = entry.options.className
                ? ' ' + escapeAttr(entry.options.className)
                : '';
 
-               const attrString = Object.entries(entry.options.attrs || {})
-               .map(([key, value]) => ` ${escapeAttr(key)}="${escapeAttr(String(value))}"`)
-               .join('');
+               const attrs = entry.options.attrs || {};
+               const attrParts = [];
+               for (const key of Object.keys(attrs)) {
+                   if (!isSafeAttrName(key)) continue;
+                   attrParts.push(` ${key}="${escapeAttr(String(attrs[key]))}"`);
+               }
+               const attrString = attrParts.join('');
 
                let innerHtml = '';
                if (typeof entry.options.html === 'function') {
@@ -325,15 +339,17 @@
                        instance.props = props;
                    }
 
-                   Object.keys(props || {}).forEach((key) => {
-                       if (RESERVED_INSTANCE_KEYS.has(key)) return;
+                   const propKeys = Object.keys(props || {});
+                   for (let i = 0; i < propKeys.length; i++) {
+                       const key = propKeys[i];
+                       if (RESERVED_INSTANCE_KEYS.has(key)) continue;
 
                        try {
                            if (typeof instance[key] === 'undefined') {
                                instance[key] = props[key];
                            }
                        } catch (e) {}
-                   });
+                   }
                }
            } catch (e) {}
 
@@ -445,24 +461,32 @@
        function mountRow(dtApi, rowNode, mergedOptions) {
            if (!rowNode || rowNode.nodeType !== 1) return;
            const mounts = rowNode.querySelectorAll(mergedOptions.mountSelector);
-           mounts.forEach((el) => mountOne(dtApi, rowNode, el, mergedOptions));
+           for (let i = 0; i < mounts.length; i++) {
+               mountOne(dtApi, rowNode, mounts[i], mergedOptions);
+           }
        }
 
        function mountAll(dtApi, mergedOptions) {
            const rows = getRows(dtApi, mergedOptions);
-           rows.forEach((rowNode) => mountRow(dtApi, rowNode, mergedOptions));
+           for (let i = 0; i < rows.length; i++) {
+               mountRow(dtApi, rows[i], mergedOptions);
+           }
 
            if (mergedOptions.includeChildRows) {
                const container = dtApi.table().container();
                const childRows = container.querySelectorAll('tr.child');
-               childRows.forEach((rowNode) => mountRow(dtApi, rowNode, mergedOptions));
+               for (let i = 0; i < childRows.length; i++) {
+                   mountRow(dtApi, childRows[i], mergedOptions);
+               }
            }
        }
 
        function unmountAll(dtApi, mergedOptions) {
            const container = dtApi.table().container();
            const mounts = container.querySelectorAll(mergedOptions.mountSelector);
-           mounts.forEach((el) => unmountOne(el, mergedOptions));
+           for (let i = 0; i < mounts.length; i++) {
+               unmountOne(mounts[i], mergedOptions);
+           }
        }
 
        function bind(dtApi, mergedOptions) {
@@ -516,7 +540,12 @@
 
            if (!store.handlers || !store.handlers.ns) return;
 
-           Object.values(store.handlers.ns).forEach((evt) => $table.off(evt));
+           const ns = store.handlers.ns;
+           $table.off(ns.preDraw);
+           $table.off(ns.draw);
+           $table.off(ns.columnVisibility);
+           $table.off(ns.responsiveDisplay);
+           $table.off(ns.destroy);
            store.handlers = null;
        }
 

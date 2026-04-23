@@ -775,6 +775,7 @@ class DebugDemoApp {
         { id: 3, text: 'Trigger real plugin events', done: false }
       ],
       nextTodoId: 4,
+      lastWatch: '',
       events: [],
       debugCounts: {},
       eventTotal: 0,
@@ -811,7 +812,24 @@ class DebugDemoApp {
     this.bridgeStatus = this.hasBridge ? 'debug bridge live' : 'debug bridge missing';
 
     this._onDebugEvent = (event) => {
-      this.applyDebugEvents(event.detail?.events || MiniX_Debug.getEvents());
+      const incoming = event.detail?.event;
+      if (!incoming) return;
+      // Append the single new event to the display list instead of
+      // re-fetching and re-mapping the entire log on every event.
+      const mapped = {
+        seq: incoming.seq,
+        type: incoming.type,
+        component: incoming.component,
+        time: new Date(incoming.ts).toLocaleTimeString('en', {
+          hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'
+        }),
+        summary: this.describeEvent(incoming)
+      };
+      // Prepend (newest first), cap at 60, update totals
+      this.events = [mapped, ...this.events].slice(0, 60);
+      this.eventTotal = MiniX_Debug.getEvents().length;
+      const t = incoming.type;
+      this.debugCounts = { ...this.debugCounts, [t]: (this.debugCounts[t] || 0) + 1 };
     };
     window.addEventListener('minix-debug:event', this._onDebugEvent);
     this.refreshEvents();
@@ -842,7 +860,6 @@ class DebugDemoApp {
 
     togglePanel() {
       this.showPanel = !this.showPanel;
-      this.ready = !this.ready;
     },
 
     addTodo() {
@@ -888,6 +905,14 @@ class DebugDemoApp {
     },
 
     applyDebugEvents(rawEvents) {
+      // Single pass: build the display list and accumulate counts together
+      const counts = {};
+      const allLen = rawEvents.length;
+      for (let i = 0; i < allLen; i++) {
+        const t = rawEvents[i].type;
+        counts[t] = (counts[t] || 0) + 1;
+      }
+
       const mapped = rawEvents.slice(-60).reverse().map((event) => ({
         seq: event.seq,
         type: event.type,
@@ -901,14 +926,9 @@ class DebugDemoApp {
         summary: this.describeEvent(event)
       }));
 
-      const counts = {};
-      rawEvents.forEach((event) => {
-        counts[event.type] = (counts[event.type] || 0) + 1;
-      });
-
       this.events = mapped;
       this.debugCounts = counts;
-      this.eventTotal = rawEvents.length;
+      this.eventTotal = allLen;
       this.hasStore = typeof window.MiniXStore !== 'undefined';
       this.hasRouter = typeof window.MiniXRouter !== 'undefined';
       this.hasBridge = typeof window.MxDB !== 'undefined';

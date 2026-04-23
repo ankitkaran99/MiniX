@@ -11,6 +11,14 @@
 		return value != null && typeof value.then === "function";
 	}
 
+	function scheduleMicrotask(callback) {
+		if (typeof queueMicrotask === "function") {
+			queueMicrotask(callback);
+			return;
+		}
+		Promise.resolve().then(callback);
+	}
+
 	function escapeRegex(str) {
 		return String(str).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 	}
@@ -502,7 +510,7 @@
 			if (fromRoute) pendingRouterViewFromRoute = fromRoute;
 			if (routerViewRefreshScheduled) return;
 			routerViewRefreshScheduled = true;
-			queueMicrotask(() => {
+			scheduleMicrotask(() => {
 				routerViewRefreshScheduled = false;
 				const queuedFromRoute = pendingRouterViewFromRoute;
 				pendingRouterViewFromRoute = null;
@@ -519,7 +527,7 @@
 		function scheduleActiveLinkRefresh() {
 			if (activeLinkRefreshScheduled) return;
 			activeLinkRefreshScheduled = true;
-			queueMicrotask(() => {
+			scheduleMicrotask(() => {
 				activeLinkRefreshScheduled = false;
 				for (const ctrl of activeLinkControllers) {
 					if (!ctrl || !ctrl.el || !ctrl.el.isConnected || typeof ctrl.refresh !== "function") {
@@ -794,7 +802,7 @@
 			try {
 				fn();
 			} finally {
-				queueMicrotask(() => {
+				scheduleMicrotask(() => {
 					if (suppressNextHistoryEvent) suppressNextHistoryEvent = false;
 				});
 			}
@@ -1045,53 +1053,54 @@
 			return compiler._effect(component, () => {
 				if (scheduled) return;
 				scheduled = true;
-				queueMicrotask(() => { scheduled = false; callback(); });
+				scheduleMicrotask(() => { scheduled = false; callback(); });
 			});
+		}
+
+		async function handleHistoryNavigation(location, options = {}) {
+			if (!options.initial && suppressNextHistoryEvent) { suppressNextHistoryEvent = false; return; }
+			const navId = ++navigationId;
+			const from = cloneRoute(currentRoute);
+			const normalizedLocation = normalizeHistoryLocation(location);
+			const rawLocation = normalizedLocation.path + stringifyQuery(normalizedLocation.query) + normalizeHash(normalizedLocation.hash);
+			const next = resolve(rawLocation, null, debugEnabled);
+			const guardResult = await runGuardList(beforeEachHooks, next, from, "beforeEach");
+			if (navId !== navigationId) {
+				emitDebug("navigation:cancelled", { reason: "superseded", to: next, from });
+				return;
+			}
+			if (guardResult === false) {
+				suppressHistoryEventOnce(() => writeHistory(from, true));
+				emitDebug("navigation:aborted", { source: "beforeEach", to: next, from });
+				return;
+			}
+			if (guardResult !== true) {
+				if (!options.initial) suppressHistoryEventOnce(() => writeHistory(from, true));
+				navigate(guardResult, true).catch(() => {});
+				return;
+			}
+			const routeResult = await runRouteBeforeEnter(next, from);
+			if (navId !== navigationId) {
+				emitDebug("navigation:cancelled", { reason: "superseded", to: next, from });
+				return;
+			}
+			if (routeResult === false) {
+				suppressHistoryEventOnce(() => writeHistory(from, true));
+				emitDebug("navigation:aborted", { source: "beforeEnter", to: next, from });
+				return;
+			}
+			if (routeResult !== true) {
+				if (!options.initial) suppressHistoryEventOnce(() => writeHistory(from, true));
+				navigate(routeResult, true).catch(() => {});
+				return;
+			}
+			syncRoute(next);
+			await runHookList(afterEachHooks, { to: cloneRoute(next), from }, "afterEach");
+			emitDebug(options.initial ? "navigation:initial" : "navigation:external", { to: next, from });
 		}
 
 		function attachHistoryListener() {
 			if (unlisten || !history || typeof history.listen !== "function") return;
-			async function handleHistoryNavigation(location) {
-				if (suppressNextHistoryEvent) { suppressNextHistoryEvent = false; return; }
-				const navId = ++navigationId;
-				const from = cloneRoute(currentRoute);
-				const normalizedLocation = normalizeHistoryLocation(location);
-				const rawLocation = normalizedLocation.path + stringifyQuery(normalizedLocation.query) + normalizeHash(normalizedLocation.hash);
-				const next = resolve(rawLocation, null, debugEnabled);
-				const guardResult = await runGuardList(beforeEachHooks, next, from, "beforeEach");
-				if (navId !== navigationId) {
-					emitDebug("navigation:cancelled", { reason: "superseded", to: next, from });
-					return;
-				}
-				if (guardResult === false) {
-					suppressHistoryEventOnce(() => writeHistory(from, true));
-					emitDebug("navigation:aborted", { source: "beforeEach", to: next, from });
-					return;
-				}
-				if (guardResult !== true) {
-					suppressHistoryEventOnce(() => writeHistory(from, true));
-					navigate(guardResult, true).catch(() => {});
-					return;
-				}
-				const routeResult = await runRouteBeforeEnter(next, from);
-				if (navId !== navigationId) {
-					emitDebug("navigation:cancelled", { reason: "superseded", to: next, from });
-					return;
-				}
-				if (routeResult === false) {
-					suppressHistoryEventOnce(() => writeHistory(from, true));
-					emitDebug("navigation:aborted", { source: "beforeEnter", to: next, from });
-					return;
-				}
-				if (routeResult !== true) {
-					suppressHistoryEventOnce(() => writeHistory(from, true));
-					navigate(routeResult, true).catch(() => {});
-					return;
-				}
-				syncRoute(next);
-				await runHookList(afterEachHooks, { to: cloneRoute(next), from }, "afterEach");
-				emitDebug("navigation:external", { to: next, from });
-			}
 			unlisten = history.listen(function (location) {
 				Promise.resolve(handleHistoryNavigation(location)).catch((error) => {
 					emitDebug("navigation:error", { source: "history", error: String(error?.message || error), location });
@@ -1426,7 +1435,7 @@
 						if (el.__minix_router_view_ctrl__ !== ctrl || ctrl.instanceId !== instanceId || ctrl.destroyed || !el.isConnected) return;
 						if (ctrl.scheduled) return;
 						ctrl.scheduled = true;
-						queueMicrotask(() => {
+						scheduleMicrotask(() => {
 							if (el.__minix_router_view_ctrl__ !== ctrl || ctrl.instanceId !== instanceId) return;
 							ctrl.scheduled = false;
 							if (ctrl.destroyed || !el.isConnected) return;
@@ -1446,7 +1455,7 @@
 					if (!ctrl.activeChild && !ctrl.scheduled) ctrl.requestRefresh(null);
 					return function cleanup() {
 						const myInstanceId = instanceId;
-						queueMicrotask(() => {
+						scheduleMicrotask(() => {
 							if (el.__minix_router_view_ctrl__ !== ctrl) return;
 							if (ctrl.instanceId !== myInstanceId) return;
 							if (el.isConnected) return;
@@ -1469,7 +1478,9 @@
 				});
 
 				attachHistoryListener();
-				syncRoute(resolve(getHistoryLocation(), null, false));
+				Promise.resolve(handleHistoryNavigation(getHistoryLocation(), { initial: true })).catch((error) => {
+					emitDebug("navigation:error", { source: "initial", error: String(error?.message || error), location: getHistoryLocation() });
+				});
 				return app;
 			},
 
@@ -1532,7 +1543,9 @@
 
 			start() {
 				attachHistoryListener();
-				syncRoute(resolve(getHistoryLocation(), null, debugEnabled));
+				Promise.resolve(handleHistoryNavigation(getHistoryLocation(), { initial: true })).catch((error) => {
+					emitDebug("navigation:error", { source: "start", error: String(error?.message || error), location: getHistoryLocation() });
+				});
 				return router;
 			},
 

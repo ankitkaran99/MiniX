@@ -1,6 +1,14 @@
 (function (global) {
   'use strict';
 
+  function scheduleMicrotask(callback) {
+    if (typeof queueMicrotask === 'function') {
+      queueMicrotask(callback);
+      return;
+    }
+    Promise.resolve().then(callback);
+  }
+
   function MiniX_Mask_Plugin(extraOptions) {
     const pluginOptions = normalizePluginOptions(extraOptions);
 
@@ -63,7 +71,16 @@
             const emitInput = () => {
               internalWrite = true;
               el.dispatchEvent(new Event('input', { bubbles: true }));
-              queueMicrotask(() => { internalWrite = false; });
+              scheduleMicrotask(() => { internalWrite = false; });
+            };
+
+            const getTransferText = (event) => {
+              if (typeof event.data === 'string' && event.data) return event.data;
+              const transfer = event.dataTransfer || event.clipboardData;
+              if (transfer && typeof transfer.getData === 'function') {
+                return transfer.getData('text/plain') || transfer.getData('text') || '';
+              }
+              return '';
             };
 
             const applyResult = (result, shouldEmit) => {
@@ -140,7 +157,7 @@
 
               if (type === 'insertFromPaste') {
                 event.preventDefault();
-                const pasted = event.data || '';
+                const pasted = getTransferText(event);
                 runInsert(pasted, false, true);
                 return;
               }
@@ -166,9 +183,7 @@
             const onPaste = (event) => {
               if (event.defaultPrevented) return;
               event.preventDefault();
-              const text = event.clipboardData && typeof event.clipboardData.getData === 'function'
-                ? event.clipboardData.getData('text')
-                : '';
+              const text = getTransferText(event);
               runInsert(text, false, true);
             };
 
@@ -313,9 +328,11 @@
     if (Array.isArray(value)) return value.map(sortObject);
     if (!value || typeof value !== 'object') return value;
     const out = {};
-    Object.keys(value).sort().forEach((key) => {
+    const keys = Object.keys(value).sort();
+    for (let i = 0; i < keys.length; i++) {
+      const key = keys[i];
       out[key] = sortObject(value[key]);
-    });
+    }
     return out;
   }
 
