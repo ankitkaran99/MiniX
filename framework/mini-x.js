@@ -54,6 +54,7 @@ class MiniX_State {
 		
 		this._proxySet = new WeakSet();
 		this._dev = Boolean(options.dev);
+		this._captureTraces = Boolean(options.captureTraces);
 		this._devLabel = options.label || null;
 		this._devHistory = this._dev ? [] : null;
 		this._state = this._wrap(this._clone(initialState), []);
@@ -65,19 +66,21 @@ class MiniX_State {
 		if (!this._dev) return;
 		if (MiniX_State._suppressDevCaptureDepth > 0) return;
 
-		
-		const raw = new Error().stack || '';
-		const lines = raw.split('\n');
-		
-		const callerLines = lines.filter((line) => {
-			if (!line.includes('at ')) return false;
-			if (line.includes('MiniX_State.') || line.includes('MiniX_State._')) return false;
-			if (line.includes('_minix_splitPipes')) return false;
-			return true;
-		});
-
-		const trace = callerLines.map((l) => l.trim()).join('\n');
-		const topFrame = callerLines[0]?.trim() || '(unknown)';
+		// Stack trace capture is expensive; only collect when explicitly opted in.
+		let trace = '';
+		let topFrame = '(unknown)';
+		if (this._captureTraces) {
+			const raw = new Error().stack || '';
+			const lines = raw.split('\n');
+			const callerLines = lines.filter((line) => {
+				if (!line.includes('at ')) return false;
+				if (line.includes('MiniX_State.') || line.includes('MiniX_State._')) return false;
+				if (line.includes('_minix_splitPipes')) return false;
+				return true;
+			});
+			trace = callerLines.map((l) => l.trim()).join('\n');
+			topFrame = callerLines[0]?.trim() || '(unknown)';
+		}
 
 		const entry = {
 			timestamp: Date.now(),
@@ -139,7 +142,7 @@ class MiniX_State {
 				value.forEach((v) => out.push(this._cloneForLog(v)));
 				return out;
 			}
-			const raw = value.__raw ?? value;
+			const raw = this._unwrapProxy(value);
 			return { ...raw };
 		} catch (_) {
 			return String(value);
@@ -160,8 +163,9 @@ class MiniX_State {
 		return this;
 	}
 
-	enableDev(label = null) {
+	enableDev(label = null, { captureTraces = false } = {}) {
 		this._dev = true;
+		this._captureTraces = Boolean(captureTraces);
 		if (this._devHistory === null) this._devHistory = [];
 		if (label !== null) this._devLabel = label;
 		return this;
@@ -169,6 +173,7 @@ class MiniX_State {
 
 	disableDev() {
 		this._dev = false;
+		this._captureTraces = false;
 		this._devHistory = null;
 		return this;
 	}
@@ -266,7 +271,7 @@ class MiniX_State {
 	}
 
 	_unwrapProxy(value) {
-		return value && typeof value === 'object' && MiniX_State._proxySet.has(value) && value.__raw
+		return value && typeof value === 'object' && (this._proxySet.has(value) || MiniX_State._proxySet.has(value)) && value.__raw
 			? value.__raw
 			: value;
 	}
@@ -312,17 +317,13 @@ class MiniX_State {
 	}
 
 	_joinPath(basePath, prop) {
-		
 		const key = typeof prop === 'symbol' ? `Symbol(${String(prop)})` : prop;
 		if (!basePath) return key;
 		if (typeof basePath === 'string') return basePath + '.' + key;
-		
 		if (Array.isArray(basePath)) {
 			if (!basePath.length) return key;
-			
-			let s = basePath[0];
-			for (let i = 1; i < basePath.length; i++) s += '.' + basePath[i];
-			return s + '.' + key;
+			// Join once via _pathString which caches the result for this exact array reference.
+			return this._pathString(basePath) + '.' + key;
 		}
 		return String(basePath) + '.' + key;
 	}
@@ -668,11 +669,38 @@ class MiniX_State {
 		return Boolean(targetWatchers && targetWatchers.size);
 	}
 
+	// Shared parent-link traversal used by both branches of _bubbleTargetNotify.
+	_walkParentLinks(startTarget, newVal, oldVal, meta) {
+		const parentLinks = this._parentLinks.get(startTarget);
+		if (!parentLinks || !parentLinks.length) return;
+		let structuralMeta = null;
+		const stack = [];
+		for (let i = 0; i < parentLinks.length; i++) {
+			const link = parentLinks[i];
+			stack.push(link.parentTarget, link.parentKey, 0);
+		}
+		while (stack.length) {
+			const depth = stack.pop();
+			const currentProp = stack.pop();
+			const currentParent = stack.pop();
+			if (!currentParent || depth >= 64) continue;
+			if (this._hasWatchersForTarget(currentParent)) {
+				if (!structuralMeta) structuralMeta = { ...meta, structural: true };
+				this._notifyTarget(currentParent, currentProp, newVal, oldVal, structuralMeta);
+			}
+			const links = this._parentLinks.get(currentParent);
+			if (links && links.length) {
+				for (let i = 0; i < links.length; i++) {
+					const link = links[i];
+					stack.push(link.parentTarget, link.parentKey, depth + 1);
+				}
+			}
+		}
+	}
+
 	_bubbleTargetNotify(target, prop, newVal, oldVal, meta = {}) {
 		if (!target || (typeof target !== 'object' && typeof target !== 'function')) return;
 
-		
-		
 		const metaType = meta.type;
 		if (metaType === 'set' || metaType === 'set:path') {
 			const propMap = this._targetWatchers.get(target);
@@ -697,30 +725,7 @@ class MiniX_State {
 				return;
 			}
 			if (!hasGlobal && this._targetWatcherTargetCount <= 1) return;
-			
-			const stack = [];
-			for (let i = 0; i < parentLinks.length; i++) {
-				const link = parentLinks[i];
-				stack.push(link.parentTarget, link.parentKey, 0);
-			}
-			let structuralMeta = null;
-			while (stack.length) {
-				const depth = stack.pop();
-				const currentProp = stack.pop();
-				const currentParent = stack.pop();
-				if (!currentParent || depth >= 64) continue;
-				if (this._hasWatchersForTarget(currentParent)) {
-					if (!structuralMeta) structuralMeta = { ...meta, structural: true };
-					this._notifyTarget(currentParent, currentProp, newVal, oldVal, structuralMeta);
-				}
-				const links = this._parentLinks.get(currentParent);
-				if (links && links.length) {
-					for (let i = 0; i < links.length; i++) {
-						const link = links[i];
-						stack.push(link.parentTarget, link.parentKey, depth + 1);
-					}
-				}
-			}
+			this._walkParentLinks(target, newVal, oldVal, meta);
 			if (hasGlobal) this._notifyGlobalWatchers(newVal, oldVal, prop, meta);
 			return;
 		}
@@ -732,37 +737,8 @@ class MiniX_State {
 			if (hasGlobal) this._notifyGlobalWatchers(newVal, oldVal, prop, meta);
 			return;
 		}
-		
-		
-		
-		
 		if (!hasGlobal && this._targetWatcherTargetCount <= 1) return;
-		
-		
-		let structuralMeta = null;
-		const stack = [];
-		for (let i = 0; i < parentLinks.length; i++) {
-			const link = parentLinks[i];
-			stack.push(link.parentTarget, link.parentKey, 0);
-		}
-		while (stack.length) {
-			const depth = stack.pop();
-			const currentProp = stack.pop();
-			const currentParent = stack.pop();
-			if (!currentParent || depth >= 64) continue;
-			if (this._hasWatchersForTarget(currentParent)) {
-				
-				if (!structuralMeta) structuralMeta = { ...meta, structural: true };
-				this._notifyTarget(currentParent, currentProp, newVal, oldVal, structuralMeta);
-			}
-			const links = this._parentLinks.get(currentParent);
-			if (links && links.length) {
-				for (let i = 0; i < links.length; i++) {
-					const link = links[i];
-					stack.push(link.parentTarget, link.parentKey, depth + 1);
-				}
-			}
-		}
+		this._walkParentLinks(target, newVal, oldVal, meta);
 		if (hasGlobal) this._notifyGlobalWatchers(newVal, oldVal, prop, meta);
 	}
 
@@ -862,12 +838,13 @@ class MiniX_State {
 					return (key) => {
 						const childPath = self._joinPath(basePath, key);
 						const oldVal = obj.get(key);
+						const oldSize = obj.size;
 						const deleted = obj.delete(key);
 						if (deleted) {
 							self._unlinkTargetFromParent(oldVal, obj, String(key));
 							self._devCapture('map:delete', childPath, oldVal, undefined, { type: 'map:delete' });
 							self._bubbleTargetNotify(obj, key, undefined, oldVal, { type: 'map:delete' });
-							self._bubbleTargetNotify(obj, MiniX_State.SIZE_KEY, obj.size, obj.size + 1, { type: 'map:delete' });
+							self._bubbleTargetNotify(obj, MiniX_State.SIZE_KEY, obj.size, oldSize, { type: 'map:delete' });
 						}
 						return deleted;
 					};
@@ -1021,20 +998,36 @@ class MiniX_State {
 						MiniX_Effect._beginBatch();
 						try {
 							const oldSnapshot = obj.slice();
+							// Unwrap into a NEW array — never mutate the caller's args array.
 							let nextArgs = args;
 							if (prop === 'push' || prop === 'unshift') {
-								for (let i = 0; i < args.length; i++) args[i] = this._unwrapProxy(args[i]);
+								nextArgs = new Array(args.length);
+								for (let i = 0; i < args.length; i++) nextArgs[i] = this._unwrapProxy(args[i]);
 							} else if (prop === 'splice' && args.length > 2) {
-								for (let i = 2; i < args.length; i++) args[i] = this._unwrapProxy(args[i]);
+								nextArgs = args.slice();
+								for (let i = 2; i < nextArgs.length; i++) nextArgs[i] = this._unwrapProxy(nextArgs[i]);
 							}
 							const result = Array.prototype[prop].apply(obj, nextArgs);
 							if (prop === 'push') {
+								// Only link the newly appended items.
 								for (let i = oldSnapshot.length; i < obj.length; i++) {
 									this._linkTargetToParent(obj[i], obj, String(i));
 								}
 							} else if (prop === 'pop') {
 								this._unlinkTargetFromParent(oldSnapshot[oldSnapshot.length - 1], obj, String(oldSnapshot.length - 1));
+							} else if (prop === 'shift') {
+								// Unlink removed head; re-key remaining items (indices shifted by -1).
+								this._unlinkTargetFromParent(oldSnapshot[0], obj, '0');
+								for (let i = 0; i < obj.length; i++) {
+									this._linkTargetToParent(obj[i], obj, String(i));
+								}
+							} else if (prop === 'unshift') {
+								// Link only the newly prepended items; re-key all (indices shifted by +n).
+								for (let i = 0; i < obj.length; i++) {
+									this._linkTargetToParent(obj[i], obj, String(i));
+								}
 							} else {
+								// sort, reverse, splice: full relink.
 								for (let i = 0; i < oldSnapshot.length; i++) {
 									this._unlinkTargetFromParent(oldSnapshot[i], obj, String(i));
 								}
@@ -1297,14 +1290,13 @@ class MiniX_State {
 	push(path, ...items) {
 		const arr = this.get(path, []);
 		if (!Array.isArray(arr)) throw new Error(`Value at ${path} is not an array`);
-		
-		
 		if (!items.length) return arr;
+		// Wrap into a new array — never mutate the caller's rest-args.
+		const wrapped = new Array(items.length);
 		for (let i = 0; i < items.length; i++) {
-			const item = items[i];
-			items[i] = this._isWrappable(item) ? this._wrap(item, path) : item;
+			wrapped[i] = this._isWrappable(items[i]) ? this._wrap(items[i], path) : items[i];
 		}
-		arr.push(...items);
+		arr.push(...wrapped);
 		return arr;
 	}
 	pop(path) {
@@ -1344,10 +1336,12 @@ class MiniX_State {
 		this._proxySet = new WeakSet();
 		this._state = this._wrap(this._clone(nextState), []);
 		this._devCapture('reset', '', oldState, nextState, { type: 'reset', api: 'reset()' });
+		const toRemove = [];
 		for (const effect of this._trackedEffects) {
 			if (effect && effect.active) effect.schedule();
-			else this._trackedEffects.delete(effect);
+			else toRemove.push(effect);
 		}
+		for (const effect of toRemove) this._trackedEffects.delete(effect);
 		this._notify('', this._state, oldState, { type: 'reset' });
 		return this._state;
 	}
@@ -1422,7 +1416,13 @@ function _minix_splitPipes(expr) {
 	for (let i = 0; i < expr.length; i++) {
 		const ch = expr[i];
 		if (inStr) {
-			if (ch === inStr && expr[i - 1] !== '\\') inStr = null;
+			// Count consecutive backslashes before this char; an even count means the quote is unescaped.
+			if (ch === inStr) {
+				let backslashes = 0;
+				let j = i - 1;
+				while (j >= 0 && expr[j] === '\\') { backslashes++; j--; }
+				if (backslashes % 2 === 0) inStr = null;
+			}
 		} else if (ch === '"' || ch === "'" || ch === '`') {
 			inStr = ch;
 		} else if (ch === '(' || ch === '[' || ch === '{') {
@@ -1506,11 +1506,8 @@ function _minix_shallowEqual(a, b) {
 	if (a === b) return true;
 	if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return false;
 	const keysA = Object.keys(a);
-	let countB = 0;
-	for (const key in b) {
-		if (Object.prototype.hasOwnProperty.call(b, key)) countB++;
-	}
-	if (keysA.length !== countB) return false;
+	const keysB = Object.keys(b);
+	if (keysA.length !== keysB.length) return false;
 	for (let i = 0; i < keysA.length; i++) {
 		const key = keysA[i];
 		if (!Object.is(a[key], b[key])) return false;
@@ -1780,17 +1777,16 @@ class MiniX_Event_Bus {
 	emit(name, payload = null, meta = {}) {
 		const event = { name, payload, meta, timestamp: Date.now() };
 		const set = this._events.get(name);
-		
-		
-		
+		// ES2015+ Set iteration is safe when entries are deleted mid-iteration
+		// (e.g. by `once` handlers), so no snapshot copy is needed.
 		if (set) {
-			for (const cb of [...set]) {
+			for (const cb of set) {
 				try { cb(event); }
 				catch (err) { console.error('[MiniX_Event_Bus] Listener threw:', err); }
 			}
 		}
 		if (this._wildcards.size) {
-			for (const cb of [...this._wildcards]) {
+			for (const cb of this._wildcards) {
 				try { cb(event); }
 				catch (err) { console.error('[MiniX_Event_Bus] Wildcard listener threw:', err); }
 			}
@@ -2057,19 +2053,21 @@ class MiniX_Listener {
 	}
 
 	_compileExpression(expression, scope = {}) {
-		return (extraScope = {}) => {
-			const cacheKey = String(expression);
-			let fn = MiniX_Listener._exprFnCache.get(cacheKey);
-			if (fn === undefined) {
-				try {
-					fn = new Function('__scope__', `with(__scope__) { return (${expression}); }`);
-				} catch (_) {
-					fn = null; 
-				}
-				if (MiniX_Listener._exprFnCache.size >= 4000) MiniX_Listener._exprFnCache.delete(MiniX_Listener._exprFnCache.keys().next().value);
-				MiniX_Listener._exprFnCache.set(cacheKey, fn);
+		// Compute cacheKey and look up/compile the fn once at creation time,
+		// not on every invocation of the returned closure.
+		const cacheKey = String(expression);
+		let fn = MiniX_Listener._exprFnCache.get(cacheKey);
+		if (fn === undefined) {
+			try {
+				fn = new Function('__scope__', `with(__scope__) { return (${expression}); }`);
+			} catch (_) {
+				fn = null;
 			}
-			if (!fn) throw new SyntaxError(`Failed to compile expression: ${expression}`);
+			if (MiniX_Listener._exprFnCache.size >= 4000) MiniX_Listener._exprFnCache.delete(MiniX_Listener._exprFnCache.keys().next().value);
+			MiniX_Listener._exprFnCache.set(cacheKey, fn);
+		}
+		if (!fn) throw new SyntaxError(`Failed to compile expression: ${expression}`);
+		return (extraScope = {}) => {
 			const runtimeScope = Object.create(scope && typeof scope === 'object' ? scope : null);
 			Object.assign(runtimeScope, extraScope);
 			return fn(_minix_createEvalScope(runtimeScope));
@@ -2531,7 +2529,6 @@ class MiniX_Effect {
 		const queue = MiniX_Effect._queues[name];
 		if (!queue.size) return;
 		if (queue.size === 1) {
-			
 			const effect = queue.values().next().value;
 			queue.clear();
 			if (effect.active) {
@@ -2540,19 +2537,19 @@ class MiniX_Effect {
 			}
 			return;
 		}
-		
-		
-		
 		const items = MiniX_Effect._sortQueue(queue);
 		queue.clear();
-		for (let i = 0; i < items.length; i++) {
-			const effect = items[i];
-			if (effect.active) {
-				try { effect.run(); }
-				catch (err) { console.error('[MiniX] Effect threw during flush:', err); }
+		try {
+			for (let i = 0; i < items.length; i++) {
+				const effect = items[i];
+				if (effect.active) {
+					try { effect.run(); }
+					catch (err) { console.error('[MiniX] Effect threw during flush:', err); }
+				}
 			}
+		} finally {
+			items.length = 0;
 		}
-		items.length = 0;
 	}
 
 	static _flushAll() {
@@ -2560,12 +2557,22 @@ class MiniX_Effect {
 		MiniX_Effect._flushing = true;
 		try {
 			let guard = 0;
-			while ((MiniX_Effect._queues.pre.size || MiniX_Effect._queues.post.size) && ++guard <= 100) {
+			while (MiniX_Effect._queues.pre.size || MiniX_Effect._queues.post.size) {
+				if (++guard > 100) {
+					console.warn('[MiniX_Effect] Flush loop exceeded 100 iterations — possible reactive cycle detected. Check for effects that mutate state they also read.');
+					break;
+				}
+				const preSizeBefore = MiniX_Effect._queues.pre.size;
+				const postSizeBefore = MiniX_Effect._queues.post.size;
 				MiniX_Effect._drainPhase('pre');
 				MiniX_Effect._drainPhase('post');
-			}
-			if (guard > 100) {
-				console.warn('[MiniX_Effect] Flush loop exceeded 100 iterations — possible reactive cycle detected. Check for effects that mutate state they also read.');
+				// If no new effects were enqueued during this drain, we're done.
+				if (MiniX_Effect._queues.pre.size === 0 && MiniX_Effect._queues.post.size === 0) break;
+				// If queues are exactly the same size as before draining, we're in a hard cycle.
+				if (MiniX_Effect._queues.pre.size >= preSizeBefore && MiniX_Effect._queues.post.size >= postSizeBefore) {
+					console.warn('[MiniX_Effect] Reactive cycle detected — queues are not shrinking. Aborting flush.');
+					break;
+				}
 			}
 		} finally {
 			MiniX_Effect._flushing = false;
@@ -2874,12 +2881,18 @@ class MiniX_Compiler {
 	
 	
 	_resolveScope(component, _hasExtra, gen, el) {
-		let cursor = el;
-		while (cursor) {
-			if (typeof cursor.__minix_scope_provider__ === 'function') {
-				return cursor.__minix_scope_provider__();
+		// If the component has no scope factories, no ancestor can have a
+		// __minix_scope_provider__ stamped by this system, so skip the traversal.
+		const hasScopeFactories = (component._scopeFactories && component._scopeFactories.length > 0) ||
+			(component._localScopeFactories && component._localScopeFactories.length > 0);
+		if (el && hasScopeFactories) {
+			let cursor = el;
+			while (cursor) {
+				if (typeof cursor.__minix_scope_provider__ === 'function') {
+					return cursor.__minix_scope_provider__();
+				}
+				cursor = cursor.parentNode || null;
 			}
-			cursor = cursor.parentNode || null;
 		}
 		return component._createRenderScope({}, el);
 	}
@@ -3120,10 +3133,16 @@ class MiniX_Compiler {
 		const attrs = el.attributes || [];
 		const attrNames = el.getAttributeNames ? el.getAttributeNames() : null;
 		const count = attrNames ? attrNames.length : attrs.length;
+
+		// Build signature from directive-relevant attributes only (x-*, @*, :*).
+		// Including non-directive attrs (class, id, data-*) caused spurious cache misses.
 		let signature = '';
 		for (let i = 0; i < count; i++) {
 			const name = attrNames ? attrNames[i] : attrs[i].name;
-			if (i) signature += '|';
+			const ch0 = name.charCodeAt(0);
+			const isDirective = ch0 === 120 /* x */ || ch0 === 64 /* @ */ || ch0 === 58 /* : */;
+			if (!isDirective) continue;
+			if (signature) signature += '|';
 			signature += name + '=' + (attrNames ? el.getAttribute(name) : attrs[i].value);
 		}
 		const cached = el.__minix_directives_cache__;
@@ -3316,11 +3335,19 @@ class MiniX_Compiler {
 			const delegated = this._ensureDelegatedEventRoot(delegateRoot, eventName);
 			let list = delegated.handlers.get(el);
 			if (!list) { list = []; delegated.handlers.set(el, list); }
-			list.push(listener);
-			return () => {
+			const removeFromDelegated = () => {
 				const current = delegated.handlers.get(el);
 				if (!current) return;
 				const idx = current.indexOf(listener);
+				if (idx >= 0) current.splice(idx, 1);
+			};
+			// For once, wrap so the handler self-removes from the WeakMap after firing.
+			const wrappedListener = mods.has('once') ? (event) => { removeFromDelegated(); listener(event); } : listener;
+			list.push(wrappedListener);
+			return () => {
+				const current = delegated.handlers.get(el);
+				if (!current) return;
+				const idx = current.indexOf(wrappedListener);
 				if (idx >= 0) current.splice(idx, 1);
 			};
 		}
@@ -7671,6 +7698,11 @@ class MiniX_Request {
 				if (Date.now() < hit.expires) return hit.data;
 				this._cache.delete(cacheKey);
 			}
+			// Evict all other stale entries opportunistically (once per fired request with a cache key).
+			const now = Date.now();
+			for (const [k, v] of this._cache) {
+				if (now >= v.expires) this._cache.delete(k);
+			}
 		}
 
 		const controller = new AbortController();
@@ -7913,15 +7945,15 @@ class MiniX_Request {
 	}
 
 	static all(requests) {
-		return Promise.all(requests.map((r) => typeof r.then === 'function' ? r : r.json()));
+		return Promise.all(requests.map((r) => typeof r.then === 'function' ? r : (typeof r.json === 'function' ? r.json() : Promise.resolve(r))));
 	}
 
 	static allSettled(requests) {
-		return Promise.allSettled(requests.map((r) => typeof r.then === 'function' ? r : r.json()));
+		return Promise.allSettled(requests.map((r) => typeof r.then === 'function' ? r : (typeof r.json === 'function' ? r.json() : Promise.resolve(r))));
 	}
 
 	static race(requests) {
-		return Promise.race(requests.map((r) => typeof r.then === 'function' ? r : r.json()));
+		return Promise.race(requests.map((r) => typeof r.then === 'function' ? r : (typeof r.json === 'function' ? r.json() : Promise.resolve(r))));
 	}
 
 	static async waterfall(steps) {
@@ -7942,9 +7974,9 @@ class MiniX_Request {
 				const i = index++;
 				const req = requests[i];
 				try {
-					results[i] = await (typeof req === 'function' ? req() : req);
+					results[i] = { ok: true, value: await (typeof req === 'function' ? req() : req) };
 				} catch (e) {
-					results[i] = e;
+					results[i] = { ok: false, error: e };
 				}
 			}
 		};
@@ -7981,7 +8013,10 @@ class MiniX_Request {
 		if (MiniX_Request._absUrlRe.test(urlStr)) {
 			resolved = urlStr;
 		} else {
-			resolved = this._baseURL + (urlStr ? '/' + urlStr.replace(/^\/+/, '') : '');
+			// Defensively strip trailing slash from baseURL at resolution time,
+			// in case it was set via a path that preserved one.
+			const base = this._baseURL.replace(/\/+$/, '');
+			resolved = base + (urlStr ? '/' + urlStr.replace(/^\/+/, '') : '');
 		}
 		if (params) {
 			const qs = new URLSearchParams();

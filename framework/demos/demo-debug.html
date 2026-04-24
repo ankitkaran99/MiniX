@@ -706,15 +706,15 @@ router.beforeEach(function debugBeforeEach(to, from) {
   return true;
 });
 
-router.afterEach(function debugAfterEach({ to, from }) {
+router.afterEach(function debugAfterEach(to, from) {
   debugStore.$set('lastRoute', `${from.fullPath || '(start)'} -> ${to.fullPath}`);
 });
 
 class DebugChild {
   static props = {
     label: { type: String, default: 'Anonymous' },
-    version: { type: Number, fallback: 1 },
-    count: { type: Number, fallback: 0 }
+    version: { type: Number, default: 1 },
+    count: { type: Number, default: 0 }
   };
 
   data() {
@@ -744,7 +744,7 @@ class DebugChild {
 
 class UserForm {
   static props = {
-    user_id: { type: Number, fallback: 0 }
+    user_id: { type: Number, default: 0 }
   };
 
   template() {
@@ -827,7 +827,7 @@ class DebugDemoApp {
       };
       // Prepend (newest first), cap at 60, update totals
       this.events = [mapped, ...this.events].slice(0, 60);
-      this.eventTotal = MiniX_Debug.getEvents().length;
+      this.eventTotal++;
       const t = incoming.type;
       this.debugCounts = { ...this.debugCounts, [t]: (this.debugCounts[t] || 0) + 1 };
     };
@@ -884,7 +884,7 @@ class DebugDemoApp {
     },
 
     handleSave(payload, userId) {
-      this.savedUserId = payload?.user_id || userId;
+      this.savedUserId = payload?.user_id ?? userId;
     },
 
     inspectRoot() {
@@ -895,8 +895,16 @@ class DebugDemoApp {
     },
 
     clearDebugEvents() {
-      if (window.MxDB) window.MxDB.clearEvents();
-      this.refreshEvents();
+      if (window.MxDB) {
+        window.MxDB.clearEvents();
+        // clearEvents() already resets the panel and event log;
+        // sync local state directly without a redundant full re-fetch.
+        this.events = [];
+        this.debugCounts = {};
+        this.eventTotal = 0;
+      } else {
+        this.refreshEvents();
+      }
     },
 
     refreshEvents() {
@@ -929,10 +937,6 @@ class DebugDemoApp {
       this.events = mapped;
       this.debugCounts = counts;
       this.eventTotal = allLen;
-      this.hasStore = typeof window.MiniXStore !== 'undefined';
-      this.hasRouter = typeof window.MiniXRouter !== 'undefined';
-      this.hasBridge = typeof window.MxDB !== 'undefined';
-      this.bridgeStatus = this.hasBridge ? 'debug bridge live' : 'debug bridge missing';
     },
 
     describeEvent(event) {

@@ -244,7 +244,6 @@ const MiniX_Debug = (() => {
 
   function _installStoreDebugListener() {
     if (_storeDebugListenerInstalled || typeof window === 'undefined') return;
-    _storeDebugListenerInstalled = true;
     _storeDebugListener = (event) => {
       const payload = event.detail || {};
       const detail = {
@@ -258,6 +257,8 @@ const MiniX_Debug = (() => {
       _record('store', `store:${detail.store || 'unknown'}`, detail);
     };
     window.addEventListener('minix-store:debug', _storeDebugListener);
+    // Set only after the listener is successfully registered
+    _storeDebugListenerInstalled = true;
   }
 
   function _hookMiniXStore() {
@@ -266,8 +267,6 @@ const MiniX_Debug = (() => {
     const api = window.MiniXStore;
 
     if (!_storeBridgePatched && typeof api.define === 'function') {
-      _storeBridgePatched = true;
-      _storeOriginalDefine = api.define;
       const originalDefine = api.define.bind(api);
       const patched = (name, def) => {
         const store = originalDefine(name, def);
@@ -276,6 +275,8 @@ const MiniX_Debug = (() => {
       };
       _patches.push({ obj: api, key: 'define', original: api.define });
       api.define = patched;
+      // Set only after patch is registered and api.define is replaced
+      _storeBridgePatched = true;
     }
 
     if (typeof api.list === 'function' && typeof api.use === 'function') {
@@ -336,7 +337,7 @@ const MiniX_Debug = (() => {
   function _storeEventSummary(detail) {
     if (!detail) return '';
     if (detail.kind === 'action') {
-      return `${detail.event || 'action'} ${detail.store}.${detail.action || '(unknown)'}`;
+      return `${detail.event || 'action'} ${detail.store || '(unknown)'}.${detail.action || '(unknown)'}`;
     }
     return `state ${detail.name}.${detail.path || '(root)'} ${_safeSerialise(detail.old, 40)} -> ${_safeSerialise(detail.new, 40)}`;
   }
@@ -418,7 +419,6 @@ const MiniX_Debug = (() => {
   const _storeEvents = [];
   const _routerEvents = [];
   let _storeBridgePatched = false;
-  let _storeOriginalDefine = null;
   let _storeDebugListenerInstalled = false;
   let _storeDebugListener = null;
 
@@ -531,7 +531,8 @@ const MiniX_Debug = (() => {
   function _hookStateRefresh(flags, component) {
     const state = component?.state;
     if (!state || state.__minixDebugRefreshHooked) return;
-    state.__minixDebugRefreshHooked = true;
+    // Set the flag only after all patches are successfully registered so that
+    // if any patch setup throws, a subsequent call can retry cleanly.
     const componentName = _componentLabel(component);
 
     _wrapStateWatchers(flags, state, componentName);
@@ -577,13 +578,18 @@ const MiniX_Debug = (() => {
 
     if (typeof state._notify === 'function') {
       const originalNotify = state._notify.bind(state);
-      _patches.push({ obj: state, key: '_notify', original: state._notify });
+      _patches.push({
+        obj: state, key: '_notify', original: state._notify,
+        cleanup: () => { try { delete state.__minixDebugRefreshHooked; } catch (_) { state.__minixDebugRefreshHooked = false; } }
+      });
       state._notify = (...args) => {
         const result = originalNotify(...args);
         _refreshComponentsTabSoon();
         return result;
       };
     }
+    // Mark as hooked only after all patches registered successfully
+    state.__minixDebugRefreshHooked = true;
   }
 
   // ─── Prop diff tracing ──────────────────────────────────────────────────────
@@ -616,7 +622,6 @@ const MiniX_Debug = (() => {
 
   function _installGlobalPatches(flags) {
     if (_globalPatchesApplied) return;
-    _globalPatchesApplied = true;
 
     // ── x-for: wrap _compileForDirective ──────────────────────────────────────
     if (flags.loops && typeof MiniX_Compiler !== 'undefined') {
@@ -702,6 +707,8 @@ const MiniX_Debug = (() => {
       _wrapDirective('_compileScopedDataDirective','x-data');
       _wrapDirective('_compileTransitionDirective','x-transition');
     }
+    // Mark applied only after all patches complete successfully
+    _globalPatchesApplied = true;
   }
 
   // ─── In-page debug panel ────────────────────────────────────────────────────
@@ -996,8 +1003,13 @@ const MiniX_Debug = (() => {
     ? new Intl.DateTimeFormat('en', _EVENT_TIME_OPTIONS)
     : null;
 
+  // Whitelist of valid event types for the CSS class — prevents class-attribute injection
+  // if a spoofed minix-debug:event ever arrives with a crafted type string.
+  const _VALID_EVENT_TYPES = new Set(['lifecycle','watcher','state','directive','props','loop','effect','store','router']);
+
   function _buildEventRow(ev) {
     const icon = _EVENT_TYPE_LABEL[ev.type] || '⚪';
+    const safeType = _VALID_EVENT_TYPES.has(ev.type) ? ev.type : 'effect';
     _rowDate.setTime(ev.ts);
     const time = _rowTimeFormatter
       ? _rowTimeFormatter.format(_rowDate)
@@ -1017,7 +1029,7 @@ const MiniX_Debug = (() => {
       : ev.type === 'router'
       ? `<span class="phase">${_escapeHtml(_routerEventSummary(ev.detail))}</span>`
       : '';
-    return `<div class="minix-event ${ev.type}">
+    return `<div class="minix-event ${safeType}">
       ${_escapeHtml(icon)} <span class="comp">${_escapeHtml(ev.component)}</span> ${detail}
       <span class="muted">${time}</span>
     </div>`;
@@ -1067,7 +1079,7 @@ const MiniX_Debug = (() => {
     for (const [id, comp] of _liveComponents) {
       const summary = _componentSummary(id, comp);
       const stateJson = JSON.stringify(summary.state, null, 2);
-      rows.push(`<div class="minix-comp-row" data-id="${id}" title="Click to inspect in console">
+      rows.push(`<div class="minix-comp-row" data-id="${_escapeHtml(id)}" title="Click to inspect in console">
         <div class="minix-comp-row-head">
           <span class="name">${_escapeHtml(summary.name)}</span>
           <span class="state-badge">${summary.stateKeys} state / ${summary.propKeys} props</span>
@@ -1082,7 +1094,6 @@ const MiniX_Debug = (() => {
 
   function _renderStoresTab(el) {
     if (!el) return;
-    _hookMiniXStore();
     const rows = [];
     if (typeof window !== 'undefined' && window.MiniXStore?.list && window.MiniXStore?.use) {
       for (const name of window.MiniXStore.list()) {
@@ -1226,7 +1237,7 @@ const MiniX_Debug = (() => {
 
       /** Return the last N recorded events */
       events(n = 50) {
-        const limit = Math.max(0, Number(n) || 0);
+        const limit = Math.max(0, Number.isFinite(+n) ? +n : 50);
         const start = Math.max(0, _events.length - limit);
         const slice = [];
         const table = [];
@@ -1423,7 +1434,6 @@ const MiniX_Debug = (() => {
 
           // Patch updateProps to emit prop diffs
           if (flags.props && component.updateProps && !component.__minixDebugPropsHooked) {
-            component.__minixDebugPropsHooked = true;
             const origUpdateProps = component.updateProps.bind(component);
             _patches.push({
               obj: component,
@@ -1437,6 +1447,8 @@ const MiniX_Debug = (() => {
               _tracePropDiff(flags, _componentLabel(component), prevProps, nextProps);
               return result;
             };
+            // Set only after patch registered successfully
+            component.__minixDebugPropsHooked = true;
           }
 
           // Return nothing — we only need side-effects, no new instance properties.
@@ -1454,7 +1466,6 @@ const MiniX_Debug = (() => {
 
           // One-time hook wrapping per component instance
           if (!component.__minixDebugHooked && component._callHook) {
-            component.__minixDebugHooked = true;
             const origCallHook = component._callHook.bind(component);
             _patches.push({
               obj: component,
@@ -1481,6 +1492,8 @@ const MiniX_Debug = (() => {
 
               return origCallHook(hookName, meta);
             };
+            // Set only after patch and replacement are both complete
+            component.__minixDebugHooked = true;
           }
 
           return {}; // no scope additions needed
@@ -1496,6 +1509,9 @@ const MiniX_Debug = (() => {
    * Useful for test teardown or when switching to production mode at runtime.
    */
   function uninstall() {
+    // Reset the bridge-patched flag BEFORE restoring patches so that
+    // a subsequent install() can re-patch MiniXStore.define correctly.
+    _storeBridgePatched = false;
     _restorePatches();
     _globalPatchesApplied = false;
     _installCount = 0;
@@ -1503,7 +1519,6 @@ const MiniX_Debug = (() => {
     _eventSeq = 0;
     _dispatchDepth = 0;
     _panelLastRenderedSeq = -1;
-    _componentsRefreshPending = false;
     for (const app of _installedApps) {
       try { delete app.__minixDebugInstalled; } catch (_) { app.__minixDebugInstalled = false; }
     }
@@ -1532,8 +1547,6 @@ const MiniX_Debug = (() => {
     }
     _storeDebugListener = null;
     _storeDebugListenerInstalled = false;
-    _storeOriginalDefine = null;
-    _storeBridgePatched = false;
     if (typeof document !== 'undefined' && _pendingPanelCreate) {
       document.removeEventListener('DOMContentLoaded', _createPanel);
       _pendingPanelCreate = false;
@@ -1547,8 +1560,8 @@ const MiniX_Debug = (() => {
   /** Access the raw event log from outside the plugin */
   function getEvents(n) {
     if (n == null) return _events.slice();
-    const limit = Math.max(0, Number(n) || 0);
-    return limit ? _events.slice(-limit) : [];
+    const limit = Math.max(0, Number.isFinite(+n) ? +n : 0);
+    return _events.slice(-limit);
   }
 
   return { plugin, uninstall, getEvents };
