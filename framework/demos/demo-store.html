@@ -571,6 +571,16 @@ const themeStore = MiniXStore.define('theme', {
     cssVarsCount: 0,
   }),
 
+  init() {
+    try {
+      const savedActive = localStorage.getItem('minix-demo:theme-active');
+      const savedMode = localStorage.getItem('minix-demo:theme-mode');
+      if (savedActive && PALETTES.some(p => p.id === savedActive)) this.active = savedActive;
+      if (savedMode === 'dark' || savedMode === 'light') this.mode = savedMode;
+    } catch (_) {}
+    this._applyToDom();
+  },
+
   getters: {
     current:     (s) => PALETTES.find(p => p.id === s.active) || PALETTES[0],
     currentBg:   (s) => (PALETTES.find(p => p.id === s.active) || PALETTES[0]).bg,
@@ -582,12 +592,14 @@ const themeStore = MiniXStore.define('theme', {
     select(id) {
       if (!PALETTES.find(p => p.id === id)) return;
       this.$set('active', id);
+      try { localStorage.setItem('minix-demo:theme-active', id); } catch (_) {}
       this._applyToDom();
       logStore.push('theme', `palette → ${id}`);
     },
     toggleMode() {
       const next = this.$get('mode') === 'dark' ? 'light' : 'dark';
       this.$set('mode', next);
+      try { localStorage.setItem('minix-demo:theme-mode', next); } catch (_) {}
       this._applyToDom();
       logStore.push('theme', `mode → ${next}`);
     },
@@ -607,8 +619,6 @@ const themeStore = MiniXStore.define('theme', {
   },
 });
 
-// Apply initial theme
-themeStore._applyToDom();
 
 // ══════════════════════════════════════════════════════════════════
 // 5. Root component + App bootstrap

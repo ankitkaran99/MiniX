@@ -42,6 +42,10 @@
  *   const logStore = MiniXStore.define('log', { ... });
  *
  *   MiniXStore.define('todos', {
+ *     init(store) {
+ *       const saved = localStorage.getItem('todos-filter');
+ *       if (saved) this.filter = saved;
+ *     },
  *     actions: {
  *       add() {
  *         // ...
@@ -157,6 +161,7 @@ const MiniXStore = (() => {
     // (destroy() already zeroes the array before invoking the callbacks).
     const _watcherCleanups = new Set();
     let _destroyed = false;
+    const _initDef = typeof def.init === 'function' ? def.init : null;
 
     // 3. Action context — "this" inside every action
     const actionCtx = Object.create(null);
@@ -794,6 +799,31 @@ const MiniXStore = (() => {
     };
 
     _registry.set(name, instance);
+
+    if (_initDef) {
+      const debug = _canEmitDebug();
+      if (debug) _emitDebug('init:start', { store: name });
+      try {
+        const result = _initDef.call(actionThis, _proxy);
+        if (result && typeof result.then === 'function') {
+          result.then(
+            () => {
+              if (debug) _emitDebug('init:finish', { store: name });
+            },
+            (error) => {
+              console.error(`[MiniXStore "${name}"] init() failed.`, error);
+              if (debug) _emitDebug('init:error', { store: name, error: String(error?.message || error) });
+            }
+          );
+        } else if (debug) {
+          _emitDebug('init:finish', { store: name });
+        }
+      } catch (error) {
+        console.error(`[MiniXStore "${name}"] init() failed.`, error);
+        if (debug) _emitDebug('init:error', { store: name, error: String(error?.message || error) });
+      }
+    }
+
     return _proxy;
   }
 
@@ -805,7 +835,7 @@ const MiniXStore = (() => {
    * then pass it into components via stores().
    *
    * @param {string} name
-   * @param {object} def  { state, getters, actions }
+   * @param {object} def  { state, init, getters, actions }
    * @returns {StoreProxy}
    */
   function define(name, def = {}) {

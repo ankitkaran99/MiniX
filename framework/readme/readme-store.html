@@ -268,11 +268,15 @@ app.mount('#app');</code></pre>
       <span>Defining a Store</span>
     </div>
     <p>Use <code class="inline-code">MiniXStore.define(name, definition)</code> to create a reactive store. Returns a store proxy that can be imported anywhere.</p>
-    <pre><code class="language-javascript">const counterStore = MiniXStore.define('counter', {
+<pre><code class="language-javascript">const counterStore = MiniXStore.define('counter', {
   state: () => ({
     count: 0,
     step: 1
   }),
+  init(store) {
+    const saved = Number(localStorage.getItem('counter:count'));
+    if (Number.isFinite(saved)) this.count = saved;
+  },
   getters: {
     doubled: (state) => state.count * 2,
     sign: (state) => state.count > 0 ? 'positive' : state.count < 0 ? 'negative' : 'zero'
@@ -286,7 +290,7 @@ app.mount('#app');</code></pre>
     setStep(step) { this.step = step; }
   }
 });</code></pre>
-    <p><strong>Inside actions</strong> you can access <code>this.stateKey</code> directly (reactive proxy), or use helper methods: <code>this.$set(path, value)</code>, <code>this.$batch(fn)</code>, <code>this.$patch(path, updater)</code>.</p>
+    <p><strong>Inside actions and init()</strong> you can access <code>this.stateKey</code> directly (reactive proxy), or use helper methods: <code>this.$set(path, value)</code>, <code>this.$batch(fn)</code>, <code>this.$patch(path, updater)</code>. The optional <code>init(store)</code> hook runs once after state initialization and registration, so it can hydrate from <code>localStorage</code> or start an async backend bootstrap.</p>
   </div>
 
   <!-- ========== USING STORES IN COMPONENTS ========== -->
@@ -377,6 +381,7 @@ const todosStore = MiniXStore.define('todos', {
       <div class="api-card"><h3>$reset()</h3><p>Reset store to initial state defined in <code>state()</code>.</p></div>
       <div class="api-card"><h3>watch(path, callback)</h3><p>Watch a specific state path. Returns unsubscribe function. <code>this.watch('count', (val, old) => ...)</code></p></div>
       <div class="api-card"><h3>snapshot()</h3><p>Returns a frozen copy of entire state (debugging).</p></div>
+      <div class="api-card"><h3>init(store)</h3><p>Optional one-time hook after state creation. Use it for hydration, persisted preferences, or async bootstrap work.</p></div>
     </div>
     <p><strong>Getter caching:</strong> getters are lazily computed and cached until their tracked dependencies change — automatic and efficient.</p>
   </div>
@@ -480,6 +485,7 @@ MiniX.createApp(MyApp)
       <thead><tr><th>Property</th><th>Type</th><th>Description</th></tr></thead>
       <tbody>
         <tr><td><code>state</code></td><td><code>() => Object | Object</code></td><td>Initial state. Function is recommended for fresh state on reset.</td></tr>
+        <tr><td><code>init</code></td><td><code>(store) => void | Promise&lt;any&gt;</code></td><td>Optional hook called once after initial state exists and the store is registered. <code>this</code> has the normal store action context.</td></tr>
         <tr><td><code>getters</code></td><td><code>{ [key]: (state) => any }</code></td><td>Computed properties, cached, reactive.</td></tr>
         <tr><td><code>actions</code></td><td><code>{ [key]: function }</code></td><td>Methods that can mutate state and call other actions. <code>this</code> provides state + helpers.</td></tr>
       </tbody>
