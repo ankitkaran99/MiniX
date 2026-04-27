@@ -266,14 +266,19 @@ class MiniX_State {
 	_isArrayIndex(prop) {
 		if (typeof prop === 'number') return Number.isInteger(prop) && prop >= 0 && prop < 4294967295;
 		if (typeof prop !== 'string' || prop === '') return false;
+		const n = prop.charCodeAt(0);
+		// Fast-reject: first char must be a digit 0-9
+		if (n < 48 || n > 57) return false;
 		const index = Number(prop);
 		return Number.isInteger(index) && index >= 0 && index < 4294967295 && String(index) === prop;
 	}
 
 	_unwrapProxy(value) {
-		return value && typeof value === 'object' && (this._proxySet.has(value) || MiniX_State._proxySet.has(value)) && value.__raw
-			? value.__raw
-			: value;
+		if (!value || typeof value !== 'object') return value;
+		if ((this._proxySet.has(value) || MiniX_State._proxySet.has(value)) && value.__raw !== undefined) {
+			return value.__raw;
+		}
+		return value;
 	}
 
 	_isWrappable(value) {
@@ -819,7 +824,7 @@ class MiniX_State {
 							const oldVal = obj.get(key);
 							const oldSize = obj.size;
 							const wrapped = self._isWrappable(value) ? self._wrap(value, childPath) : value;
-							if (hadKey && Object.is(oldVal, wrapped)) return receiver;
+							if (hadKey && (Object.is(oldVal, wrapped) || Object.is(self._unwrapProxy(oldVal), value))) return receiver;
 							if (hadKey) self._unlinkTargetFromParent(oldVal, obj, String(key));
 							obj.set(key, wrapped);
 							self._devCapture('map:set', childPath, oldVal, wrapped, { type: 'map:set' });
@@ -841,10 +846,15 @@ class MiniX_State {
 						const oldSize = obj.size;
 						const deleted = obj.delete(key);
 						if (deleted) {
-							self._unlinkTargetFromParent(oldVal, obj, String(key));
-							self._devCapture('map:delete', childPath, oldVal, undefined, { type: 'map:delete' });
-							self._bubbleTargetNotify(obj, key, undefined, oldVal, { type: 'map:delete' });
-							self._bubbleTargetNotify(obj, MiniX_State.SIZE_KEY, obj.size, oldSize, { type: 'map:delete' });
+							MiniX_Effect._beginBatch();
+							try {
+								self._unlinkTargetFromParent(oldVal, obj, String(key));
+								self._devCapture('map:delete', childPath, oldVal, undefined, { type: 'map:delete' });
+								self._bubbleTargetNotify(obj, key, undefined, oldVal, { type: 'map:delete' });
+								self._bubbleTargetNotify(obj, MiniX_State.SIZE_KEY, obj.size, oldSize, { type: 'map:delete' });
+							} finally {
+								MiniX_Effect._endBatch();
+							}
 						}
 						return deleted;
 					};
@@ -1862,6 +1872,7 @@ class MiniX_Sanitizer {
 			...options
 		};
 	}
+	static _UNSAFE_URL_ATTRS = new Set(['href', 'src', 'xlink:href', 'action', 'formaction', 'data']);
 	hasDOMPurify() { return typeof window !== 'undefined' && typeof window.DOMPurify !== 'undefined'; }
 
 	_buildAttrLookup(allowedAttributes) {
@@ -1974,7 +1985,7 @@ class MiniX_Sanitizer {
 			[...node.attributes].forEach((attr) => {
 				const attrName = attr.name.toLowerCase();
 				const attrValue = String(attr.value || '').trim();
-				const unsafeUrlAttr = ['href', 'src', 'xlink:href'].includes(attrName) && /^(javascript:|data:text\/html)/i.test(attrValue);
+				const unsafeUrlAttr = MiniX_Sanitizer._UNSAFE_URL_ATTRS.has(attrName) && /^(javascript:|data:text\/html)/i.test(attrValue);
 				const unsafeStyle = attrName === 'style' && /url\s*\(\s*(['"]?)\s*javascript:|expression\s*\(/i.test(attrValue);
 				if (!isAttrAllowed(tag, attrName) || unsafeUrlAttr || unsafeStyle) node.removeAttribute(attr.name);
 			});
@@ -2109,13 +2120,20 @@ class MiniX_Listener {
 		};
 
 		const scheduleSubscribers = () => {
-			descriptor.subscribers.forEach((effect) => effect?.schedule?.());
+			for (const effect of descriptor.subscribers) {
+				if (effect?.active) effect.schedule();
+				else descriptor.subscribers.delete(effect);
+			}
 		};
 
 		const api = {
 			get: () => {
 				const active = typeof MiniX_Effect !== 'undefined' ? MiniX_Effect.activeEffect : null;
-				if (active) descriptor.subscribers.add(active);
+				if (active) {
+					descriptor.subscribers.add(active);
+					// Clean up stopped effects lazily to avoid a leak
+					if (!active.active) descriptor.subscribers.delete(active);
+				}
 
 				if (!descriptor.effect) {
 					descriptor.effect = new MiniX_Effect(() => getter.call(context), {
@@ -2268,7 +2286,7 @@ class MiniX_Listener {
 
 	cleanup() {
 		
-		for (const fn of Array.from(this._cleanups)) fn();
+		for (const fn of this._cleanups) fn();
 		this._cleanups.clear();
 		for (const fn of this._watcherCleanups) fn();
 		this._watcherCleanups.clear();
@@ -2486,10 +2504,13 @@ class MiniX_Effect {
 
 	static _scheduleFlush() {
 		if (MiniX_Effect._batchDepth > 0 || MiniX_Effect._flushPromise) return;
-		MiniX_Effect._flushPromise = Promise.resolve().then(() => {
-			MiniX_Effect._flushPromise = null;
-			MiniX_Effect._flushAll();
-		});
+		MiniX_Effect._flushPromise = new Promise((resolve) =>
+			MiniX_State._scheduleMicrotask(() => {
+				MiniX_Effect._flushPromise = null;
+				MiniX_Effect._flushAll();
+				resolve();
+			})
+		);
 	}
 
 	static _enqueue(effect) {
@@ -2569,7 +2590,8 @@ class MiniX_Effect {
 				// If no new effects were enqueued during this drain, we're done.
 				if (MiniX_Effect._queues.pre.size === 0 && MiniX_Effect._queues.post.size === 0) break;
 				// If queues are exactly the same size as before draining, we're in a hard cycle.
-				if (MiniX_Effect._queues.pre.size >= preSizeBefore && MiniX_Effect._queues.post.size >= postSizeBefore) {
+				if (MiniX_Effect._queues.pre.size >= preSizeBefore && MiniX_Effect._queues.post.size >= postSizeBefore
+					&& (MiniX_Effect._queues.pre.size > 0 || MiniX_Effect._queues.post.size > 0)) {
 					console.warn('[MiniX_Effect] Reactive cycle detected — queues are not shrinking. Aborting flush.');
 					break;
 				}
@@ -2600,9 +2622,7 @@ class MiniX_Effect {
 		this._cleanupDeps();
 		this.active = false;
 		this._scheduled = false;
-		MiniX_Effect._queues.pre.delete(this);
-		MiniX_Effect._queues.post.delete(this);
-		MiniX_Effect._queues.frame.delete(this);
+		for (const q of Object.values(MiniX_Effect._queues)) q.delete(this);
 		return true;
 	}
 }
@@ -2625,9 +2645,17 @@ class MiniX_Compiler {
 	}
 
 	_normalizeDirectiveName(name) {
-		
-		if (typeof name === 'string' && name === name.trim() && name === name.toLowerCase()) return name;
-		return String(name || '').trim().toLowerCase();
+		if (typeof name !== 'string') return String(name || '').trim().toLowerCase();
+		// Fast-path: all lowercase ASCII with no leading/trailing whitespace
+		let clean = true;
+		for (let i = 0; i < name.length; i++) {
+			const c = name.charCodeAt(i);
+			if (c >= 65 && c <= 90) { clean = false; break; }  // uppercase A-Z
+			if (i === 0 || i === name.length - 1) {
+				if (c === 32 || c === 9 || c === 10 || c === 13) { clean = false; break; }
+			}
+		}
+		return clean ? name : name.trim().toLowerCase();
 	}
 
 	_warn(message, ...args) {
@@ -3328,7 +3356,7 @@ class MiniX_Compiler {
 			
 			
 			if (typeof result === 'function') result.call(fireScope, event);
-			if (mods.has('once')) el.removeEventListener(eventName, listener, mods.has('capture'));
+			// Note: 'once' for non-delegated path is handled below at addEventListener level
 		};
 		const delegateRoot = this._shouldDelegateEvent(eventName, mods) ? this._getDelegatedEventRoot(component) : null;
 		if (delegateRoot) {
@@ -3351,7 +3379,7 @@ class MiniX_Compiler {
 				if (idx >= 0) current.splice(idx, 1);
 			};
 		}
-		el.addEventListener(eventName, listener, mods.has('capture'));
+		el.addEventListener(eventName, listener, mods.has('capture') ? { capture: true } : mods.has('once') ? { once: true } : false);
 		return () => el.removeEventListener(eventName, listener, mods.has('capture'));
 	}
 
@@ -3925,7 +3953,10 @@ class MiniX_Compiler {
 
 		el.__minix_scope_provider__ = scopeProvider;
 
+		const subtreeCleanup = this.compile(el, component);
+
 		return () => {
+			subtreeCleanup?.();
 			if (el.__minix_scope_provider__ === scopeProvider) delete el.__minix_scope_provider__;
 			delete el.__minix_scoped_state__;
 		};
@@ -5474,7 +5505,10 @@ class MiniX_Compiler {
 					key = entry.key;
 				}
 
-				if (seenKeys.has(key)) this._warn(`Duplicate x-for key "${String(key)}" at index ${index}. Keys must be unique and stable.`);
+				if (seenKeys.has(key)) {
+					this._warn(`Duplicate x-for key "${String(key)}" at index ${index}. Keys must be unique and stable.`);
+					return; // skip duplicate to avoid orphaned blocks
+				}
 				seenKeys.add(key);
 
 				let block = keyed.get(key);
@@ -5905,7 +5939,7 @@ class MiniX_Compiler {
 					if (el.hasAttribute('x-props') && !el.hasAttribute('x-component')) this._warn('x-props has no effect without x-component', el);
 					if (!directives.length) return cleanups;
 					const structural = directives.find((entry) => entry.structural);
-		if (structural) {
+					if (structural) {
 						if (structural.name !== 'x-for') directives.forEach((directive) => {
 							if (directive.structural) return;
 							if (structural.name === 'x-component' && (directive.kind === 'event' || directive.name === 'x-bind' || directive.name.startsWith(':') || directive.name.startsWith('x-bind:'))) return;
@@ -6834,10 +6868,12 @@ class MiniX_Component {
 	_normalizePropsDefinition(definition) {
 		if (!definition) return {};
 		if (Array.isArray(definition)) {
-			return definition.reduce((acc, key) => {
+			const acc = {};
+			for (let i = 0; i < definition.length; i++) {
+				const key = definition[i];
 				if (typeof key === 'string' && key) acc[key] = {};
-				return acc;
-			}, {});
+			}
+			return acc;
 		}
 		if (typeof definition !== 'object') return {};
 
@@ -7368,7 +7404,10 @@ class MiniX_Component {
 		if (this.isDestroyed) return true;
 		this._callHook('beforeUnmount', { reason: 'destroy' });
 		this._destroyChildren();
-		if (typeof this._compilerCleanup === 'function') this._compilerCleanup();
+		if (typeof this._compilerCleanup === 'function') {
+			this._compilerCleanup();
+			this._compilerCleanup = null;
+		}
 		this.listener.cleanup();
 		this._effects.forEach((effect) => effect.stop());
 		this._effects = new Set();
@@ -7681,7 +7720,8 @@ class MiniX_Request {
 
 		let reqContext = { url, method: desc._method, headers, body: fetchBody, descriptor: desc };
 		for (const interceptor of this._interceptors.request) {
-			try { reqContext = (await interceptor(reqContext)) || reqContext; } catch (_) { }
+			try { reqContext = (await interceptor(reqContext)) || reqContext; }
+			catch (e) { console.warn('[MiniX_Request] Request interceptor threw:', e); }
 		}
 		const requestUrl = reqContext.url || url;
 		const requestMethod = String(reqContext.method || '').toUpperCase();
@@ -7774,7 +7814,8 @@ class MiniX_Request {
 
 			let resContext = { response, descriptor: desc };
 			for (const interceptor of this._interceptors.response) {
-				try { resContext = (await interceptor(resContext)) || resContext; } catch (_) { }
+				try { resContext = (await interceptor(resContext)) || resContext; }
+				catch (e) { console.warn('[MiniX_Request] Response interceptor threw:', e); }
 			}
 
 			const data = await this._read(resContext.response, desc._responseType);
@@ -7870,7 +7911,8 @@ class MiniX_Request {
 	}
 
 	invalidate(url, params = {}) {
-		const prefix = this._cacheKey({ _method: 'GET', _url: url, _params: params, _responseType: '' });
+		const resolvedURL = this._resolveURL(url, params);
+		const prefix = `GET:${resolvedURL}:`;
 		for (const key of this._cache.keys()) {
 			if (key.startsWith(prefix)) this._cache.delete(key);
 		}
@@ -8076,13 +8118,13 @@ class MiniX_Request {
 			const { done, value } = await reader.read();
 			if (done) break;
 			chunks.push(value);
-			loaded += value.length;
+			loaded += value.byteLength;
 			try { onProgress({ loaded, total, percent: total ? Math.round(loaded / total * 100) : 0 }); }
 			catch (_) { }
 		}
 		const merged = new Uint8Array(loaded);
 		let offset = 0;
-		for (const chunk of chunks) { merged.set(chunk, offset); offset += chunk.length; }
+		for (const chunk of chunks) { merged.set(chunk, offset); offset += chunk.byteLength; }
 		return new Response(merged, { status: response.status, statusText: response.statusText, headers: response.headers });
 	}
 

@@ -62,7 +62,7 @@ const MiniX_Debug = (() => {
   // ─── Constants ─────────────────────────────────────────────────────────────
 
   const PLUGIN_NAME    = 'mini-x-debug';
-  const PLUGIN_VERSION = '1.0.0';
+  const PLUGIN_VERSION = '1.0.3';
   const MAX_EVENTS     = 500;   // ring-buffer size for event log
   const MAX_VALUE_LEN  = 120;   // truncate serialised values in logs
 
@@ -82,7 +82,9 @@ const MiniX_Debug = (() => {
     newValue:  'color:#16a34a;font-weight:normal',      // green
   };
 
-  // ─── Shared event ring-buffer ───────────────────────────────────────────────
+  // ─── Environment detection (evaluated once at load time) ────────────────────
+  const _hasWindow   = typeof window   !== 'undefined';
+  const _hasDocument = typeof document !== 'undefined';
 
   /** @type {Array<{ts:number, type:string, component:string, detail:object}>} */
   const _events = [];
@@ -90,14 +92,15 @@ const MiniX_Debug = (() => {
   let   _dispatchDepth = 0;
 
   function _trimBuffer(buffer, max) {
-    if (buffer.length > max) buffer.splice(0, buffer.length - max);
+    const excess = buffer.length - max;
+    if (excess > 0) buffer.splice(0, excess);
   }
 
   function _record(type, componentName, detail = {}) {
     const entry = { seq: ++_eventSeq, ts: Date.now(), type, component: componentName, detail };
     _events.push(entry);
     _trimBuffer(_events, MAX_EVENTS);
-    if (!_dispatchDepth && typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+    if (!_dispatchDepth && _hasWindow && typeof window.dispatchEvent === 'function') {
       // Pass only the new entry — callers that need the full log can call getEvents()
       const EventCtor = window.CustomEvent || (typeof CustomEvent !== 'undefined' ? CustomEvent : null);
       if (EventCtor) {
@@ -114,7 +117,8 @@ const MiniX_Debug = (() => {
       }
     }
     if (_panel) {
-      if (_panelEls?.count) _panelEls.count.textContent = `${_events.length} events`;
+      const panelEls = _panelEls;
+      if (panelEls?.count) panelEls.count.textContent = `${_events.length} events`;
       if (_activeTab === 'events') _renderPanelEventsSoon();
       else _refreshComponentsTabSoon();
     }
@@ -132,16 +136,8 @@ const MiniX_Debug = (() => {
   // Shared JSON replacer — avoids allocating an identical closure in both _safeSerialise and _safeClone
   function _jsonReplacer(_k, v) {
     if (typeof v === 'function') return '[Function]';
-    if (v instanceof Map) {
-      const entries = [];
-      for (const entry of v.entries()) entries.push(entry);
-      return { __Map: entries };
-    }
-    if (v instanceof Set) {
-      const values = [];
-      for (const item of v.values()) values.push(item);
-      return { __Set: values };
-    }
+    if (v instanceof Map) return { __Map: Array.from(v.entries()) };
+    if (v instanceof Set) return { __Set: Array.from(v.values()) };
     return v;
   }
 
@@ -243,7 +239,7 @@ const MiniX_Debug = (() => {
   }
 
   function _installStoreDebugListener() {
-    if (_storeDebugListenerInstalled || typeof window === 'undefined') return;
+    if (_storeDebugListenerInstalled || !_hasWindow) return;
     _storeDebugListener = (event) => {
       const payload = event.detail || {};
       const detail = {
@@ -262,7 +258,7 @@ const MiniX_Debug = (() => {
   }
 
   function _hookMiniXStore() {
-    if (typeof window === 'undefined' || !window.MiniXStore) return;
+    if (!_hasWindow || !window.MiniXStore) return;
     _installStoreDebugListener();
     const api = window.MiniXStore;
 
@@ -289,17 +285,13 @@ const MiniX_Debug = (() => {
   function _routerSnapshot(router) {
     try {
       const route = router.currentRoute || {};
-      const matched = [];
-      if (Array.isArray(route.matched)) {
-        for (let i = 0; i < route.matched.length; i++) {
-          const record = route.matched[i];
-          matched.push(record.name || record.fullPath || record.path);
-        }
-      }
+      const matched = Array.isArray(route.matched)
+        ? route.matched.map(r => r.name || r.fullPath || r.path)
+        : [];
       return _safeClone({
         fullPath: route.fullPath,
         path: route.path,
-        name: route.name || null,
+        name: route.name ?? null,
         params: route.params || {},
         query: route.query || {},
         hash: route.hash || '',
@@ -348,8 +340,10 @@ const MiniX_Debug = (() => {
       const cleanup = router.onDebug((payload) => {
         _routerEvents.push({ ts: payload.timestamp || Date.now(), detail: payload, router });
         _trimBuffer(_routerEvents, MAX_PANEL_ENTRIES);
-        // _record() already triggers _renderPanelEvents / _refreshComponentsTabSoon
-        _record('router', 'router', payload);
+        // Label includes router index so multi-router events are distinguishable in the panel
+        const routerIndex = Array.from(_routers).indexOf(router);
+        const routerLabel = routerIndex >= 0 ? `router:${routerIndex + 1}` : 'router';
+        _record('router', routerLabel, payload);
       });
       _routerCleanups.set(router, cleanup);
       _routers.add(router);
@@ -361,15 +355,16 @@ const MiniX_Debug = (() => {
 
   function _diffObjects(prev = {}, next = {}) {
     const changes = [];
+    const hop = Object.prototype.hasOwnProperty;
     // Check all keys in prev (covers removed + changed)
     for (const k in prev) {
-      if (Object.prototype.hasOwnProperty.call(prev, k) && !Object.is(prev[k], next[k])) {
+      if (hop.call(prev, k) && !Object.is(prev[k], next[k])) {
         changes.push({ key: k, from: prev[k], to: next[k] });
       }
     }
     // Check keys in next that were not in prev (covers added)
     for (const k in next) {
-      if (Object.prototype.hasOwnProperty.call(next, k) && !Object.prototype.hasOwnProperty.call(prev, k)) {
+      if (hop.call(next, k) && !hop.call(prev, k)) {
         changes.push({ key: k, from: undefined, to: next[k] });
       }
     }
@@ -379,19 +374,16 @@ const MiniX_Debug = (() => {
   function _copyOwnObject(value) {
     const out = {};
     if (!value || typeof value !== 'object') return out;
+    const hop = Object.prototype.hasOwnProperty;
     for (const key in value) {
-      if (Object.prototype.hasOwnProperty.call(value, key)) out[key] = value[key];
+      if (hop.call(value, key)) out[key] = value[key];
     }
     return out;
   }
 
   function _lifecycleDetail(phaseName, meta) {
     const detail = { phase: phaseName };
-    if (meta && typeof meta === 'object') {
-      for (const key in meta) {
-        if (Object.prototype.hasOwnProperty.call(meta, key)) detail[key] = meta[key];
-      }
-    }
+    if (meta && typeof meta === 'object') Object.assign(detail, meta);
     return detail;
   }
 
@@ -446,7 +438,8 @@ const MiniX_Debug = (() => {
   // Module-level constant — avoids re-allocating this object on every _log call
   const _LOG_CLR = {
     lifecycle: CLR.lifecycle, watcher: CLR.watcher, directive: CLR.directive,
-    props: CLR.props, loop: CLR.loop, effect: CLR.effect,
+    props: CLR.props, loop: CLR.loop, effect: CLR.effect, state: CLR.effect,
+    store: CLR.value, router: CLR.lifecycle,
   };
 
   // ─── Core logger ────────────────────────────────────────────────────────────
@@ -506,16 +499,16 @@ const MiniX_Debug = (() => {
     state.watch = (path, callback) => {
       const wrapped = (newVal, oldVal, key, meta) => {
         _record('watcher', componentName, { path, old: oldVal, new: newVal });
+        const serialOld = flags.verbose ? _safeSerialise(oldVal) : null;
+        const serialNew = flags.verbose ? _safeSerialise(newVal) : null;
         _log(
           flags, 'watcher', componentName,
           `"${path}" changed`,
-          flags.verbose
-            ? { path, old: _safeSerialise(oldVal), new: _safeSerialise(newVal) }
-            : null
+          flags.verbose ? { path, old: serialOld, new: serialNew } : null
         );
         if (flags.verbose) {
           console.log(
-            `  %cold%c ${_safeSerialise(oldVal)}  %c→  %cnew%c ${_safeSerialise(newVal)}`,
+            `  %cold%c ${serialOld}  %c→  %cnew%c ${serialNew}`,
             CLR.oldValue, '', CLR.muted, CLR.newValue, ''
           );
         }
@@ -537,13 +530,22 @@ const MiniX_Debug = (() => {
 
     _wrapStateWatchers(flags, state, componentName);
 
+    // Shared cleanup: clears the hook guard flag exactly once regardless of
+    // how many of the three patches below trigger their cleanup.
+    let _refreshHookCleared = false;
+    const _clearRefreshHook = () => {
+      if (_refreshHookCleared) return;
+      _refreshHookCleared = true;
+      try { delete state.__minixDebugRefreshHooked; } catch (_) { state.__minixDebugRefreshHooked = false; }
+    };
+
     if (flags.watchers) {
       const previousDevCaptureHook = typeof state._onDevCapture === 'function' ? state._onDevCapture.bind(state) : null;
       _patches.push({
         obj: state,
         key: '_onDevCapture',
         original: state._onDevCapture,
-        cleanup: () => { try { delete state.__minixDebugRefreshHooked; } catch (_) { state.__minixDebugRefreshHooked = false; } }
+        cleanup: _clearRefreshHook,
       });
       state._onDevCapture = (entry, raw = {}) => {
         if (previousDevCaptureHook) previousDevCaptureHook(entry, raw);
@@ -567,7 +569,7 @@ const MiniX_Debug = (() => {
         obj: state,
         key: '_bubbleTargetNotify',
         original: state._bubbleTargetNotify,
-        cleanup: () => { try { delete state.__minixDebugRefreshHooked; } catch (_) { state.__minixDebugRefreshHooked = false; } }
+        cleanup: _clearRefreshHook,
       });
       state._bubbleTargetNotify = (...args) => {
         const result = originalBubbleNotify(...args);
@@ -580,7 +582,7 @@ const MiniX_Debug = (() => {
       const originalNotify = state._notify.bind(state);
       _patches.push({
         obj: state, key: '_notify', original: state._notify,
-        cleanup: () => { try { delete state.__minixDebugRefreshHooked; } catch (_) { state.__minixDebugRefreshHooked = false; } }
+        cleanup: _clearRefreshHook,
       });
       state._notify = (...args) => {
         const result = originalNotify(...args);
@@ -623,9 +625,11 @@ const MiniX_Debug = (() => {
   function _installGlobalPatches(flags) {
     if (_globalPatchesApplied) return;
 
+    const needsCompiler = (flags.loops || flags.directives) && typeof MiniX_Compiler !== 'undefined';
+    const proto = needsCompiler ? MiniX_Compiler.prototype : null;
+
     // ── x-for: wrap _compileForDirective ──────────────────────────────────────
-    if (flags.loops && typeof MiniX_Compiler !== 'undefined') {
-      const proto = MiniX_Compiler.prototype;
+    if (flags.loops && proto) {
       const original = proto._compileForDirective;
 
       proto._compileForDirective = function _debugForDirective(el, expression, component) {
@@ -685,9 +689,7 @@ const MiniX_Debug = (() => {
     }
 
     // ── Directive debug logs ───────────────────────────────────────────────────
-    if (flags.directives && typeof MiniX_Compiler !== 'undefined') {
-      const proto = MiniX_Compiler.prototype;
-
+    if (flags.directives && proto) {
       const _wrapDirective = (methodName, label) => {
         const orig = proto[methodName];
         if (!orig) return;
@@ -757,7 +759,7 @@ const MiniX_Debug = (() => {
   }
 
   function _createPanel() {
-    if (typeof document === 'undefined' || _panel) return;
+    if (!_hasDocument || _panel) return;
     _pendingPanelCreate = false;
 
     if (!_panelStyle || !_panelStyle.isConnected) {
@@ -843,6 +845,12 @@ const MiniX_Debug = (() => {
         background:#11111b; border:1px solid #313244; border-radius:4px;
         color:#cdd6f4; font:10px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         white-space:pre-wrap; word-break:break-word;
+      }
+      .minix-comp-recent {
+        margin:4px 0 0; padding:4px 6px; max-height:80px; overflow:auto;
+        background:#181825; border:1px solid #313244; border-radius:4px;
+        color:#a6adc8; font:10px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        white-space:pre; word-break:break-all;
       }
     `;
       document.head.appendChild(_panelStyle);
@@ -950,9 +958,15 @@ const MiniX_Debug = (() => {
     });
     _panelEls.export.addEventListener('click', () => {
       const text = JSON.stringify(_events, null, 2);
-      navigator.clipboard?.writeText(text).then(() => {
-        console.log('[MiniX Debug] Event log copied to clipboard.');
-      });
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+          console.log('[MiniX Debug] Event log copied to clipboard.');
+        }).catch(() => {
+          console.warn('[MiniX Debug] Clipboard write failed. Event log available via window.MxDB.log');
+        });
+      } else {
+        console.log('[MiniX Debug] Clipboard API unavailable. Event log available via window.MxDB.log');
+      }
     });
 
     // ── Dragging ──────────────────────────────────────────────────────────────
@@ -973,7 +987,7 @@ const MiniX_Debug = (() => {
     };
     const _onMouseUp = () => { dragState = null; };
     header.addEventListener('mousedown', e => {
-      if (e.target.tagName === 'BUTTON') return;
+      if (e.target.closest('button')) return;
       const rect = _panel.getBoundingClientRect();
       dragState = { startX: e.clientX - rect.left, startY: e.clientY - rect.top };
       e.preventDefault();
@@ -1015,32 +1029,34 @@ const MiniX_Debug = (() => {
       ? _rowTimeFormatter.format(_rowDate)
       : _rowDate.toLocaleTimeString('en', _EVENT_TIME_OPTIONS);
     const detail = ev.type === 'watcher'
-      ? `<span class="phase">${_escapeHtml(ev.detail.path)}</span>`
+      ? `<span class="phase">${_escapeHtml(ev.detail?.path ?? '')}</span>`
       : ev.type === 'state'
-      ? `<span class="phase">${_escapeHtml(`${ev.detail.operation || 'set'} ${ev.detail.path || '(root)'}`)}</span>`
+      ? `<span class="phase">${_escapeHtml(`${ev.detail?.operation || 'set'} ${ev.detail?.path || '(root)'}`)}</span>`
       : ev.type === 'loop'
-      ? `<span class="phase">${_escapeHtml(ev.detail.kind)}</span>`
+      ? `<span class="phase">${_escapeHtml(ev.detail?.kind ?? '')}</span>`
       : ev.type === 'lifecycle'
-      ? `<span class="phase">${_escapeHtml(ev.detail.phase)}</span>`
+      ? `<span class="phase">${_escapeHtml(ev.detail?.phase ?? '')}</span>`
       : ev.type === 'directive'
-      ? `<span class="phase">${_escapeHtml(ev.detail.directive)}</span>`
+      ? `<span class="phase">${_escapeHtml(ev.detail?.directive ?? '')}</span>`
       : ev.type === 'store'
       ? `<span class="phase">${_escapeHtml(_storeEventSummary(ev.detail))}</span>`
       : ev.type === 'router'
       ? `<span class="phase">${_escapeHtml(_routerEventSummary(ev.detail))}</span>`
       : '';
     return `<div class="minix-event ${safeType}">
-      ${_escapeHtml(icon)} <span class="comp">${_escapeHtml(ev.component)}</span> ${detail}
-      <span class="muted">${time}</span>
+      ${icon} <span class="comp">${_escapeHtml(ev.component)}</span> ${detail}
+      <span class="muted">${_escapeHtml(time)}</span>
     </div>`;
   }
 
   function _renderPanelEvents() {
     if (!_panel) return;
+    const panelEls = _panelEls;
+    if (!panelEls) return;
     // Always keep the footer count current regardless of active tab
-    if (_panelEls?.count) _panelEls.count.textContent = `${_events.length} events`;
+    if (panelEls.count) panelEls.count.textContent = `${_events.length} events`;
     if (_activeTab !== 'events') return;
-    const el = _panelEls?.events;
+    const el = panelEls.events;
     if (!el) return;
 
     const total = _events.length;
@@ -1078,7 +1094,9 @@ const MiniX_Debug = (() => {
     const rows = [];
     for (const [id, comp] of _liveComponents) {
       const summary = _componentSummary(id, comp);
-      const stateJson = JSON.stringify(summary.state, null, 2);
+      const stateJson = typeof summary.state === 'object'
+        ? JSON.stringify(summary.state, null, 2)
+        : String(summary.state);
       rows.push(`<div class="minix-comp-row" data-id="${_escapeHtml(id)}" title="Click to inspect in console">
         <div class="minix-comp-row-head">
           <span class="name">${_escapeHtml(summary.name)}</span>
@@ -1095,7 +1113,7 @@ const MiniX_Debug = (() => {
   function _renderStoresTab(el) {
     if (!el) return;
     const rows = [];
-    if (typeof window !== 'undefined' && window.MiniXStore?.list && window.MiniXStore?.use) {
+    if (_hasWindow && window.MiniXStore?.list && window.MiniXStore?.use) {
       for (const name of window.MiniXStore.list()) {
         let store;
         try { store = window.MiniXStore.use(name); } catch (_) { store = null; }
@@ -1112,15 +1130,18 @@ const MiniX_Debug = (() => {
           if (i) recentText += '\n';
           recentText += _escapeHtml(_storeEventSummary(recent[i].detail));
         }
+        const snapshotText = typeof snapshot === 'object'
+          ? JSON.stringify(snapshot, null, 2)
+          : String(snapshot);
         rows.push(`<div class="minix-comp-row" data-store="${_escapeHtml(name)}" title="Click to inspect store in console">
           <div class="minix-comp-row-head">
             <span class="name">${_escapeHtml(name)}</span>
             <span class="state-badge">${Object.keys(snapshot || {}).length} keys</span>
           </div>
-          <div class="minix-comp-state">${recent.length
+          <div class="minix-comp-recent">${recent.length
             ? recentText
             : 'No store actions or state changes yet'}</div>
-          <pre class="minix-comp-state">${_escapeHtml(JSON.stringify(snapshot, null, 2))}</pre>
+          <pre class="minix-comp-state">${_escapeHtml(snapshotText)}</pre>
         </div>`);
       }
     }
@@ -1147,15 +1168,18 @@ const MiniX_Debug = (() => {
         if (i) recentText += '\n';
         recentText += _escapeHtml(_routerEventSummary(recentEvents[i].detail));
       }
+      const snapshotText = typeof snapshot === 'object'
+        ? JSON.stringify(snapshot, null, 2)
+        : String(snapshot);
       rows.push(`<div class="minix-comp-row" data-router-index="${index}" title="Click to inspect router in console">
         <div class="minix-comp-row-head">
           <span class="name">router ${index + 1}</span>
           <span class="state-badge">${_escapeHtml(snapshot.fullPath || '/')}</span>
         </div>
-        <div class="minix-comp-state">${recentEvents.length
+        <div class="minix-comp-recent">${recentEvents.length
           ? recentText
           : 'No router navigation or middleware events yet'}</div>
-        <pre class="minix-comp-state">${_escapeHtml(JSON.stringify(snapshot, null, 2))}</pre>
+        <pre class="minix-comp-state">${_escapeHtml(snapshotText)}</pre>
       </div>`);
       index++;
     }
@@ -1185,29 +1209,25 @@ const MiniX_Debug = (() => {
       /** List all live component names */
       components() {
         const list = [];
-        const table = [];
-        let index = 0;
         for (const [id, comp] of _liveComponents) {
           const state = _componentStateSnapshot(comp);
           const props = _componentPropsSnapshot(comp);
-          const entry = {
-            index,
+          list.push({
+            index: list.length,
             id,
             component: _componentLabel(comp),
             mounted: !!comp.isMounted,
             state,
             props,
-          };
-          list.push(entry);
-          table.push({
-            index: entry.index,
-            component: entry.component,
-            mounted: entry.mounted,
-            state: _safeSerialise(state, 140),
-            props: _safeSerialise(props, 100),
           });
-          index++;
         }
+        const table = list.map(entry => ({
+          index:     entry.index,
+          component: entry.component,
+          mounted:   entry.mounted,
+          state:     _safeSerialise(entry.state, 140),
+          props:     _safeSerialise(entry.props, 100),
+        }));
         console.table(table);
         return list;
       },
@@ -1237,20 +1257,15 @@ const MiniX_Debug = (() => {
 
       /** Return the last N recorded events */
       events(n = 50) {
-        const limit = Math.max(0, Number.isFinite(+n) ? +n : 50);
-        const start = Math.max(0, _events.length - limit);
-        const slice = [];
-        const table = [];
-        for (let i = start; i < _events.length; i++) {
-          const e = _events[i];
-          slice.push(e);
-          table.push({
-            seq:       e.seq,
-            type:      e.type,
-            component: e.component,
-            detail:    _safeSerialise(e.detail, 80),
-          });
-        }
+        const parsed = +n;
+        const limit = Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 50;
+        const slice = _events.slice(-limit);
+        const table = slice.map(e => ({
+          seq:       e.seq,
+          type:      e.type,
+          component: e.component,
+          detail:    _safeSerialise(e.detail, 80),
+        }));
         console.table(table);
         return slice;
       },
@@ -1266,7 +1281,7 @@ const MiniX_Debug = (() => {
       /** List MiniXStore stores and snapshots */
       stores() {
         _hookMiniXStore();
-        const api = typeof window !== 'undefined' ? window.MiniXStore : null;
+        const api = _hasWindow ? window.MiniXStore : null;
         const list = [];
         if (api?.list && api?.use) {
           for (const name of api.list()) {
@@ -1276,21 +1291,17 @@ const MiniX_Debug = (() => {
             list.push({ name, snapshot: _storeSnapshot(store), store });
           }
         }
-        const table = [];
-        for (let i = 0; i < list.length; i++) {
-          const entry = list[i];
-          table.push({
-            store: entry.name,
-            state: _safeSerialise(entry.snapshot, 160)
-          });
-        }
+        const table = list.map(entry => ({
+          store: entry.name,
+          state: _safeSerialise(entry.snapshot, 160)
+        }));
         console.table(table);
         return list;
       },
 
       /** Inspect one MiniXStore store */
       store(name) {
-        const api = typeof window !== 'undefined' ? window.MiniXStore : null;
+        const api = _hasWindow ? window.MiniXStore : null;
         if (!api?.use) return null;
         let store;
         try { store = api.use(name); } catch (err) {
@@ -1307,7 +1318,7 @@ const MiniX_Debug = (() => {
 
       /** Inspect a tracked router */
       router(index = 0) {
-        const targetIndex = Number(index) || 0;
+        const targetIndex = Number.isFinite(+index) && +index >= 0 ? Math.floor(+index) : 0;
         let router = null;
         let i = 0;
         for (const entry of _routers) {
@@ -1379,7 +1390,9 @@ const MiniX_Debug = (() => {
     // Merge user options into the shared _defaultFlags object so that
     // MxDB.enable() runtime toggles apply to already-installed instances.
     // We still accept per-install overrides; they become the new baseline.
-    Object.assign(_defaultFlags, userOptions);
+    if (userOptions && typeof userOptions === 'object' && Object.keys(userOptions).length > 0) {
+      Object.assign(_defaultFlags, userOptions);
+    }
     const flags = _defaultFlags;
 
     return _definePlugin({
@@ -1398,12 +1411,12 @@ const MiniX_Debug = (() => {
         _hookMiniXStore();
 
         // ── Console bridge (once per page) ─────────────────────────────────
-        if (typeof window !== 'undefined' && !window.MxDB) {
+        if (_hasWindow && !window.MxDB) {
           _installConsoleBridge();
         }
 
         // ── In-page panel ──────────────────────────────────────────────────
-        if (flags.panel && typeof document !== 'undefined') {
+        if (flags.panel && _hasDocument) {
           if (document.readyState === 'loading') {
             if (!_pendingPanelCreate) {
               _pendingPanelCreate = true;
@@ -1441,7 +1454,11 @@ const MiniX_Debug = (() => {
               original: component.updateProps,
               cleanup: () => { try { delete component.__minixDebugPropsHooked; } catch (_) { component.__minixDebugPropsHooked = false; } }
             });
-            component.updateProps = (nextProps, opts) => {
+          component.updateProps = (nextProps, opts) => {
+              // NOTE: If the framework mutates _propsSource in-place before invoking
+              // updateProps, prevProps and nextProps will reference the same object.
+              // In that case, _diffObjects will produce no changes even though props
+              // did change. The safest fix is a shallow clone here.
               const prevProps = _copyOwnObject(component._propsSource);
               const result = origUpdateProps(nextProps, opts);
               _tracePropDiff(flags, _componentLabel(component), prevProps, nextProps);
@@ -1529,6 +1546,7 @@ const MiniX_Debug = (() => {
     _liveComponents.clear();
     _storeEvents.length = 0;
     _routerEvents.length = 0;
+    _events.length = 0;  // must clear alongside _eventSeq reset to keep seq ordering consistent
     _activeTab = 'events';
     _eventsRefreshPending = false;
     _componentsRefreshPending = false;
@@ -1542,25 +1560,29 @@ const MiniX_Debug = (() => {
       try { cleanup?.(); } catch (_) {}
     }
     _routers.clear();
-    if (typeof window !== 'undefined' && _storeDebugListener) {
+    if (_hasWindow && _storeDebugListener) {
       window.removeEventListener('minix-store:debug', _storeDebugListener);
     }
     _storeDebugListener = null;
     _storeDebugListenerInstalled = false;
-    if (typeof document !== 'undefined' && _pendingPanelCreate) {
+    if (_hasDocument && _pendingPanelCreate) {
       document.removeEventListener('DOMContentLoaded', _createPanel);
       _pendingPanelCreate = false;
     }
     if (_panel) { _panel._removeDragListeners?.(); _panel.remove(); _panel = null; _panelEls = null; }
     if (_panelStyle) { _panelStyle.remove(); _panelStyle = null; }
-    if (typeof window !== 'undefined') delete window.MxDB;
+    if (_hasWindow) delete window.MxDB;
     console.log('%c[MiniX Debug]%c Uninstalled.', CLR.plugin, CLR.muted);
   }
 
   /** Access the raw event log from outside the plugin */
   function getEvents(n) {
     if (n == null) return _events.slice();
-    const limit = Math.max(0, Number.isFinite(+n) ? +n : 0);
+    const parsed = +n;
+    // Non-finite positive (Infinity) means "all events"
+    if (parsed === Infinity) return _events.slice();
+    const limit = Math.floor(parsed);
+    if (!Number.isFinite(limit) || limit <= 0) return [];
     return _events.slice(-limit);
   }
 
