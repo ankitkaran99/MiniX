@@ -1,84 +1,100 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MiniX Router + Lazy Loader Demo</title>
-  <style>
-    * { box-sizing: border-box; }
-    body {
-      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-      background: #0f172a;
-      color: #e2e8f0;
-      margin: 0;
-      padding: 20px;
-    }
-    .nav {
-      display: flex;
-      gap: 12px;
-      background: #1e293b;
-      padding: 12px 20px;
-      border-radius: 40px;
-      margin-bottom: 24px;
-      flex-wrap: wrap;
-    }
-    .nav a {
-      color: #94a3b8;
-      text-decoration: none;
-      padding: 8px 16px;
-      border-radius: 30px;
-      cursor: pointer;
-      transition: 0.2s;
-    }
-    .nav a.active {
-      background: #3b82f6;
-      color: white;
-    }
-    .nav a:hover:not(.active) {
-      background: #334155;
-      color: #f1f5f9;
-    }
-    .view-container {
-      background: #1e293b;
-      border-radius: 24px;
-      padding: 24px;
-      min-height: 400px;
-      box-shadow: 0 8px 20px rgba(0,0,0,0.3);
-    }
-    h2 { margin-top: 0; color: #facc15; }
-    .card {
-      background: #0f172a;
-      padding: 16px;
-      border-radius: 20px;
-      margin-top: 16px;
-    }
-    .loader-info {
-      font-size: 0.85rem;
-      color: #94a3b8;
-      margin-top: 20px;
-      border-top: 1px solid #334155;
-      padding-top: 16px;
-      text-align: center;
-    }
-    code {
-      background: #0f172a;
-      padding: 2px 6px;
-      border-radius: 12px;
-      font-family: monospace;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MiniX Router + Lazy Loader Demo</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .nav {
+            display: flex;
+            gap: 12px;
+            background: #1e293b;
+            padding: 12px 20px;
+            border-radius: 40px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
+
+        .nav a {
+            color: #94a3b8;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .nav a.active {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .nav a:hover:not(.active) {
+            background: #334155;
+            color: #f1f5f9;
+        }
+
+        .view-container {
+            background: #1e293b;
+            border-radius: 24px;
+            padding: 24px;
+            min-height: 400px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        h2 {
+            margin-top: 0;
+            color: #facc15;
+        }
+
+        .card {
+            background: #0f172a;
+            padding: 16px;
+            border-radius: 20px;
+            margin-top: 16px;
+        }
+
+        .loader-info {
+            font-size: 0.85rem;
+            color: #94a3b8;
+            margin-top: 20px;
+            border-top: 1px solid #334155;
+            padding-top: 16px;
+            text-align: center;
+        }
+
+        code {
+            background: #0f172a;
+            padding: 2px 6px;
+            border-radius: 12px;
+            font-family: monospace;
+        }
+    </style>
 </head>
+
 <body>
-<div id="app"></div>
+    <div id="app"></div>
 
-<!-- Include MiniX core and the router (the version with integrated loader) -->
-<script src="../mini-x.js"></script>
-<script src="../plugin-router.js"></script>
+    <!-- Include MiniX core and the router (the version with integrated loader) -->
+    <script src="../mini-x.js"></script>
+    <script src="../plugin-router.js"></script>
 
-<script>
-  class Home {
-      template(){
-        return `
+    <script>
+        class Home {
+            view = `
         <div>
           <h2>🏠 Home</h2>
           <p>Welcome to the <strong>lazy‑loading demo</strong>.</p>
@@ -92,44 +108,41 @@
             </ul>
           </div>
         </div>
-      `
-      }
-    }
+      `;
+        }
 
-  // Create router with integrated lazy loader
-  const router = MiniXRouter.createRouter({
-    // Use hash history for easy file:// testing; switch to createWebHistory() if you have a server
-    history: MiniXRouter.createWebHashHistory(),
-    debug: true,  // see console logs for lazy loading events
-    loader: {
-      baseDir: './components',      // directory where .js component files live
-      ext: '.js',         // file extension
-      retries: 1,         // retry once on failure
-      timeout: 5000       // 5 seconds timeout
-    },
-    routes: [
-      {
-        path: '/',
-        name: 'home',
-        component: Home
-      },
-      {
-        path: '/customer',
-        name: 'customer',
-        component: (load) => load('Customer')   // the router passes the `load` function
-      },
-      {
-        path: '/reports',
-        name: 'reports',
-        component: (load) => load('ReportsPage')
-      }
-    ]
-  });
+        // Create router with integrated lazy loader
+        const router = MiniXRouter.createRouter({
+            // Use hash history for easy file:// testing; switch to createWebHistory() if you have a server
+            history: MiniXRouter.createWebHashHistory(),
+            debug: true, // see console logs for lazy loading events
+            loader: {
+                baseDir: './components', // directory where .js component files live
+                ext: '.js', // file extension
+                retries: 1, // retry once on failure
+                timeout: 5000 // 5 seconds timeout
+            },
+            routes: [{
+                path: '/',
+                name: 'home',
+                component: Home
+            },
+            {
+                path: '/customer',
+                name: 'customer',
+                component: (load) => load('Customer') // the router passes the `load` function
+            },
+            {
+                path: '/reports',
+                name: 'reports',
+                component: (load) => load('ReportsPage')
+            }
+            ]
+        });
 
-  // Root application component
-  class AppShell {
-    template() {
-      return `
+        // Root application component
+        class AppShell {
+            view = `
         <div>
           <div class="nav">
             <a x-route="home" x-active="active">Home</a>
@@ -145,13 +158,13 @@
           </div>
         </div>
       `;
-    }
-  }
+        }
 
-  // Mount the app
-  const app = MiniX.createApp(AppShell)
-    .use(router)
-    .mount('#app');
-</script>
+        // Mount the app
+        const app = MiniX.createApp(AppShell)
+            .use(router)
+            .mount('#app');
+    </script>
 </body>
+
 </html>

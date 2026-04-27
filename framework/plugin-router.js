@@ -972,8 +972,11 @@
 
 			const looksLikeLazyLoader =
 			typeof componentValue === "function" &&
-			!componentValue.prototype?.template &&
-			!componentValue.prototype?.render;
+			!(componentValue.prototype?.constructor === componentValue) &&
+			!componentValue.prototype?.view &&
+			!componentValue.prototype?.render &&
+			!componentValue.prototype?.data &&
+			!componentValue.prototype?.mounted;
 
 			if (looksLikeLazyLoader) {
 				const pendingKey = routeRecord ? routeRecord.fullPath + "::" + cacheKey : null;

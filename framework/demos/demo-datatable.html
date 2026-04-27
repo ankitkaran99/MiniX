@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+ <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -243,7 +243,7 @@
           log('unmounted StatusBadge row=' + this.row.id);
         }
 
-        template = '<span class="badge {{ badgeClass }}" x-text="row.status"></span>';
+        view = '<span class="badge {{ badgeClass }}" x-text="row.status"></span>';
       }
 
       class RowActions {
@@ -280,7 +280,7 @@
           log('unmounted RowActions row=' + this.row.id);
         }
 
-        template = '<div class="btn-group"><button class="btn" x-on:click="edit">Edit</button><button class="btn" x-on:click="remove">Delete</button></div>';
+        view = '<div class="btn-group"><button class="btn" x-on:click="edit">Edit</button><button class="btn" x-on:click="remove">Delete</button></div>';
       }
 
       let users = makeUsers(24);

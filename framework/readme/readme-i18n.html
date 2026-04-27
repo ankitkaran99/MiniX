@@ -369,9 +369,7 @@
     });
   }
 
-  template() {
-    return `&lt;h1&gt;{{ $t('hero.heading', { name: guestName }) }}&lt;/h1&gt;`;
-  }
+  view = `&lt;h1&gt;{{ $t('hero.heading', { name: guestName }) }}&lt;/h1&gt;`;
 }</code></pre>
         <div class="note warn">The plugin intentionally exposes <code>$t</code> and <code>$i18n</code>. It does not add <code>this.t</code> or <code>this.i18n</code>.</div>
       </section>

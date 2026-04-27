@@ -428,7 +428,7 @@ const router = MiniXRouter.createRouter({
     <h3>Example: Lazy Component File (<code>Customer.js</code>)</h3>
     <pre><code>class Customer {
   data() { return { name: '' }; }
-  template() { return `&lt;input x-model="name"&gt;`; }
+  view = `&lt;input x-model="name"&gt;`; }
 }
 // Required registration
 if (typeof MiniX_Component !== 'undefined') {

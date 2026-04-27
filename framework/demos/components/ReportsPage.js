@@ -26,8 +26,7 @@ class ReportsPage {
     this.loadReport();
   }
 
-  template() {
-    return `
+  view = `
       <div>
         <h2>📊 Reports Dashboard</h2>
         <div class="card">
@@ -45,7 +44,6 @@ class ReportsPage {
         </div>
       </div>
     `;
-  }
 }
 
 // Register the component globally (required for lazy loading)

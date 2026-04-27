@@ -393,15 +393,13 @@ MxDB.routers          // raw tracked routers getter</code></pre>
     return { localClicks: 0 };
   }
 
-  template() {
-    return `
+  view = `
       &lt;div&gt;
         &lt;h3 x-text="'DebugChild v' + $props.version"&gt;&lt;/h3&gt;
         &lt;p&gt;&lt;span x-text="$props.label"&gt;&lt;/span&gt;&lt;/p&gt;
         &lt;button @click="localClicks++"&gt;Click&lt;/button&gt;
       &lt;/div&gt;
     `;
-  }
 
   mounted() {}
   updated() {}

@@ -1,730 +1,791 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MiniX Debug Plugin - Real Integration Demo</title>
-<style>
-  *, *::before, *::after { box-sizing: border-box; }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MiniX Debug Plugin - Real Integration Demo</title>
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+    }
 
-  :root {
-    --bg: #f6f4ef;
-    --panel: #fff;
-    --ink: #161616;
-    --muted: #6f6a60;
-    --line: #d9d3c7;
-    --accent: #d94b18;
-    --blue: #2563eb;
-    --green: #15803d;
-    --amber: #b7791f;
-    --violet: #7c3aed;
-    --red: #dc2626;
-    --shadow: 0 2px 0 #161616;
-    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-    --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  }
+    :root {
+      --bg: #f6f4ef;
+      --panel: #fff;
+      --ink: #161616;
+      --muted: #6f6a60;
+      --line: #d9d3c7;
+      --accent: #d94b18;
+      --blue: #2563eb;
+      --green: #15803d;
+      --amber: #b7791f;
+      --violet: #7c3aed;
+      --red: #dc2626;
+      --shadow: 0 2px 0 #161616;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
 
-  body {
-    margin: 0;
-    min-height: 100vh;
-    color: var(--ink);
-    background: var(--bg);
-    font-family: var(--sans);
-  }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      background: var(--bg);
+      font-family: var(--sans);
+    }
 
-  [x-cloak] { display: none !important; }
+    [x-cloak] {
+      display: none !important;
+    }
 
-  .shell {
-    min-height: 100vh;
-    display: grid;
-    grid-template-rows: auto 1fr;
-  }
+    .shell {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
 
-  .topbar {
-    position: sticky;
-    top: 0;
-    z-index: 20;
-    display: flex;
-    align-items: center;
-    gap: 18px;
-    padding: 16px 24px;
-    background: var(--panel);
-    border-bottom: 2px solid var(--ink);
-  }
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      padding: 16px 24px;
+      background: var(--panel);
+      border-bottom: 2px solid var(--ink);
+    }
 
-  .brand {
-    font-size: 24px;
-    line-height: 1;
-    font-weight: 900;
-    letter-spacing: 0;
-  }
+    .brand {
+      font-size: 24px;
+      line-height: 1;
+      font-weight: 900;
+      letter-spacing: 0;
+    }
 
-  .brand span { color: var(--accent); }
+    .brand span {
+      color: var(--accent);
+    }
 
-  .tag {
-    font-family: var(--mono);
-    font-size: 12px;
-    color: var(--muted);
-  }
+    .tag {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+    }
 
-  .top-actions {
-    margin-left: auto;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
+    .top-actions {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
 
-  .pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    min-height: 28px;
-    padding: 4px 10px;
-    border: 1px solid var(--line);
-    border-radius: 4px;
-    background: #fbfaf7;
-    font-family: var(--mono);
-    font-size: 12px;
-    color: var(--muted);
-  }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 28px;
+      padding: 4px 10px;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      background: #fbfaf7;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+    }
 
-  .dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--green);
-  }
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+    }
 
-  .grid {
-    display: grid;
-    grid-template-columns: 320px minmax(0, 1fr) 360px;
-    gap: 16px;
-    padding: 18px;
-  }
+    .grid {
+      display: grid;
+      grid-template-columns: 320px minmax(0, 1fr) 360px;
+      gap: 16px;
+      padding: 18px;
+    }
 
-  .panel {
-    min-width: 0;
-    background: var(--panel);
-    border: 2px solid var(--ink);
-    border-radius: 6px;
-    box-shadow: var(--shadow);
-    overflow: hidden;
-  }
+    .panel {
+      min-width: 0;
+      background: var(--panel);
+      border: 2px solid var(--ink);
+      border-radius: 6px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
 
-  .panel-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 11px 14px;
-    background: var(--ink);
-    color: #fff;
-  }
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 11px 14px;
+      background: var(--ink);
+      color: #fff;
+    }
 
-  .panel-title {
-    font-size: 12px;
-    font-weight: 800;
-    letter-spacing: .08em;
-    text-transform: uppercase;
-  }
+    .panel-title {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
 
-  .panel-body {
-    padding: 14px;
-  }
+    .panel-body {
+      padding: 14px;
+    }
 
-  .stack {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
+    .stack {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
 
-  .group {
-    border: 1px solid var(--line);
-    border-radius: 5px;
-    overflow: hidden;
-    background: #fbfaf7;
-  }
+    .group {
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      overflow: hidden;
+      background: #fbfaf7;
+    }
 
-  .group-title {
-    padding: 8px 10px;
-    border-bottom: 1px solid var(--line);
-    font-family: var(--mono);
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: .08em;
-  }
+    .group-title {
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--line);
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
 
-  .group-content {
-    padding: 10px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
+    .group-content {
+      padding: 10px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
 
-  button {
-    min-height: 34px;
-    border: 2px solid var(--ink);
-    border-radius: 4px;
-    background: var(--panel);
-    color: var(--ink);
-    cursor: pointer;
-    font: 800 13px var(--sans);
-    padding: 7px 10px;
-  }
+    button {
+      min-height: 34px;
+      border: 2px solid var(--ink);
+      border-radius: 4px;
+      background: var(--panel);
+      color: var(--ink);
+      cursor: pointer;
+      font: 800 13px var(--sans);
+      padding: 7px 10px;
+    }
 
-  button:hover {
-    background: var(--ink);
-    color: #fff;
-  }
+    button:hover {
+      background: var(--ink);
+      color: #fff;
+    }
 
-  button.primary {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: #fff;
-  }
+    button.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
 
-  button.primary:hover { background: #b43d12; }
+    button.primary:hover {
+      background: #b43d12;
+    }
 
-  input {
-    width: 100%;
-    min-height: 36px;
-    border: 1.5px solid var(--line);
-    border-radius: 4px;
-    padding: 8px 10px;
-    font: 13px var(--mono);
-    color: var(--ink);
-    background: #fff;
-  }
+    input {
+      width: 100%;
+      min-height: 36px;
+      border: 1.5px solid var(--line);
+      border-radius: 4px;
+      padding: 8px 10px;
+      font: 13px var(--mono);
+      color: var(--ink);
+      background: #fff;
+    }
 
-  input:focus {
-    border-color: var(--blue);
-    outline: none;
-  }
+    input:focus {
+      border-color: var(--blue);
+      outline: none;
+    }
 
-  .metric-row {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: 8px;
-    margin-bottom: 14px;
-  }
+    .metric-row {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 8px;
+      margin-bottom: 14px;
+    }
 
-  .metric {
-    border: 1px solid var(--line);
-    border-radius: 5px;
-    background: #fbfaf7;
-    padding: 10px;
-  }
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      background: #fbfaf7;
+      padding: 10px;
+    }
 
-  .metric strong {
-    display: block;
-    font-size: 22px;
-    line-height: 1;
-  }
+    .metric strong {
+      display: block;
+      font-size: 22px;
+      line-height: 1;
+    }
 
-  .metric span {
-    display: block;
-    margin-top: 6px;
-    color: var(--muted);
-    font-family: var(--mono);
-    font-size: 11px;
-  }
+    .metric span {
+      display: block;
+      margin-top: 6px;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 11px;
+    }
 
-  .workspace {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(260px, .9fr);
-    gap: 14px;
-  }
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(260px, .9fr);
+      gap: 14px;
+    }
 
-  .card {
-    border: 1px solid var(--line);
-    border-radius: 5px;
-    background: #fbfaf7;
-    padding: 12px;
-  }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      background: #fbfaf7;
+      padding: 12px;
+    }
 
-  .card h3 {
-    margin: 0 0 10px;
-    font-size: 15px;
-  }
+    .card h3 {
+      margin: 0 0 10px;
+      font-size: 15px;
+    }
 
-  .counter {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-  }
+    .counter {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
 
-  .count {
-    min-width: 74px;
-    font-size: 48px;
-    font-weight: 900;
-    line-height: 1;
-    font-variant-numeric: tabular-nums;
-  }
+    .count {
+      min-width: 74px;
+      font-size: 48px;
+      font-weight: 900;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
 
-  .hint {
-    color: var(--muted);
-    font-size: 13px;
-    line-height: 1.45;
-  }
+    .hint {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
 
-  .list {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    margin-top: 10px;
-  }
+    .list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 10px;
+    }
 
-  .item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    padding: 8px 10px;
-    border: 1px solid var(--line);
-    border-radius: 4px;
-    background: #fff;
-  }
+    .item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      background: #fff;
+    }
 
-  .item.done span {
-    color: var(--muted);
-    text-decoration: line-through;
-  }
+    .item.done span {
+      color: var(--muted);
+      text-decoration: line-through;
+    }
 
-  .status {
-    display: inline-flex;
-    align-items: center;
-    min-height: 24px;
-    padding: 2px 8px;
-    border-radius: 4px;
-    background: #ecfdf5;
-    color: var(--green);
-    font-family: var(--mono);
-    font-size: 12px;
-    font-weight: 700;
-  }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      background: #ecfdf5;
+      color: var(--green);
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 700;
+    }
 
-  .status.warn {
-    background: #fff7ed;
-    color: var(--amber);
-  }
+    .status.warn {
+      background: #fff7ed;
+      color: var(--amber);
+    }
 
-  .event-list {
-    height: calc(100vh - 180px);
-    min-height: 420px;
-    overflow: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 7px;
-  }
+    .event-list {
+      height: calc(100vh - 180px);
+      min-height: 420px;
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
 
-  .event {
-    border: 1px solid var(--line);
-    border-left-width: 4px;
-    border-radius: 5px;
-    background: #fff;
-    padding: 9px 10px;
-    font-family: var(--mono);
-    font-size: 12px;
-  }
+    .event {
+      border: 1px solid var(--line);
+      border-left-width: 4px;
+      border-radius: 5px;
+      background: #fff;
+      padding: 9px 10px;
+      font-family: var(--mono);
+      font-size: 12px;
+    }
 
-  .event.lifecycle { border-left-color: var(--blue); }
-  .event.watcher { border-left-color: var(--amber); }
-  .event.directive { border-left-color: var(--green); }
-  .event.props { border-left-color: var(--violet); }
-  .event.loop { border-left-color: var(--red); }
-  .event.effect { border-left-color: var(--muted); }
-  .event.store { border-left-color: var(--green); }
-  .event.router { border-left-color: var(--blue); }
+    .event.lifecycle {
+      border-left-color: var(--blue);
+    }
 
-  .event-top {
-    display: flex;
-    justify-content: space-between;
-    gap: 10px;
-    margin-bottom: 5px;
-  }
+    .event.watcher {
+      border-left-color: var(--amber);
+    }
 
-  .event-type {
-    font-weight: 900;
-    text-transform: uppercase;
-  }
+    .event.directive {
+      border-left-color: var(--green);
+    }
 
-  .event-meta { color: var(--muted); }
-  .event-detail { color: var(--ink); word-break: break-word; }
+    .event.props {
+      border-left-color: var(--violet);
+    }
 
-  .bridge-box {
-    border: 1px solid var(--line);
-    border-radius: 5px;
-    background: #111;
-    color: #e7e5dc;
-    padding: 12px;
-    font: 12px/1.6 var(--mono);
-    overflow: auto;
-  }
+    .event.loop {
+      border-left-color: var(--red);
+    }
 
-  .bridge-box code { color: #fbbf24; }
+    .event.effect {
+      border-left-color: var(--muted);
+    }
 
-  .route-link {
-    display: inline-flex;
-    align-items: center;
-    min-height: 34px;
-    padding: 7px 10px;
-    border: 2px solid var(--ink);
-    border-radius: 4px;
-    background: #fff;
-    color: var(--ink);
-    font: 800 13px var(--sans);
-    text-decoration: none;
-  }
+    .event.store {
+      border-left-color: var(--green);
+    }
 
-  .route-link.active,
-  .route-link:hover {
-    background: var(--ink);
-    color: #fff;
-  }
+    .event.router {
+      border-left-color: var(--blue);
+    }
 
-  .route-frame {
-    margin-top: 12px;
-    min-height: 96px;
-    border: 1px solid var(--line);
-    border-radius: 5px;
-    background: #fff;
-    padding: 10px;
-  }
+    .event-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 5px;
+    }
 
-  @media (max-width: 1100px) {
-    .grid { grid-template-columns: 1fr; }
-    .event-list { height: auto; min-height: 260px; max-height: 460px; }
-  }
+    .event-type {
+      font-weight: 900;
+      text-transform: uppercase;
+    }
 
-  @media (max-width: 760px) {
-    .topbar { align-items: flex-start; flex-direction: column; }
-    .top-actions { margin-left: 0; flex-wrap: wrap; }
-    .grid { padding: 10px; }
-    .metric-row, .workspace { grid-template-columns: 1fr; }
-  }
-</style>
+    .event-meta {
+      color: var(--muted);
+    }
+
+    .event-detail {
+      color: var(--ink);
+      word-break: break-word;
+    }
+
+    .bridge-box {
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      background: #111;
+      color: #e7e5dc;
+      padding: 12px;
+      font: 12px/1.6 var(--mono);
+      overflow: auto;
+    }
+
+    .bridge-box code {
+      color: #fbbf24;
+    }
+
+    .route-link {
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 7px 10px;
+      border: 2px solid var(--ink);
+      border-radius: 4px;
+      background: #fff;
+      color: var(--ink);
+      font: 800 13px var(--sans);
+      text-decoration: none;
+    }
+
+    .route-link.active,
+    .route-link:hover {
+      background: var(--ink);
+      color: #fff;
+    }
+
+    .route-frame {
+      margin-top: 12px;
+      min-height: 96px;
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      background: #fff;
+      padding: 10px;
+    }
+
+    @media (max-width: 1100px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      .event-list {
+        height: auto;
+        min-height: 260px;
+        max-height: 460px;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .topbar {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .top-actions {
+        margin-left: 0;
+        flex-wrap: wrap;
+      }
+
+      .grid {
+        padding: 10px;
+      }
+
+      .metric-row,
+      .workspace {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
 </head>
+
 <body>
-<div id="debug-demo" x-cloak>
-  <div class="shell">
-    <header class="topbar">
-      <div class="brand">Mini<span>X</span> Debug</div>
-      <div class="tag">real MiniX.createApp(...).use(MiniX_Debug.plugin(...)) integration</div>
-      <div class="top-actions">
-        <span class="pill"><span class="dot"></span><span x-text="bridgeStatus"></span></span>
-        <span class="pill"><span x-text="eventTotal"></span> plugin events</span>
-      </div>
-    </header>
-
-    <main class="grid">
-      <aside class="panel">
-        <div class="panel-head">
-          <div class="panel-title">Real Triggers</div>
+  <div id="debug-demo" x-cloak>
+    <div class="shell">
+      <header class="topbar">
+        <div class="brand">Mini<span>X</span> Debug</div>
+        <div class="tag">real MiniX.createApp(...).use(MiniX_Debug.plugin(...)) integration</div>
+        <div class="top-actions">
+          <span class="pill"><span class="dot"></span><span x-text="bridgeStatus"></span></span>
+          <span class="pill"><span x-text="eventTotal"></span> plugin events</span>
         </div>
-        <div class="panel-body stack">
-          <div class="group">
-            <div class="group-title">State Changes</div>
-            <div class="group-content">
-              <button class="primary" @click="increment">Increment count</button>
-              <button @click="rename">Rename user</button>
-              <button @click="toggleReady">Toggle ready</button>
-            </div>
+      </header>
+
+      <main class="grid">
+        <aside class="panel">
+          <div class="panel-head">
+            <div class="panel-title">Real Triggers</div>
           </div>
-
-          <div class="group">
-            <div class="group-title">Directives</div>
-            <div class="group-content">
-              <button @click="togglePanel">Toggle x-if / x-show</button>
-              <button @click="shuffleTodos">Shuffle x-for</button>
-              <button @click="addTodo">Add todo</button>
-            </div>
-          </div>
-
-          <div class="group">
-            <div class="group-title">Props + Child Component</div>
-            <div class="group-content">
-              <button @click="bumpChild">Update child props</button>
-              <button @click="toggleChild">Mount/unmount child</button>
-              <button @click="user_id++">Change form user</button>
-            </div>
-          </div>
-
-          <div class="group">
-            <div class="group-title">Store + Router Plugins</div>
-            <div class="group-content">
-              <button @click="$store('debug').increment()">Store increment</button>
-              <button @click="$store('debug').rename()">Store rename</button>
-              <button @click="$router.push('/details?tab=debug')">Route details</button>
-              <button @click="$router.push('/')">Route home</button>
-            </div>
-          </div>
-
-          <div class="group">
-            <div class="group-title">Console Bridge</div>
-            <div class="group-content">
-              <button @click="inspectRoot">Inspect root</button>
-              <button @click="refreshEvents">Refresh events</button>
-              <button @click="clearDebugEvents">Clear plugin log</button>
-            </div>
-          </div>
-        </div>
-      </aside>
-
-      <section class="panel">
-        <div class="panel-head">
-          <div class="panel-title">Mounted MiniX App</div>
-          <span class="status" x-class="{ warn: !ready }" x-text="ready ? 'ready' : 'paused'"></span>
-        </div>
-        <div class="panel-body stack">
-          <div class="metric-row">
-            <div class="metric"><strong x-text="count"></strong><span>count</span></div>
-            <div class="metric"><strong x-text="todos.length"></strong><span>todos</span></div>
-            <div class="metric"><strong x-text="childVersion"></strong><span>child prop</span></div>
-            <div class="metric"><strong x-text="$store('debug').count"></strong><span>store</span></div>
-            <div class="metric"><strong x-text="route.name || 'home'"></strong><span>route</span></div>
-            <div class="metric"><strong x-text="debugCounts.lifecycle || 0"></strong><span>lifecycle</span></div>
-            <div class="metric"><strong x-text="debugCounts.directive || 0"></strong><span>directives</span></div>
-          </div>
-
-          <div class="workspace">
-            <div class="card">
-              <h3>Reactive state</h3>
-              <div class="counter">
-                <div class="count" x-text="count"></div>
-                <button @click="decrement">-1</button>
-                <button @click="increment">+1</button>
-              </div>
-              <p class="hint">
-                User: <strong x-text="user.name"></strong>.
-                The input below uses real <code>x-model</code>; edits update MiniX state.
-              </p>
-              <input x-model="user.name" aria-label="User name">
-            </div>
-
-            <div class="card">
-              <h3>Real directives</h3>
-              <p x-show="showPanel" class="hint">
-                This paragraph is controlled by <code>x-show="showPanel"</code>.
-              </p>
-              <template x-if="ready">
-                <div class="status">Rendered by x-if</div>
-              </template>
-              <template x-if="!ready">
-                <div class="status warn">Alternate x-if branch</div>
-              </template>
-
-              <div class="list">
-                <template x-for="todo in todos">
-                  <div class="item" x-class="{ done: todo.done }">
-                    <span x-text="todo.text"></span>
-                    <button @click="todo.done = !todo.done">toggle</button>
-                  </div>
-                </template>
-              </div>
-            </div>
-          </div>
-
-          <div class="workspace">
-            <div class="card">
-              <h3>Child component props</h3>
-              <template x-if="childVisible">
-                <div x-component="DebugChild" x-props="{ label: user.name, version: childVersion, count: count }"></div>
-              </template>
-              <template x-if="!childVisible">
-                <p class="hint">Child component is unmounted. Mount it again to generate lifecycle events.</p>
-              </template>
-            </div>
-
-            <div class="card">
-              <h3>Dynamic template component</h3>
-              <template x-component="UserForm" x-bind:user_id="user_id" x-on:save="handleSave($event, user_id)"></template>
-              <p class="hint">Saved user: <strong x-text="savedUserId || 'none'"></strong></p>
-            </div>
-          </div>
-
-          <div class="workspace">
-            <div class="card">
-              <h3>Store + router plugins</h3>
-              <p class="hint">
-                Store owner: <strong x-text="$store('debug').user"></strong>,
-                count: <strong x-text="$store('debug').count"></strong>
-              </p>
-              <div class="group-content" style="padding:0">
-                <button @click="$store('debug').increment()">Store +1</button>
-                <button @click="$store('debug').addNote()">Store note</button>
-                <a class="route-link" x-route="home" x-active="active">Home</a>
-                <a class="route-link" x-route="details" x-active="active">Details</a>
-              </div>
-              <div class="route-frame">
-                <div x-router-view></div>
-              </div>
-            </div>
-          </div>
-
-          <div class="workspace">
-            <div class="card">
-              <h3>Debug bridge</h3>
-              <div class="bridge-box">
-                <div><code>MiniX</code> loaded: <span x-text="hasMiniX ? 'yes' : 'no'"></span></div>
-                <div><code>MiniX_Debug</code> loaded: <span x-text="hasDebug ? 'yes' : 'no'"></span></div>
-                <div><code>MiniXStore</code> loaded: <span x-text="hasStore ? 'yes' : 'no'"></span></div>
-                <div><code>MiniXRouter</code> loaded: <span x-text="hasRouter ? 'yes' : 'no'"></span></div>
-                <div><code>window.MxDB</code>: <span x-text="hasBridge ? 'yes' : 'no'"></span></div>
-                <div>Try <code>MxDB.components()</code> in DevTools.</div>
-                <div>Try <code>MxDB.stores()</code> and <code>MxDB.router()</code> in DevTools.</div>
-                <div>Try <code>MiniX_Debug.getEvents()</code> in DevTools.</div>
+          <div class="panel-body stack">
+            <div class="group">
+              <div class="group-title">State Changes</div>
+              <div class="group-content">
+                <button class="primary" @click="increment">Increment count</button>
+                <button @click="rename">Rename user</button>
+                <button @click="toggleReady">Toggle ready</button>
               </div>
             </div>
 
-            <div class="card">
-              <h3>Store notes</h3>
-              <div class="list">
-                <template x-for="note in $store('debug').notes" :key="note.id">
-                  <div class="item">
-                    <span x-text="note.text"></span>
-                    <button @click="$store('debug').removeNote(note.id)">remove</button>
-                  </div>
-                </template>
+            <div class="group">
+              <div class="group-title">Directives</div>
+              <div class="group-content">
+                <button @click="togglePanel">Toggle x-if / x-show</button>
+                <button @click="shuffleTodos">Shuffle x-for</button>
+                <button @click="addTodo">Add todo</button>
+              </div>
+            </div>
+
+            <div class="group">
+              <div class="group-title">Props + Child Component</div>
+              <div class="group-content">
+                <button @click="bumpChild">Update child props</button>
+                <button @click="toggleChild">Mount/unmount child</button>
+                <button @click="user_id++">Change form user</button>
+              </div>
+            </div>
+
+            <div class="group">
+              <div class="group-title">Store + Router Plugins</div>
+              <div class="group-content">
+                <button @click="$store('debug').increment()">Store increment</button>
+                <button @click="$store('debug').rename()">Store rename</button>
+                <button @click="$router.push('/details?tab=debug')">Route details</button>
+                <button @click="$router.push('/')">Route home</button>
+              </div>
+            </div>
+
+            <div class="group">
+              <div class="group-title">Console Bridge</div>
+              <div class="group-content">
+                <button @click="inspectRoot">Inspect root</button>
+                <button @click="refreshEvents">Refresh events</button>
+                <button @click="clearDebugEvents">Clear plugin log</button>
               </div>
             </div>
           </div>
-        </div>
-      </section>
+        </aside>
 
-      <aside class="panel">
-        <div class="panel-head">
-          <div class="panel-title">Plugin Event Log</div>
-          <span class="pill" x-text="eventTotal + ' total'"></span>
-        </div>
-        <div class="panel-body">
-          <div class="event-list">
-            <template x-if="events.length === 0">
-              <div class="hint">No plugin events yet. Use the buttons or the floating MiniX Debug panel.</div>
-            </template>
-            <template x-for="event in events" :key="event.seq">
-              <div class="event" x-class="event.type">
-                <div class="event-top">
-                  <span class="event-type" x-text="event.type"></span>
-                  <span class="event-meta" x-text="'#' + event.seq + ' ' + event.time"></span>
+        <section class="panel">
+          <div class="panel-head">
+            <div class="panel-title">Mounted MiniX App</div>
+            <span class="status" x-class="{ warn: !ready }" x-text="ready ? 'ready' : 'paused'"></span>
+          </div>
+          <div class="panel-body stack">
+            <div class="metric-row">
+              <div class="metric"><strong x-text="count"></strong><span>count</span></div>
+              <div class="metric"><strong x-text="todos.length"></strong><span>todos</span></div>
+              <div class="metric"><strong x-text="childVersion"></strong><span>child prop</span></div>
+              <div class="metric"><strong x-text="$store('debug').count"></strong><span>store</span></div>
+              <div class="metric"><strong x-text="route.name || 'home'"></strong><span>route</span></div>
+              <div class="metric"><strong x-text="debugCounts.lifecycle || 0"></strong><span>lifecycle</span></div>
+              <div class="metric"><strong x-text="debugCounts.directive || 0"></strong><span>directives</span></div>
+            </div>
+
+            <div class="workspace">
+              <div class="card">
+                <h3>Reactive state</h3>
+                <div class="counter">
+                  <div class="count" x-text="count"></div>
+                  <button @click="decrement">-1</button>
+                  <button @click="increment">+1</button>
                 </div>
-                <div class="event-meta" x-text="event.component"></div>
-                <div class="event-detail" x-text="event.summary"></div>
+                <p class="hint">
+                  User: <strong x-text="user.name"></strong>.
+                  The input below uses real <code>x-model</code>; edits update MiniX state.
+                </p>
+                <input x-model="user.name" aria-label="User name">
               </div>
-            </template>
+
+              <div class="card">
+                <h3>Real directives</h3>
+                <p x-show="showPanel" class="hint">
+                  This paragraph is controlled by <code>x-show="showPanel"</code>.
+                </p>
+                <template x-if="ready">
+                  <div class="status">Rendered by x-if</div>
+                </template>
+                <template x-if="!ready">
+                  <div class="status warn">Alternate x-if branch</div>
+                </template>
+
+                <div class="list">
+                  <template x-for="todo in todos">
+                    <div class="item" x-class="{ done: todo.done }">
+                      <span x-text="todo.text"></span>
+                      <button @click="todo.done = !todo.done">toggle</button>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </div>
+
+            <div class="workspace">
+              <div class="card">
+                <h3>Child component props</h3>
+                <template x-if="childVisible">
+                  <div x-component="DebugChild" x-props="{ label: user.name, version: childVersion, count: count }">
+                  </div>
+                </template>
+                <template x-if="!childVisible">
+                  <p class="hint">Child component is unmounted. Mount it again to generate lifecycle events.</p>
+                </template>
+              </div>
+
+              <div class="card">
+                <h3>Dynamic template component</h3>
+                <template x-component="UserForm" x-bind:user_id="user_id"
+                  x-on:save="handleSave($event, user_id)"></template>
+                <p class="hint">Saved user: <strong x-text="savedUserId || 'none'"></strong></p>
+              </div>
+            </div>
+
+            <div class="workspace">
+              <div class="card">
+                <h3>Store + router plugins</h3>
+                <p class="hint">
+                  Store owner: <strong x-text="$store('debug').user"></strong>,
+                  count: <strong x-text="$store('debug').count"></strong>
+                </p>
+                <div class="group-content" style="padding:0">
+                  <button @click="$store('debug').increment()">Store +1</button>
+                  <button @click="$store('debug').addNote()">Store note</button>
+                  <a class="route-link" x-route="home" x-active="active">Home</a>
+                  <a class="route-link" x-route="details" x-active="active">Details</a>
+                </div>
+                <div class="route-frame">
+                  <div x-router-view></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="workspace">
+              <div class="card">
+                <h3>Debug bridge</h3>
+                <div class="bridge-box">
+                  <div><code>MiniX</code> loaded: <span x-text="hasMiniX ? 'yes' : 'no'"></span></div>
+                  <div><code>MiniX_Debug</code> loaded: <span x-text="hasDebug ? 'yes' : 'no'"></span></div>
+                  <div><code>MiniXStore</code> loaded: <span x-text="hasStore ? 'yes' : 'no'"></span></div>
+                  <div><code>MiniXRouter</code> loaded: <span x-text="hasRouter ? 'yes' : 'no'"></span></div>
+                  <div><code>window.MxDB</code>: <span x-text="hasBridge ? 'yes' : 'no'"></span></div>
+                  <div>Try <code>MxDB.components()</code> in DevTools.</div>
+                  <div>Try <code>MxDB.stores()</code> and <code>MxDB.router()</code> in DevTools.</div>
+                  <div>Try <code>MiniX_Debug.getEvents()</code> in DevTools.</div>
+                </div>
+              </div>
+
+              <div class="card">
+                <h3>Store notes</h3>
+                <div class="list">
+                  <template x-for="note in $store('debug').notes" :key="note.id">
+                    <div class="item">
+                      <span x-text="note.text"></span>
+                      <button @click="$store('debug').removeNote(note.id)">remove</button>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-      </aside>
-    </main>
+        </section>
+
+        <aside class="panel">
+          <div class="panel-head">
+            <div class="panel-title">Plugin Event Log</div>
+            <span class="pill" x-text="eventTotal + ' total'"></span>
+          </div>
+          <div class="panel-body">
+            <div class="event-list">
+              <template x-if="events.length === 0">
+                <div class="hint">No plugin events yet. Use the buttons or the floating MiniX Debug panel.</div>
+              </template>
+              <template x-for="event in events" :key="event.seq">
+                <div class="event" x-class="event.type">
+                  <div class="event-top">
+                    <span class="event-type" x-text="event.type"></span>
+                    <span class="event-meta" x-text="'#' + event.seq + ' ' + event.time"></span>
+                  </div>
+                  <div class="event-meta" x-text="event.component"></div>
+                  <div class="event-detail" x-text="event.summary"></div>
+                </div>
+              </template>
+            </div>
+          </div>
+        </aside>
+      </main>
+    </div>
   </div>
-</div>
 
-<script src="../mini-x.js"></script>
-<script src="../plugin-store.js"></script>
-<script src="../plugin-router.js"></script>
-<script src="../plugin-debug.js"></script>
-<script>
-const debugStore = MiniXStore.define('debug', {
-  state: () => ({
-    count: 10,
-    user: 'Store Ada',
-    notes: [
-      { id: 1, text: 'Store is provided by MiniXStore.plugin()' }
-    ],
-    nextNoteId: 2
-  }),
-  getters: {
-    label(state) {
-      return `${state.user} #${state.count}`;
-    }
-  },
-  actions: {
-    increment() {
-      this.count += 1;
-    },
-    rename() {
-      const names = ['Store Ada', 'Store Grace', 'Store Katherine', 'Store Margaret'];
-      const index = names.indexOf(this.user);
-      this.user = names[(index + 1) % names.length];
-    },
-    addNote() {
-      this.notes.push({
-        id: this.nextNoteId,
-        text: 'Store note #' + this.nextNoteId
-      });
-      this.nextNoteId += 1;
-    },
-    removeNote(id) {
-      this.notes = this.notes.filter((note) => note.id !== id);
-    }
-  }
-});
+  <script src="../mini-x.js"></script>
+  <script src="../plugin-store.js"></script>
+  <script src="../plugin-router.js"></script>
+  <script src="../plugin-debug.js"></script>
+  <script>
+    const debugStore = MiniXStore.define('debug', {
+      state: () => ({
+        count: 10,
+        user: 'Store Ada',
+        notes: [
+          { id: 1, text: 'Store is provided by MiniXStore.plugin()' }
+        ],
+        nextNoteId: 2
+      }),
+      getters: {
+        label(state) {
+          return `${state.user} #${state.count}`;
+        }
+      },
+      actions: {
+        increment() {
+          this.count += 1;
+        },
+        rename() {
+          const names = ['Store Ada', 'Store Grace', 'Store Katherine', 'Store Margaret'];
+          const index = names.indexOf(this.user);
+          this.user = names[(index + 1) % names.length];
+        },
+        addNote() {
+          this.notes.push({
+            id: this.nextNoteId,
+            text: 'Store note #' + this.nextNoteId
+          });
+          this.nextNoteId += 1;
+        },
+        removeNote(id) {
+          this.notes = this.notes.filter((note) => note.id !== id);
+        }
+      }
+    });
 
-class DebugHomeRoute {
-  template() {
-    return `
+    class DebugHomeRoute {
+      view = `
       <div>
         <strong>Router home</strong>
         <p class="hint">Current store label: <span x-text="$store('debug').label"></span></p>
       </div>
     `;
-  }
-}
+    }
 
-class DebugDetailsRoute {
-  template() {
-    return `
+    class DebugDetailsRoute {
+      view = `
       <div>
         <strong>Router details</strong>
         <p class="hint">Route path: <span x-text="route.fullPath"></span></p>
         <p class="hint">Store count inside route: <span x-text="$store('debug').count"></span></p>
       </div>
     `;
-  }
-}
-
-const router = MiniXRouter.createRouter({
-  history: MiniXRouter.createWebHashHistory(),
-  debug: true,
-  routes: [
-    { path: '/', name: 'home', component: DebugHomeRoute },
-    {
-      path: '/details',
-      name: 'details',
-      component: DebugDetailsRoute,
-      beforeEnter: function detailsGate(to) {
-        debugStore.addNote();
-        return true;
-      }
     }
-  ]
-});
 
-router.beforeEach(function debugBeforeEach(to, from) {
-  return true;
-});
+    const router = MiniXRouter.createRouter({
+      history: MiniXRouter.createWebHashHistory(),
+      debug: true,
+      routes: [
+        { path: '/', name: 'home', component: DebugHomeRoute },
+        {
+          path: '/details',
+          name: 'details',
+          component: DebugDetailsRoute,
+          beforeEnter: function detailsGate(to) {
+            debugStore.addNote();
+            return true;
+          }
+        }
+      ]
+    });
 
-router.afterEach(function debugAfterEach(to, from) {
-  debugStore.$set('lastRoute', `${from.fullPath || '(start)'} -> ${to.fullPath}`);
-});
+    router.beforeEach(function debugBeforeEach(to, from) {
+      return true;
+    });
 
-class DebugChild {
-  static props = {
-    label: { type: String, default: 'Anonymous' },
-    version: { type: Number, default: 1 },
-    count: { type: Number, default: 0 }
-  };
+    router.afterEach(function debugAfterEach(to, from) {
+      debugStore.$set('lastRoute', `${from.fullPath || '(start)'} -> ${to.fullPath}`);
+    });
 
-  data() {
-    return {
-      localClicks: 0
-    };
-  }
+    class DebugChild {
+      static props = {
+        label: { type: String, default: 'Anonymous' },
+        version: { type: Number, default: 1 },
+        count: { type: Number, default: 0 }
+      };
 
-  template() {
-    return `
+      data() {
+        return {
+          localClicks: 0
+        };
+      }
+
+      view = `
       <div class="card" style="background:#fff">
         <h3 x-text="'DebugChild v' + $props.version"></h3>
         <p class="hint">
@@ -734,247 +795,245 @@ class DebugChild {
         <button @click="localClicks++">Local click <span x-text="localClicks"></span></button>
       </div>
     `;
-  }
 
-  mounted() {}
-  updated() {}
-  beforeUnmount() {}
-  unmounted() {}
-}
+      mounted() { }
+      updated() { }
+      beforeUnmount() { }
+      unmounted() { }
+    }
 
-class UserForm {
-  static props = {
-    user_id: { type: Number, default: 0 }
-  };
+    class UserForm {
+      static props = {
+        user_id: { type: Number, default: 0 }
+      };
 
-  template() {
-    return `
+      view = `
       <div class="card" style="background:#fff">
         <h3>UserForm</h3>
         <p class="hint">Editing user <strong x-text="$props.user_id"></strong></p>
         <button @click="$emit('save', { user_id: $props.user_id, source: 'UserForm' })">Save user</button>
       </div>
     `;
-  }
-}
-
-class DebugDemoApp {
-  data() {
-    return {
-      count: 1,
-      ready: true,
-      showPanel: true,
-      childVisible: true,
-      childVersion: 1,
-      user_id: 101,
-      savedUserId: null,
-      user: { name: 'Ada Lovelace' },
-      todos: [
-        { id: 1, text: 'Load ../mini-x.js', done: true },
-        { id: 2, text: 'Install MiniX_Debug.plugin()', done: true },
-        { id: 3, text: 'Trigger real plugin events', done: false }
-      ],
-      nextTodoId: 4,
-      lastWatch: '',
-      events: [],
-      debugCounts: {},
-      eventTotal: 0,
-      hasMiniX: false,
-      hasDebug: false,
-      hasStore: false,
-      hasRouter: false,
-      hasBridge: false,
-      bridgeStatus: 'starting'
-    };
-  }
-
-  watch = {
-    count(newVal, oldVal) {
-      this.lastWatch = `count ${oldVal} -> ${newVal}`;
-    },
-    'user.name'(newVal, oldVal) {
-      this.lastWatch = `user.name ${oldVal} -> ${newVal}`;
     }
-  };
 
-  registerComponents = { DebugChild, UserForm };
-
-  stores() {
-    return { debug: debugStore };
-  }
-
-  mounted() {
-    this.hasMiniX = typeof window.MiniX !== 'undefined';
-    this.hasDebug = typeof window.MiniX_Debug !== 'undefined';
-    this.hasStore = typeof window.MiniXStore !== 'undefined';
-    this.hasRouter = typeof window.MiniXRouter !== 'undefined';
-    this.hasBridge = typeof window.MxDB !== 'undefined';
-    this.bridgeStatus = this.hasBridge ? 'debug bridge live' : 'debug bridge missing';
-
-    this._onDebugEvent = (event) => {
-      const incoming = event.detail?.event;
-      if (!incoming) return;
-      // Append the single new event to the display list instead of
-      // re-fetching and re-mapping the entire log on every event.
-      const mapped = {
-        seq: incoming.seq,
-        type: incoming.type,
-        component: incoming.component,
-        time: new Date(incoming.ts).toLocaleTimeString('en', {
-          hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'
-        }),
-        summary: this.describeEvent(incoming)
-      };
-      // Prepend (newest first), cap at 60, update totals
-      this.events = [mapped, ...this.events].slice(0, 60);
-      this.eventTotal++;
-      const t = incoming.type;
-      this.debugCounts = { ...this.debugCounts, [t]: (this.debugCounts[t] || 0) + 1 };
-    };
-    window.addEventListener('minix-debug:event', this._onDebugEvent);
-    this.refreshEvents();
-  }
-
-  beforeUnmount() {
-    if (this._onDebugEvent) window.removeEventListener('minix-debug:event', this._onDebugEvent);
-  }
-
-  methods = {
-    increment() {
-      this.count++;
-    },
-
-    decrement() {
-      this.count--;
-    },
-
-    rename() {
-      const names = ['Ada Lovelace', 'Grace Hopper', 'Katherine Johnson', 'Margaret Hamilton'];
-      const current = names.indexOf(this.user.name);
-      this.user.name = names[(current + 1) % names.length];
-    },
-
-    toggleReady() {
-      this.ready = !this.ready;
-    },
-
-    togglePanel() {
-      this.showPanel = !this.showPanel;
-    },
-
-    addTodo() {
-      this.todos.push({
-        id: this.nextTodoId,
-        text: 'Todo #' + this.nextTodoId,
-        done: false
-      });
-      this.nextTodoId++;
-    },
-
-    shuffleTodos() {
-      this.todos = this.todos.slice().reverse();
-    },
-
-    bumpChild() {
-      this.childVersion++;
-    },
-
-    toggleChild() {
-      this.childVisible = !this.childVisible;
-    },
-
-    handleSave(payload, userId) {
-      this.savedUserId = payload?.user_id ?? userId;
-    },
-
-    inspectRoot() {
-      if (window.MxDB) {
-        window.MxDB.components();
-        window.MxDB.inspect('DebugDemoApp');
+    class DebugDemoApp {
+      data() {
+        return {
+          count: 1,
+          ready: true,
+          showPanel: true,
+          childVisible: true,
+          childVersion: 1,
+          user_id: 101,
+          savedUserId: null,
+          user: { name: 'Ada Lovelace' },
+          todos: [
+            { id: 1, text: 'Load ../mini-x.js', done: true },
+            { id: 2, text: 'Install MiniX_Debug.plugin()', done: true },
+            { id: 3, text: 'Trigger real plugin events', done: false }
+          ],
+          nextTodoId: 4,
+          lastWatch: '',
+          events: [],
+          debugCounts: {},
+          eventTotal: 0,
+          hasMiniX: false,
+          hasDebug: false,
+          hasStore: false,
+          hasRouter: false,
+          hasBridge: false,
+          bridgeStatus: 'starting'
+        };
       }
-    },
 
-    clearDebugEvents() {
-      if (window.MxDB) {
-        window.MxDB.clearEvents();
-        // clearEvents() already resets the panel and event log;
-        // sync local state directly without a redundant full re-fetch.
-        this.events = [];
-        this.debugCounts = {};
-        this.eventTotal = 0;
-      } else {
+      watch = {
+        count(newVal, oldVal) {
+          this.lastWatch = `count ${oldVal} -> ${newVal}`;
+        },
+        'user.name'(newVal, oldVal) {
+          this.lastWatch = `user.name ${oldVal} -> ${newVal}`;
+        }
+      };
+
+      registerComponents = { DebugChild, UserForm };
+
+      stores() {
+        return { debug: debugStore };
+      }
+
+      mounted() {
+        this.hasMiniX = typeof window.MiniX !== 'undefined';
+        this.hasDebug = typeof window.MiniX_Debug !== 'undefined';
+        this.hasStore = typeof window.MiniXStore !== 'undefined';
+        this.hasRouter = typeof window.MiniXRouter !== 'undefined';
+        this.hasBridge = typeof window.MxDB !== 'undefined';
+        this.bridgeStatus = this.hasBridge ? 'debug bridge live' : 'debug bridge missing';
+
+        this._onDebugEvent = (event) => {
+          const incoming = event.detail?.event;
+          if (!incoming) return;
+          // Append the single new event to the display list instead of
+          // re-fetching and re-mapping the entire log on every event.
+          const mapped = {
+            seq: incoming.seq,
+            type: incoming.type,
+            component: incoming.component,
+            time: new Date(incoming.ts).toLocaleTimeString('en', {
+              hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'
+            }),
+            summary: this.describeEvent(incoming)
+          };
+          // Prepend (newest first), cap at 60, update totals
+          this.events = [mapped, ...this.events].slice(0, 60);
+          this.eventTotal++;
+          const t = incoming.type;
+          this.debugCounts = { ...this.debugCounts, [t]: (this.debugCounts[t] || 0) + 1 };
+        };
+        window.addEventListener('minix-debug:event', this._onDebugEvent);
         this.refreshEvents();
       }
-    },
 
-    refreshEvents() {
-      const rawEvents = typeof MiniX_Debug !== 'undefined' ? MiniX_Debug.getEvents() : [];
-      this.applyDebugEvents(rawEvents);
-    },
-
-    applyDebugEvents(rawEvents) {
-      // Single pass: build the display list and accumulate counts together
-      const counts = {};
-      const allLen = rawEvents.length;
-      for (let i = 0; i < allLen; i++) {
-        const t = rawEvents[i].type;
-        counts[t] = (counts[t] || 0) + 1;
+      beforeUnmount() {
+        if (this._onDebugEvent) window.removeEventListener('minix-debug:event', this._onDebugEvent);
       }
 
-      const mapped = rawEvents.slice(-60).reverse().map((event) => ({
-        seq: event.seq,
-        type: event.type,
-        component: event.component,
-        time: new Date(event.ts).toLocaleTimeString('en', {
-          hour12: false,
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit'
-        }),
-        summary: this.describeEvent(event)
-      }));
+      methods = {
+        increment() {
+          this.count++;
+        },
 
-      this.events = mapped;
-      this.debugCounts = counts;
-      this.eventTotal = allLen;
-    },
+        decrement() {
+          this.count--;
+        },
 
-    describeEvent(event) {
-      const detail = event.detail || {};
-      if (event.type === 'lifecycle') return detail.phase || 'lifecycle';
-      if (event.type === 'watcher') return `${detail.path}: ${this.shortValue(detail.old)} -> ${this.shortValue(detail.new)}`;
-      if (event.type === 'directive') return `${detail.directive || 'directive'}="${detail.expression || ''}"`;
-      if (event.type === 'props') return (detail.changes || []).map((change) => change.key).join(', ') || 'props changed';
-      if (event.type === 'loop') return `${detail.kind || 'loop'} ${detail.expression || detail.message || ''}`;
-      if (event.type === 'store') return `${detail.name}.${detail.path || '(root)'} ${this.shortValue(detail.old)} -> ${this.shortValue(detail.new)}`;
-      if (event.type === 'router') return `${detail.type || 'router'} ${this.shortValue(detail.detail?.to?.fullPath || detail.detail?.route?.fullPath || '')}`;
-      return JSON.stringify(detail);
-    },
+        rename() {
+          const names = ['Ada Lovelace', 'Grace Hopper', 'Katherine Johnson', 'Margaret Hamilton'];
+          const current = names.indexOf(this.user.name);
+          this.user.name = names[(current + 1) % names.length];
+        },
 
-    shortValue(value) {
-      if (value === undefined) return 'undefined';
-      if (value === null) return 'null';
-      const text = typeof value === 'string' ? value : JSON.stringify(value);
-      return text.length > 36 ? text.slice(0, 33) + '...' : text;
+        toggleReady() {
+          this.ready = !this.ready;
+        },
+
+        togglePanel() {
+          this.showPanel = !this.showPanel;
+        },
+
+        addTodo() {
+          this.todos.push({
+            id: this.nextTodoId,
+            text: 'Todo #' + this.nextTodoId,
+            done: false
+          });
+          this.nextTodoId++;
+        },
+
+        shuffleTodos() {
+          this.todos = this.todos.slice().reverse();
+        },
+
+        bumpChild() {
+          this.childVersion++;
+        },
+
+        toggleChild() {
+          this.childVisible = !this.childVisible;
+        },
+
+        handleSave(payload, userId) {
+          this.savedUserId = payload?.user_id ?? userId;
+        },
+
+        inspectRoot() {
+          if (window.MxDB) {
+            window.MxDB.components();
+            window.MxDB.inspect('DebugDemoApp');
+          }
+        },
+
+        clearDebugEvents() {
+          if (window.MxDB) {
+            window.MxDB.clearEvents();
+            // clearEvents() already resets the panel and event log;
+            // sync local state directly without a redundant full re-fetch.
+            this.events = [];
+            this.debugCounts = {};
+            this.eventTotal = 0;
+          } else {
+            this.refreshEvents();
+          }
+        },
+
+        refreshEvents() {
+          const rawEvents = typeof MiniX_Debug !== 'undefined' ? MiniX_Debug.getEvents() : [];
+          this.applyDebugEvents(rawEvents);
+        },
+
+        applyDebugEvents(rawEvents) {
+          // Single pass: build the display list and accumulate counts together
+          const counts = {};
+          const allLen = rawEvents.length;
+          for (let i = 0; i < allLen; i++) {
+            const t = rawEvents[i].type;
+            counts[t] = (counts[t] || 0) + 1;
+          }
+
+          const mapped = rawEvents.slice(-60).reverse().map((event) => ({
+            seq: event.seq,
+            type: event.type,
+            component: event.component,
+            time: new Date(event.ts).toLocaleTimeString('en', {
+              hour12: false,
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit'
+            }),
+            summary: this.describeEvent(event)
+          }));
+
+          this.events = mapped;
+          this.debugCounts = counts;
+          this.eventTotal = allLen;
+        },
+
+        describeEvent(event) {
+          const detail = event.detail || {};
+          if (event.type === 'lifecycle') return detail.phase || 'lifecycle';
+          if (event.type === 'watcher') return `${detail.path}: ${this.shortValue(detail.old)} -> ${this.shortValue(detail.new)}`;
+          if (event.type === 'directive') return `${detail.directive || 'directive'}="${detail.expression || ''}"`;
+          if (event.type === 'props') return (detail.changes || []).map((change) => change.key).join(', ') || 'props changed';
+          if (event.type === 'loop') return `${detail.kind || 'loop'} ${detail.expression || detail.message || ''}`;
+          if (event.type === 'store') return `${detail.name}.${detail.path || '(root)'} ${this.shortValue(detail.old)} -> ${this.shortValue(detail.new)}`;
+          if (event.type === 'router') return `${detail.type || 'router'} ${this.shortValue(detail.detail?.to?.fullPath || detail.detail?.route?.fullPath || '')}`;
+          return JSON.stringify(detail);
+        },
+
+        shortValue(value) {
+          if (value === undefined) return 'undefined';
+          if (value === null) return 'null';
+          const text = typeof value === 'string' ? value : JSON.stringify(value);
+          return text.length > 36 ? text.slice(0, 33) + '...' : text;
+        }
+      };
     }
-  };
-}
 
-MiniX.createApp(DebugDemoApp)
-  .dev(true)
-  .use(MiniXStore.plugin())
-  .use(router)
-  .use(MiniX_Debug.plugin({
-    lifecycle: true,
-    watchers: true,
-    directives: true,
-    props: true,
-    loops: true,
-    effects: false,
-    panel: true,
-    verbose: false
-  }))
-  .mount('#debug-demo');
-</script>
+    MiniX.createApp(DebugDemoApp)
+      .dev(true)
+      .use(MiniXStore.plugin())
+      .use(router)
+      .use(MiniX_Debug.plugin({
+        lifecycle: true,
+        watchers: true,
+        directives: true,
+        props: true,
+        loops: true,
+        effects: false,
+        panel: true,
+        verbose: false
+      }))
+      .mount('#debug-demo');
+  </script>
 </body>
+
 </html>

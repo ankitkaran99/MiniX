@@ -1254,8 +1254,7 @@ class InfoCard {
       this.$emit('child-action', { msg: 'InfoCard button clicked', count: this.count });
     }
   };
-  template() {
-    return `
+  view = `
       <div class="card-component">
         <div class="card-component-head" x-text="$props.title || 'No title'"></div>
         <div class="card-component-body col" style="gap:.4rem">
@@ -1264,7 +1263,6 @@ class InfoCard {
         </div>
       </div>
     `;
-  }
   beforeMount() { logLifecycle('InfoCard', 'beforeMount'); }
   mounted()     { logLifecycle('InfoCard', 'mounted'); }
   beforeUpdate(){ logLifecycle('InfoCard', 'beforeUpdate'); }
@@ -1274,14 +1272,12 @@ class InfoCard {
 }
 
 class CardShell {
-  template() {
-    return `
+  view = `
       <div class="card-component">
         <div class="card-component-head"><slot name="title">Default Title</slot></div>
         <div class="card-component-body"><slot name="body">Default body content</slot></div>
       </div>
     `;
-  }
 }
 
 // ═══════════════════════════════════════════════════════════════

@@ -3657,7 +3657,10 @@ class MiniX_Compiler {
 			const isTemplate = template.tagName === 'TEMPLATE';
 			const clone = isTemplate ? template.content.cloneNode(true) : template.cloneNode(true);
 			const nodes = isTemplate ? [...clone.childNodes] : [clone];
-			anchor.parentNode.insertBefore(clone, anchor.nextSibling);
+			// Insert immediately before the anchor so new nodes sit in the correct
+			// DOM position. Inserting after anchor.nextSibling would push content
+			// past any existing sibling that follows the anchor.
+			anchor.parentNode.insertBefore(clone, anchor);
 			const cleanups = [];
 			for (const node of nodes) {
 				const cleanup = compileBranchNode(node);
@@ -6451,7 +6454,8 @@ class MiniX_Component {
 			'$parent', '$root', '$children', '$el', '$bus', '$provider',
 			'$provide', '$inject', '$nextTick', '$listen', '$timeout', '$interval',
 			'$computed', '$watch', '$effect', '$mountChild', '$destroy', '$refresh',
-			'$setProps', '$fetch', '$get', '$snapshot', '$addScope', '$addInstanceAPI'
+			'$setProps', '$fetch', '$get', '$snapshot', '$addScope', '$addInstanceAPI',
+			'$layout', '$view'
 		];
 	
 		if (this.options.dev) dollarKeys.push('$history', '$clearHistory');
@@ -6634,6 +6638,27 @@ class MiniX_Component {
 		target.$destroy = () => this.destroy();
 		target.$refresh = (meta = {}) => this.rerender({ reason: 'manual-refresh', ...meta });
 		target.$setProps = (props = {}, options = {}) => this.updateProps(props, options);
+
+		/**
+		 * Dynamically swap the layout at runtime.
+		 * Pass a string, function, or layout class. Pass null/false to remove the layout.
+		 *   this.$layout(AppShell)
+		 *   this.$layout('<div class="auth">…</div>')
+		 *   this.$layout(null)   // strip layout
+		 */
+		target.$layout = (newLayout) => {
+			this.instance.layout = newLayout;
+			return this.rerender({ reason: 'layout-change' });
+		};
+
+		/**
+		 * Dynamically swap the view template at runtime.
+		 *   this.$view('<h2>New content</h2>')
+		 */
+		target.$view = (newView) => {
+			this.instance.view = newView;
+			return this.rerender({ reason: 'view-change' });
+		};
 	
 		target.$fetch = (url, options = {}) => {
 			const request = this.provider.inject('__minix_request__', MiniX_Request.default());
@@ -7041,12 +7066,12 @@ class MiniX_Component {
 	}
 
 	_resolveTemplateString() {
-		if (typeof this.instance.template === 'function') {
-			return this.instance.template(this.props);
+		if (typeof this.instance.view === 'function') {
+			return this.instance.view(this.props);
 		}
 
-		if (typeof this.instance.template === 'string') {
-			return this.instance.template;
+		if (typeof this.instance.view === 'string') {
+			return this.instance.view;
 		}
 
 		return '';
@@ -7185,14 +7210,94 @@ class MiniX_Component {
 		return this.root ? [this.root] : [];
 	}
 
-	_render() {
-		let template = '';
+	/**
+	 * Resolve the component's content template string.
+	 * Reads `instance.view`, then falls back to the captured root innerHTML for root components.
+	 */
+	_resolveView() {
+		if (typeof this.instance.view === 'function') return this.instance.view(this.props);
+		if (typeof this.instance.view === 'string') return this.instance.view;
+		if (!this.parent) return this._initialTemplate || '';
+		return '';
+	}
 
-		if (typeof this.instance.template === 'function') {
-			template = this.instance.template(this.props);
-		} else if (!this.parent) {
-			template = this._initialTemplate || '';
+	/**
+	 * Resolve the layout wrapper string.
+	 * `instance.layout` may be:
+	 *   - a string  (raw HTML with <template x-yield> slot markers)
+	 *   - a function that receives props and returns a string
+	 *   - a component class with a static `view` or instance `view`
+	 */
+	_resolveLayoutTemplate() {
+		const layout = this.instance.layout;
+		if (!layout) return null;
+		if (typeof layout === 'string') return layout;
+		if (typeof layout === 'function') {
+			// Could be a class or a plain function
+			try {
+				// Try instantiating to read view
+				const inst = new layout();
+				if (typeof inst.view === 'function') return inst.view(this.props);
+				if (typeof inst.view === 'string') return inst.view;
+				// Class instantiated successfully but had no usable view — do not
+				// fall through to the plain-function call below, which would throw.
+				return '';
+			} catch (_) {}
+			// Only reached if new layout() threw, meaning it is a plain function.
+			return layout(this.props) || '';
 		}
+		return null;
+	}
+
+	/**
+	 * Inject view sections into layout yield points.
+	 *
+	 * Default yield:   <template x-yield></template>        ← receives the default view
+	 * Named yields:    <template x-yield="sidebar"></template>
+	 * Named sections:  defined via instance.sections = { sidebar: '<p>…</p>' }
+	 *                  or inline in the view via <template x-section="sidebar">…</template>
+	 */
+	_injectLayout(layoutHtml, viewHtml) {
+		// Extract named sections out of the view HTML, leaving the remainder as the default content.
+		const sections = {};
+		const defaultHtml = viewHtml.replace(
+			/<template[^>]+x-section=["']([^"']+)["'][^>]*>([\s\S]*?)<\/template>/gi,
+			(_, name, content) => { sections[name] = content; return ''; }
+		);
+
+		// Also merge any sections defined directly on the instance.
+		// Inline <template x-section="…"> in the view takes priority; instance.sections
+		// only fills in names that were not defined inline.
+		if (this.instance.sections && typeof this.instance.sections === 'object') {
+			for (const name in this.instance.sections) {
+				if (!Object.prototype.hasOwnProperty.call(sections, name)) {
+					sections[name] = this.instance.sections[name];
+				}
+			}
+		}
+
+		// Replace <template x-yield="name"> with named section content
+		let result = layoutHtml.replace(
+			/<template([^>]*)x-yield=["']([^"']+)["']([^>]*)><\/template>/gi,
+			(_, pre, name, post) => sections[name] !== undefined ? sections[name] : ''
+		);
+
+		// Replace default <template x-yield> (no name) with the remaining view HTML
+		result = result.replace(
+			/<template([^>]*)x-yield([^="'\w][^>]*)?\s*><\/template>/gi,
+			() => defaultHtml
+		);
+
+		return result;
+	}
+
+	_render() {
+		const viewHtml = this._resolveView();
+		const layoutHtml = this._resolveLayoutTemplate();
+
+		// Compose: if a layout exists, inject the view into its yield slots.
+		// Otherwise render the view directly (legacy behaviour preserved).
+		const finalHtml = layoutHtml ? this._injectLayout(layoutHtml, viewHtml) : viewHtml;
 
 		if (typeof this._compilerCleanup === 'function') {
 			this._compilerCleanup();
@@ -7201,28 +7306,24 @@ class MiniX_Component {
 
 		if (!this.root) return;
 
-		
-		
-		
-		
 		const savedScopeProvider = this.root.__minix_scope_provider__;
 
 		this._destroyChildren();
 		delete this.root.__minix_interp_hoist__;
-		
-		
-		
-		
-		
-		if (!this.parent && typeof this.instance.template !== 'function') {
-			this.root.innerHTML = template;
+
+		const renderScope = this._createRenderScope();
+
+		if (!layoutHtml && !this.parent && !this.instance.view) {
+			// Root component with truly static initial/captured HTML — no renderer pass needed
+			this.root.innerHTML = finalHtml;
 		} else {
 			this.root.innerHTML = this.renderer.render(
-				template,
-				this._createRenderScope(),
+				finalHtml,
+				renderScope,
 				{ sanitizer: this.sanitizer, preserveMustaches: true }
 			);
 		}
+
 		this._compilerCleanup = this.compiler.compile(this.root, this);
 
 		if (savedScopeProvider) this.root.__minix_scope_provider__ = savedScopeProvider;

@@ -233,7 +233,7 @@ app.mount('#app');</pre>
     }
   };
 
-  template = `
+  view = `
     &lt;span class="badge" x-bind:class="badgeClass" x-text="row.status"&gt;&lt;/span&gt;
   `;
 }
@@ -254,7 +254,7 @@ class RowActions {
     }
   };
 
-  template = `
+  view = `
     &lt;div class="btn-group"&gt;
       &lt;button class="btn" x-on:click="edit"&gt;Edit&lt;/button&gt;
       &lt;button class="btn" x-on:click="remove"&gt;Delete&lt;/button&gt;
@@ -468,7 +468,7 @@ class RowActions {
     <section class="card">
       <h2>Recommended component style</h2>
       <h3>Prefer directives</h3>
-      <pre>template = `
+      <pre>view = `
   &lt;span x-text="row.status"&gt;&lt;/span&gt;
 `;</pre>
 
@@ -498,7 +498,7 @@ class StatusBadge {
     }
   };
 
-  template = `
+  view = `
     &lt;span class="badge" x-bind:class="badgeClass" x-text="row.status"&gt;&lt;/span&gt;
   `;
 }
@@ -517,7 +517,7 @@ class RowActions {
     }
   };
 
-  template = `
+  view = `
     &lt;div class="btn-group"&gt;
       &lt;button class="btn" x-on:click="edit"&gt;Edit&lt;/button&gt;
       &lt;button class="btn" x-on:click="remove"&gt;Delete&lt;/button&gt;

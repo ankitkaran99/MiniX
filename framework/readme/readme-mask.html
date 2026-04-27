@@ -298,7 +298,7 @@
     maxLen: 8
   };
 },
-template: `
+view: `
   &lt;input x-model="inputCode" 
          x-mask-free="{ token: maskType, max: maxLen }" /&gt;
   &lt;select x-model="maskType"&gt;
@@ -388,7 +388,7 @@ const App = {
       maxLen: 6
     };
   },
-  template: `
+  view: `
     &lt;div&gt;
       &lt;input x-model="phone" x-mask="(999) 999-9999" placeholder="Phone" /&gt;
       &lt;input x-model="coupon" x-mask-free="{ token: dynamicToken, max: maxLen }" placeholder="Dynamic" /&gt;

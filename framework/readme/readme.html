@@ -335,9 +335,161 @@ effect.run(); // initial run
   data() { return { count: 0 }; }
   methods = { inc() { this.count++; } };
   computed = { double() { return this.count * 2; } };
-  template() { return `&lt;button @click="inc"&gt;{{ count }} / {{ double }}&lt;/button&gt;`; }
+  view = `&lt;button @click="inc"&gt;{{ count }} / {{ double }}&lt;/button&gt;`;
 }
 MiniX.createApp(Counter).mount("#app");</code></pre>
+    
+    <h3>🎨 View & Layout — New Template System</h3>
+    <p>MiniX now supports <strong>view</strong> and <strong>layout</strong> properties for cleaner separation of component content and wrapper shells.</p>
+    
+    <pre><code>class MyComponent {
+  // ✅ Preferred — the component's own content
+  view = '&lt;h2&gt;Hello&lt;/h2&gt;'
+
+  // ✅ Preferred — the wrapper shell
+  layout = MainLayout          // a class, string, or function
+}</code></pre>
+    
+    <p><strong>Why "view"?</strong> It follows the Model-View pattern and avoids the ambiguity of "template" (which can mean layout or content).</p>
+    
+    <h4>1 — Basic layout (default yield) — MOST COMMON</h4>
+    <pre><code>// layouts/MainLayout.js
+class MainLayout {
+  view = `
+    &lt;div class="main-layout"&gt;
+      &lt;nav&gt;My App&lt;/nav&gt;
+      &lt;main&gt;
+        &lt;template x-yield&gt;&lt;/template&gt;   &lt;!-- view content goes here --&gt;
+      &lt;/main&gt;
+    &lt;/div&gt;
+  `
+}
+
+// pages/Home.js
+class Home {
+  layout = MainLayout
+  view   = '&lt;h2&gt;Welcome home!&lt;/h2&gt;'
+}
+
+// Renders:
+// &lt;div class="main-layout"&gt;
+//   &lt;nav&gt;My App&lt;/nav&gt;
+//   &lt;main&gt;&lt;h2&gt;Welcome home!&lt;/h2&gt;&lt;/main&gt;
+// &lt;/div&gt;</code></pre>
+    
+    <h4>2 — Named yield slots — ADVANCED</h4>
+    <pre><code>class AdminLayout {
+  view = `
+    &lt;div class="admin"&gt;
+      &lt;aside&gt;
+        &lt;template x-yield="sidebar"&gt;&lt;/template&gt;
+      &lt;/aside&gt;
+      &lt;section&gt;
+        &lt;template x-yield&gt;&lt;/template&gt;    &lt;!-- default slot --&gt;
+      &lt;/section&gt;
+    &lt;/div&gt;
+  `
+}
+
+class Dashboard {
+  layout = AdminLayout
+
+  // Named sections are declared inline inside the view using &lt;template x-section="..."&gt;
+  view = `
+    &lt;template x-section="sidebar"&gt;
+      &lt;a href="/users"&gt;Users&lt;/a&gt;
+      &lt;a href="/settings"&gt;Settings&lt;/a&gt;
+    &lt;/template&gt;
+
+    &lt;h1&gt;Dashboard&lt;/h1&gt;
+    &lt;p&gt;Everything looks good.&lt;/p&gt;
+  `
+  // Anything NOT inside an x-section becomes the default yield content.
+}</code></pre>
+    
+    <h4>3 — Sections as a plain object</h4>
+    <pre><code>class Profile {
+  layout = AdminLayout
+
+  view = '&lt;p&gt;Profile page content&lt;/p&gt;'
+
+  // Named sections as a data property — merged with any inline &lt;template x-section&gt; tags
+  sections = {
+    sidebar: '&lt;a href="/profile"&gt;Profile&lt;/a&gt;'
+  }
+}</code></pre>
+    
+    <h4>4 — Inline layout string</h4>
+    <pre><code>const cardShell = `
+  &lt;div class="card"&gt;
+    &lt;div class="card-body"&gt;
+      &lt;template x-yield&gt;&lt;/template&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+`
+
+class ConfirmDialog {
+  layout = cardShell
+  view   = '&lt;p&gt;Are you sure?&lt;/p&gt;'
+}</code></pre>
+    
+    <h4>5 — Layout as a function (receives props)</h4>
+    <pre><code>class Wizard {
+  layout = (props) =&gt; `
+    &lt;div class="wizard wizard--step-${props.step}"&gt;
+      &lt;header&gt;Step ${props.step} of ${props.total}&lt;/header&gt;
+      &lt;template x-yield&gt;&lt;/template&gt;
+    &lt;/div&gt;
+  `
+  view = '&lt;p&gt;Fill in the form below.&lt;/p&gt;'
+}</code></pre>
+    
+    <h4>6 — Runtime layout / view switching</h4>
+    <pre><code>class App {
+  layout = MainLayout
+  view   = '&lt;p&gt;Loading…&lt;/p&gt;'
+
+  mounted() {
+    // Swap the layout shell at any time — triggers a re-render
+    this.$layout(MinimalLayout)
+
+    // Swap just the content — triggers a re-render
+    this.$view('&lt;p&gt;Content loaded!&lt;/p&gt;')
+
+    // Remove the layout entirely
+    this.$layout(null)
+  }
+}</code></pre>
+    
+    <h4>7 — Multiple pages, one layout</h4>
+    <pre><code>const mainTemplate = `
+  &lt;div class='main-layout'&gt;
+    &lt;template x-yield&gt;&lt;/template&gt;
+  &lt;/div&gt;
+`
+
+class Home {
+  layout = mainTemplate
+  view   = '&lt;h2&gt;Hello&lt;/h2&gt;'
+}
+
+class Login {
+  layout = mainTemplate
+  view   = '&lt;h2&gt;Login&lt;/h2&gt;'
+}
+
+// Home renders:   &lt;div class='main-layout'&gt;&lt;h2&gt;Hello&lt;/h2&gt;&lt;/div&gt;
+// Login renders:  &lt;div class='main-layout'&gt;&lt;h2&gt;Login&lt;/h2&gt;&lt;/div&gt;</code></pre>
+    
+    <h4>Quick reference — yield markers</h4>
+    <pre><code>&lt;template x-yield&gt;&lt;/template&gt;           Default slot — receives the whole view
+                                          (minus any named sections extracted from it)
+
+&lt;template x-yield="sidebar"&gt;&lt;/template&gt;  Named slot — receives the matching section
+
+&lt;template x-section="sidebar"&gt;…&lt;/template&gt;  Inline section declaration inside a view
+                                               (stripped from default content automatically)</code></pre>
+    
     <h3>Component Instance APIs (available as <code>this.$xxx</code>)</h3>
     <table class="api-table">
       <tr><td><code>$state</code></td><td>Underlying MiniX_State instance</td></tr>
@@ -434,7 +586,7 @@ MiniX.createApp(App).use(loggerPlugin).mount("#app");</code></pre>
     <h3>1. Global store with addScope</h3>
     <pre><code>const store = new MiniX_State({ count: 0 });
 const app = MiniX.createApp({
-  template: `&lt;button @click="store.set('count', store.get('count')+1)"&gt;{{ store.count }}&lt;/button&gt;`
+  view: `&lt;button @click="store.set('count', store.get('count')+1)"&gt;{{ store.count }}&lt;/button&gt;`
 }).addScope(() => ({ store: store.raw() })).mount("#app");</code></pre>
     <h3>2. Scoped x-data with nested component</h3>
     <pre><code>&lt;div x-data="{ open: false }"&gt;
@@ -449,7 +601,7 @@ const app = MiniX.createApp({
     this.user = await this.$fetch('/api/user', { retry: 2 });
     this.loading = false;
   }
-  template() { return `&lt;div&gt;&lt;div x-show="loading"&gt;Loading...&lt;/div&gt;&lt;pre x-text="JSON.stringify(user, null, 2)"&gt;&lt;/pre&gt;&lt;/div&gt;`; }
+  view = `&lt;div&gt;&lt;div x-show="loading"&gt;Loading...&lt;/div&gt;&lt;pre x-text="JSON.stringify(user, null, 2)"&gt;&lt;/pre&gt;&lt;/div&gt;`; }
 }</code></pre>
     <h3>4. Custom directive: x-click-outside</h3>
     <pre><code>MiniX.directive('x-click-outside', ({ el, expression, component }) => {

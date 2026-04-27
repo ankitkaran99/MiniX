@@ -8,8 +8,7 @@ class Customer {
     };
   }
 
-  template() {
-    return `
+  view = `
       <div>
         <h2>👤 Customer Details</h2>
         <div class="card">
@@ -32,7 +31,6 @@ class Customer {
         </div>
       </div>
     `;
-  }
 }
 
 // Register the component globally (required for lazy loading)
