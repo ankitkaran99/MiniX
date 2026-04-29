@@ -37,7 +37,7 @@
 <body>
     <div id="app">
         <div id="feed-scroll">
-            <div class="feed" x-scroll="loadMore" x-scroll-dir="bottom" x-scroll-threshold="20">
+            <div class="feed" x-scroll="loadMore" x-scroll-dir="bottom" x-scroll-threshold="20" x-scroll-initial>
                 <div class="feed-item" x-for="item in items" :key="item">{{ item }}</div>
                 <div class="loading" x-show="isLoading">Loading more items...</div>
             </div>
@@ -56,10 +56,6 @@
                 };
             }
 
-            mounted() {
-                this.loadMore();
-            }
-
             loadMore(el, ctx) {
                 this.isLoading = true;
 
@@ -73,7 +69,7 @@
                 this.page++;
                 this.isLoading = false;
 
-                ctx.done(); // this is the important bit
+                ctx.done();
             }
         }
 

@@ -881,7 +881,16 @@
 					const label = hookLabel(hook, source + "[" + i + "]");
 					emitDebug("hook:start", { source, index: i, name: label, to: payload?.to, from: payload?.from });
 					try {
-						await hook(payload);
+						const expectsPayloadFirst =
+							source === "afterEach" ||
+							source === "beforeRouteEnter" ||
+							source === "afterRouteEnter" ||
+							source === "beforeRouteLeave";
+						if (expectsPayloadFirst && hook.length <= 1) {
+							await hook(payload);
+						} else {
+							await hook(payload?.to, payload?.from, payload);
+						}
 					} catch (error) {
 						emitDebug("hook:error", { source, index: i, name: label, to: payload?.to, from: payload?.from, error: String(error?.message || error) });
 						throw error;

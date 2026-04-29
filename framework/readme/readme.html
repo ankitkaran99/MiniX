@@ -227,6 +227,7 @@
         <li><a href="#effect-system">⚡ MiniX_Effect & Batching</a></li>
         <li><a href="#directives">🎛️ Directive Reference (all x-*)</a></li>
         <li><a href="#component-system">🧩 Component System (lifecycle, props, slots)</a></li>
+        <li><a href="#layout-partials">🧱 Layout Partials (x-partial)</a></li>
         <li><a href="#global-scope">🌍 Global State & Scope Injection</a></li>
         <li><a href="#compiler-internals">⚙️ Compiler & Templating (fast-for, blueprints)</a></li>
         <li><a href="#request-client">🌐 MiniX_Request — HTTP client</a></li>
@@ -480,15 +481,118 @@ class Login {
 
 // Home renders:   &lt;div class='main-layout'&gt;&lt;h2&gt;Hello&lt;/h2&gt;&lt;/div&gt;
 // Login renders:  &lt;div class='main-layout'&gt;&lt;h2&gt;Login&lt;/h2&gt;&lt;/div&gt;</code></pre>
-    
-    <h4>Quick reference — yield markers</h4>
-    <pre><code>&lt;template x-yield&gt;&lt;/template&gt;           Default slot — receives the whole view
-                                          (minus any named sections extracted from it)
 
-&lt;template x-yield="sidebar"&gt;&lt;/template&gt;  Named slot — receives the matching section
+    <h3 id="layout-partials">🧱 Layout Partials — <code>view()</code> + <code>x-partial</code></h3>
+    <p>
+      For layouts that need to compose several distinct regions (navbar, sidebar, footer), MiniX supports
+      <strong>layout partials</strong>. The layout class defines its shell via the standard <code>view</code>
+      property (string or method), and one method per partial region. Each region is injected into the
+      shell at render time via <code>&lt;template x-partial="<em>name</em>"&gt;&lt;/template&gt;</code>.
+    </p>
 
-&lt;template x-section="sidebar"&gt;…&lt;/template&gt;  Inline section declaration inside a view
-                                               (stripped from default content automatically)</code></pre>
+    <h4>How it works</h4>
+    <ul>
+      <li>The layout class defines its shell in <strong><code>view</code></strong> — a string or method — containing <code>x-partial</code> and <code>x-yield</code> markers.</li>
+      <li>Each partial is a <strong>plain method</strong> on the class (e.g. <code>header()</code>, <code>footer()</code>) that returns an HTML string.</li>
+      <li>During render, every <code>&lt;template x-partial="<em>name</em>"&gt;&lt;/template&gt;</code> in the shell is replaced by calling <code>layoutInstance.<em>name</em>(props)</code>.</li>
+      <li><code>&lt;template x-yield&gt;&lt;/template&gt;</code> still works exactly as before — receives the component's <code>view</code> content.</li>
+      <li>Partials are resolved <em>before</em> yield injection, so partial output can sit freely alongside yield markers.</li>
+    </ul>
+
+    <h4>8 — Layout class with <code>view</code> and partials</h4>
+    <pre><code>class MainLayout {
+  header() {
+    return `
+      &lt;nav class="navbar" id="layout-navbar"&gt;
+        &lt;div class="nav-brand"&gt;My App&lt;/div&gt;
+      &lt;/nav&gt;
+    `;
+  }
+
+  footer() {
+    return `
+      &lt;footer class="content-footer"&gt;
+        &lt;div&gt;© 2025 My App&lt;/div&gt;
+      &lt;/footer&gt;
+    `;
+  }
+
+  view = `
+    &lt;div class="layout-wrapper"&gt;
+      &lt;div class="layout-container"&gt;
+
+        &lt;!-- regular x-component child works as normal --&gt;
+        &lt;template x-component="Sidebar"&gt;&lt;/template&gt;
+
+        &lt;div class="layout-page"&gt;
+          &lt;!-- inject header() partial --&gt;
+          &lt;template x-partial="header"&gt;&lt;/template&gt;
+
+          &lt;div class="content-wrapper"&gt;
+            &lt;!-- view content injected here --&gt;
+            &lt;template x-yield&gt;&lt;/template&gt;
+
+            &lt;!-- inject footer() partial --&gt;
+            &lt;template x-partial="footer"&gt;&lt;/template&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+
+      &lt;/div&gt;
+    &lt;/div&gt;
+  `
+}
+
+class Dashboard {
+  layout = MainLayout
+  view   = '&lt;h1&gt;Dashboard&lt;/h1&gt;'
+}</code></pre>
+
+    <h4>9 — Partials receive props</h4>
+    <p>Each partial method receives the component's current <code>props</code> as its first argument, enabling context-aware regions without extra state:</p>
+    <pre><code>class AppLayout {
+  header(props) {
+    return `
+      &lt;nav&gt;
+        &lt;span&gt;${props.appName || 'My App'}&lt;/span&gt;
+        &lt;span class="user-greeting"&gt;Welcome, ${props.user || 'Guest'}&lt;/span&gt;
+      &lt;/nav&gt;
+    `;
+  }
+
+  view = `
+    &lt;template x-partial="header"&gt;&lt;/template&gt;
+    &lt;main&gt;
+      &lt;template x-yield&gt;&lt;/template&gt;
+    &lt;/main&gt;
+  `
+}
+
+class Page {
+  layout = AppLayout
+  view   = '&lt;p&gt;Page content here.&lt;/p&gt;'
+  data() { return { appName: 'Acme', user: 'Alice' }; }
+}</code></pre>
+
+    <div class="note">
+      <strong>Partial resolution order:</strong> <code>x-partial</code> markers are resolved first (before <code>x-yield</code> injection). If no matching method exists on the layout instance the marker is silently replaced with an empty string and a <code>console.warn</code> is emitted.
+    </div>
+
+    <div class="note tip">
+      💡 <strong>When to use partials:</strong> Use a plain <code>view</code> string when the layout shell is a single static block. Add partial methods (<code>header()</code>, <code>footer()</code>, etc.) when you want each region to be independently defined, tested, or overridden in a subclass.
+    </div>
+
+    <h4>Quick reference — all layout markers</h4>
+    <pre><code>&lt;template x-yield&gt;&lt;/template&gt;                   Default slot — receives the whole view
+                                                   (minus any named sections extracted from it)
+
+&lt;template x-yield="sidebar"&gt;&lt;/template&gt;          Named slot — receives the matching x-section
+
+&lt;template x-section="sidebar"&gt;…&lt;/template&gt;       Inline section declared inside a view
+                                                   (stripped from default content automatically)
+
+&lt;template x-partial="header"&gt;&lt;/template&gt;          Calls layout.header(props) — layout partials only
+&lt;template x-partial="footer"&gt;&lt;/template&gt;          Calls layout.footer(props)
+&lt;template x-partial="sidebar"&gt;&lt;/template&gt;         Any method name is valid</code></pre>
     
     <h3>Component Instance APIs (available as <code>this.$xxx</code>)</h3>
     <table class="api-table">
