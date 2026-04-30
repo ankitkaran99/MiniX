@@ -689,16 +689,21 @@ class MiniX_State {
 		return Boolean(targetWatchers && targetWatchers.size);
 	}
 
+	// Shared stack buffer for _walkParentLinks — avoids a `new Array` allocation per notification.
+	// The stack holds triples: [parentTarget, parentKey, depth] packed flat.
+	static _parentLinkStack = new Array(256);
+
 	// Shared parent-link traversal used by both branches of _bubbleTargetNotify.
 	_walkParentLinks(startTarget, newVal, oldVal, meta) {
 		const parentLinks = this._parentLinks.get(startTarget);
 		if (!parentLinks || !parentLinks.length) return;
 		let structuralMeta = null;
-		// Pre-size to avoid array growth on the common case of a shallow parent chain.
-		const stack = new Array(parentLinks.length * 3);
+		const stack = MiniX_State._parentLinkStack;
 		let sp = 0;
 		for (let i = 0; i < parentLinks.length; i++) {
 			const link = parentLinks[i];
+			// Grow shared stack if needed (rare).
+			if (sp + 3 > stack.length) stack.length = stack.length * 2;
 			stack[sp++] = link.parentTarget;
 			stack[sp++] = link.parentKey;
 			stack[sp++] = 0;
@@ -716,6 +721,7 @@ class MiniX_State {
 			if (links && links.length) {
 				for (let i = 0; i < links.length; i++) {
 					const link = links[i];
+					if (sp + 3 > stack.length) stack.length = stack.length * 2;
 					stack[sp++] = link.parentTarget;
 					stack[sp++] = link.parentKey;
 					stack[sp++] = depth + 1;
@@ -750,6 +756,9 @@ class MiniX_State {
 				if (hasGlobal) this._notifyGlobalWatchers(newVal, oldVal, prop, meta);
 				return;
 			}
+			// Fast-exit: if no global watchers and no target watcher on any target at all,
+			// skip the potentially expensive parent-link walk entirely.
+			if (!hasGlobal && this._targetWatcherTargetCount === 0) return;
 			if (!hasGlobal && this._targetWatcherTargetCount <= 1) return;
 			this._walkParentLinks(target, newVal, oldVal, meta);
 			if (hasGlobal) this._notifyGlobalWatchers(newVal, oldVal, prop, meta);
@@ -1111,15 +1120,12 @@ class MiniX_State {
 				value = this._unwrapProxy(value);
 				const hadKey = Object.prototype.hasOwnProperty.call(obj, prop);
 				const oldVal = obj[prop];
-				const isWrap = this._isWrappable(value);
-				
-				const wrapped = isWrap ? this._wrap(value, this._joinPath(basePath, prop), true) : value;
-				if (hadKey && Object.is(oldVal, wrapped)) return true;
+				if (hadKey && Object.is(oldVal, value)) return true;
 				if (hadKey) this._unlinkTargetFromParent(oldVal, obj, String(prop));
-				obj[prop] = wrapped;
-				if (this._dev) this._devCapture('set', this._joinPath(basePath, prop), oldVal, wrapped, { type: 'set' });
+				obj[prop] = value;
+				if (this._dev) this._devCapture('set', this._joinPath(basePath, prop), oldVal, value, { type: 'set' });
 				
-				this._bubbleTargetNotify(obj, prop, wrapped, oldVal, isArray && prop === 'length'
+				this._bubbleTargetNotify(obj, prop, value, oldVal, isArray && prop === 'length'
 					? { type: 'set', affectsLength: true }
 					: MiniX_State._META_SET);
 				if (!hadKey && !isArray) {
@@ -1517,9 +1523,14 @@ function _minix_splitPipes(expr) {
 	return parts.length ? parts : [expr];
 }
 
+// Cache eval-scope proxies by the scope object itself to avoid allocating
+// a fresh Proxy on every _evaluate() / _compileClassDirective run.
+const _minix_evalScopeCache = new WeakMap();
 function _minix_createEvalScope(scope) {
 	if (!scope || typeof scope !== 'object') scope = Object.create(null);
-	return new Proxy(scope, {
+	const cached = _minix_evalScopeCache.get(scope);
+	if (cached !== undefined) return cached;
+	const proxy = new Proxy(scope, {
 		has(target, prop) {
 			if (prop in target) return true;
 			if (typeof globalThis !== 'undefined' && prop in globalThis) return false;
@@ -1544,6 +1555,8 @@ function _minix_createEvalScope(scope) {
 			return true;
 		}
 	});
+	_minix_evalScopeCache.set(scope, proxy);
+	return proxy;
 }
 
 
@@ -2626,8 +2639,10 @@ class MiniX_Effect {
 	
 	
 	
+	static _sortBuf = [];
 	static _sortQueue(queue) {
-		const buf = [];
+		const buf = MiniX_Effect._sortBuf;
+		buf.length = 0;
 		for (const e of queue) buf.push(e);
 		buf.sort((a, b) => {
 			const pd = b.priority - a.priority;
@@ -3777,8 +3792,13 @@ class MiniX_Compiler {
 	}
 
 	_compileClassDirective(el, expression, component) {
+		let lastComputedClass = undefined;
 		return this._effect(component, () => {
-			const value = this._evaluate(expression, this.createScope(component, {}, el), {});
+			const scope = this.createScope(component, {}, el);
+			const value = this._evaluate(expression, scope, {});
+			// Avoid re-serialising and DOM-writing when nothing changed.
+			if (value === lastComputedClass) return;
+			lastComputedClass = value;
 			MiniX_Compiler._patchClassValue(el, value);
 		});
 	}
@@ -6889,7 +6909,8 @@ class MiniX_Component {
 		this._boundMethods = {};
 		Object.keys(methods).forEach((key) => {
 			if (typeof methods[key] === 'function') {
-				const bound = methods[key].bind(this.instance);
+				const original = methods[key].bind(this.instance);
+				const bound = (...args) => this.state.batch(() => original(...args));
 				Object.defineProperty(this.instance, key, {
 					value: bound,
 					writable: true,
@@ -7919,7 +7940,6 @@ MiniX.readGlobalScopeVersion = function() {
 MiniX.invalidateGlobalScopes = function() {
 	return MiniX._globalScopeState.increment('version');
 };
-
 const MiniX_Global = typeof window !== 'undefined' ? window : globalThis;
 MiniX_Global.MiniX = MiniX;
 

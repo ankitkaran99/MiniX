@@ -215,11 +215,14 @@ class Inspect {
     }
 
     async validateField(field, value, rule, allData) {
-        if (rule.rules.required && !this.checkRequired(value)) {
+        const isFileField = field?.type === 'file';
+        const fileValue = isFileField ? field.files : value;
+
+        if (rule.rules.required && !this.checkRequired(fileValue)) {
             return this.getMessage(rule, 'required');
         }
 
-        if (value === '' || value === undefined || value === null) return true;
+        if (Inspect._isEmptyValue(fileValue)) return true;
 
         for (const [ruleName, ruleValue] of Object.entries(rule.rules)) {
             if (ruleName === 'required') continue;
@@ -227,7 +230,14 @@ class Inspect {
             const validator = Inspect.validators[ruleName];
             if (!validator) continue;
 
-            const result = await validator.call(this, value, ruleValue, field, allData);
+            const validatorValue = (
+                isFileField &&
+                (ruleName === 'file_format_in' || ruleName === 'file_format_nin' || ruleName === 'file_size_min' || ruleName === 'file_size_max')
+            )
+                ? fileValue
+                : value;
+
+            const result = await validator.call(this, validatorValue, ruleValue, field, allData);
 
             if (result !== true) {
                 return this.getMessage(rule, ruleName);
@@ -266,6 +276,10 @@ class Inspect {
 
         const field = fields[0];
 
+        if (field.type === 'file') {
+            return field.multiple ? Array.from(field.files || []) : (field.files?.[0] || null);
+        }
+
         if (field.type === 'checkbox') {
             return field.checked ? field.value : '';
         }
@@ -274,8 +288,16 @@ class Inspect {
     }
 
     checkRequired(value) {
+        if (typeof FileList !== 'undefined' && value instanceof FileList) return value.length > 0;
         if (Array.isArray(value)) return value.length > 0;
+        if (value && typeof value === 'object' && 'name' in value && 'size' in value) return true;
         return value !== '' && value !== null && value !== undefined;
+    }
+
+    static _isEmptyValue(value) {
+        if (typeof FileList !== 'undefined' && value instanceof FileList) return value.length === 0;
+        if (Array.isArray(value)) return value.length === 0;
+        return value === '' || value === undefined || value === null;
     }
 
     static _getByPath(obj, path) {
@@ -285,6 +307,16 @@ class Inspect {
             .split('.')
             .filter(Boolean)
             .reduce((acc, key) => (acc == null ? undefined : acc[key]), obj);
+    }
+
+    static _timeToMinutes(value) {
+        const match = String(value ?? '').trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+        if (!match) return NaN;
+        const hours = Number(match[1]);
+        const minutes = Number(match[2]);
+        const seconds = Number(match[3] || 0);
+        if (hours > 23 || minutes > 59 || seconds > 59) return NaN;
+        return hours * 60 + minutes + (seconds / 60);
     }
 
     showError(field, message) {
@@ -319,6 +351,8 @@ class Inspect {
         min_elem: (v, m) => v.length > m,
         max_elem: (v, m) => v.length < m,
         exact_elem: (v, l) => v.length == l,
+        min_eq_elem: (v, m) => Array.isArray(v) ? v.length >= m : true,
+        max_eq_elem: (v, m) => Array.isArray(v) ? v.length <= m : true,
         in_arr: (v, a) => v === '' || (Array.isArray(a) && a.includes(v)),
         n_in_arr: (v, a) => v === '' || (Array.isArray(a) && !a.includes(v)),
         equal: (v, e) => v === '' || v == e,
@@ -357,8 +391,11 @@ class Inspect {
         lowercase: (v) => v === '' || String(v) === String(v).toLowerCase(),
         uppercase: (v) => v === '' || String(v) === String(v).toUpperCase(),
         accepted: (v) => ['yes', 'on', '1', 1, true, 'true'].includes(v),
+        lower: (v, limit) => v === '' || parseFloat(v) < limit,
+        higher: (v, limit) => v === '' || parseFloat(v) > limit,
         phone: (v) => v === '' || /^\+?[1-9]\d{1,14}$/.test(String(v).replace(/[\s\-\(\)]/g, '')),
         uuid: (v) => v === '' || /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(v)),
+        domain: (v) => v === '' || /^(?=.{1,253}$)(?!-)(?:[a-zA-Z0-9-]{1,63}\.)+[a-zA-Z]{2,63}$/.test(String(v)),
         json: (v) => {
             if (v === '') return true;
             try {
@@ -368,7 +405,24 @@ class Inspect {
                 return false;
             }
         },
+        starts_with: (v, prefix) => v === '' || String(v).startsWith(String(prefix)),
+        ends_with: (v, suffix) => v === '' || String(v).endsWith(String(suffix)),
+        not_regex: (v, pattern) => v === '' || !new RegExp(pattern).test(String(v)),
+        mac_address: (v) => v === '' || /^(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$/.test(String(v)),
+        boolean: (v) => v === '' || ['true', 'false', '1', '0', 'yes', 'no', 'on', 'off'].includes(String(v).toLowerCase()),
+        char: (v, allowed) => {
+            if (v === '') return true;
+            const allowedChars = Array.isArray(allowed) ? allowed.join('') : String(allowed ?? '');
+            const escaped = allowedChars.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            return new RegExp(`^[${escaped}]+$`).test(String(v));
+        },
         date: (v) => v === '' || !isNaN(Date.parse(v)),
+        date_min: (v, minDate) => v === '' || new Date(v) >= new Date(minDate),
+        date_max: (v, maxDate) => v === '' || new Date(v) <= new Date(maxDate),
+        date_exact: (v, exactDate) => v === '' || new Date(v).getTime() === new Date(exactDate).getTime(),
+        date_lower: (v, limitDate) => v === '' || new Date(v) < new Date(limitDate),
+        date_higher: (v, limitDate) => v === '' || new Date(v) > new Date(limitDate),
+        date_equal: (v, equalDate) => v === '' || new Date(v).getTime() === new Date(equalDate).getTime(),
         time: (v) => v === '' || /^([01]?[0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$/.test(v),
         time_min: function(v, t) {
             return v === '' || Inspect._timeToMinutes(v) >= Inspect._timeToMinutes(t);
@@ -376,15 +430,46 @@ class Inspect {
         time_max: function(v, t) {
             return v === '' || Inspect._timeToMinutes(v) <= Inspect._timeToMinutes(t);
         },
+        time_exact: (v, t) => v === '' || Inspect._timeToMinutes(v) === Inspect._timeToMinutes(t),
+        time_lower: (v, t) => v === '' || Inspect._timeToMinutes(v) < Inspect._timeToMinutes(t),
+        time_higher: (v, t) => v === '' || Inspect._timeToMinutes(v) > Inspect._timeToMinutes(t),
+        time_equal: (v, t) => v === '' || Inspect._timeToMinutes(v) === Inspect._timeToMinutes(t),
         file_format_in: (files, a) => {
             if (!files || files.length === 0) return true;
-            return Array.from(files).every(f => a.includes(f.name.split('.').pop().toLowerCase()));
+            const allowed = Array.isArray(a) ? a : String(a).split(',').map(part => part.trim().toLowerCase()).filter(Boolean);
+            return Array.from(files).every(f => allowed.includes(f.name.split('.').pop().toLowerCase()));
+        },
+        file_format_nin: (files, a) => {
+            if (!files || files.length === 0) return true;
+            const disallowed = Array.isArray(a) ? a : String(a).split(',').map(part => part.trim().toLowerCase()).filter(Boolean);
+            return Array.from(files).every(f => !disallowed.includes(f.name.split('.').pop().toLowerCase()));
+        },
+        file_size_min: (files, m) => {
+            if (!files || files.length === 0) return true;
+            return Array.from(files).every(f => f.size >= m * 1024);
         },
         file_size_max: (files, m) => {
             if (!files || files.length === 0) return true;
             return Array.from(files).every(f => f.size <= m * 1024);
         },
         alpha_num_space: (v) => v === '' || /^[a-zA-Z0-9\s]+$/.test(String(v)),
+        credit_card: (v) => {
+            if (v === '') return true;
+            const digits = String(v).replace(/\D/g, '');
+            if (!digits) return false;
+            let sum = 0;
+            let shouldDouble = false;
+            for (let i = digits.length - 1; i >= 0; i--) {
+                let digit = Number(digits[i]);
+                if (shouldDouble) {
+                    digit *= 2;
+                    if (digit > 9) digit -= 9;
+                }
+                sum += digit;
+                shouldDouble = !shouldDouble;
+            }
+            return sum % 10 === 0;
+        },
         base64: (v) => {
             if (v === '') return true;
             try {

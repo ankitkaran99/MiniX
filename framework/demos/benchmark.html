@@ -1,0 +1,1040 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vue 3 vs MiniX Benchmark</title>
+  <style>
+    :root {
+      --bg: #f4efe6;
+      --paper: #fffdf8;
+      --ink: #1b1a17;
+      --muted: #6c665d;
+      --line: #d8cfbf;
+      --accent: #d44d1f;
+      --accent-2: #0f766e;
+      --accent-3: #1d4ed8;
+      --good: #166534;
+      --bad: #b91c1c;
+      --shadow: 0 14px 40px rgba(27, 26, 23, 0.08);
+      --mono: "IBM Plex Mono", "Cascadia Code", Consolas, monospace;
+      --sans: "Segoe UI", "Trebuchet MS", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: var(--sans);
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(212, 77, 31, 0.14), transparent 34%),
+        radial-gradient(circle at top right, rgba(15, 118, 110, 0.10), transparent 28%),
+        linear-gradient(180deg, #f8f3ea 0%, var(--bg) 100%);
+    }
+
+    .shell {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 28px 18px 36px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 1.35fr 0.9fr;
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+
+    .hero-card,
+    .panel,
+    .app-shell {
+      background: color-mix(in srgb, var(--paper) 90%, white 10%);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+    }
+
+    .hero-card {
+      padding: 24px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .hero-card::after {
+      content: "";
+      position: absolute;
+      width: 180px;
+      height: 180px;
+      right: -40px;
+      top: -40px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, rgba(212, 77, 31, 0.12), rgba(29, 78, 216, 0.04));
+    }
+
+    .eyebrow,
+    .kicker {
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    h1 {
+      margin: 10px 0 12px;
+      font-size: clamp(34px, 4.2vw, 58px);
+      line-height: 0.95;
+      letter-spacing: -0.05em;
+      max-width: 9ch;
+    }
+
+    .hero p,
+    .note,
+    .status,
+    .meta,
+    .empty,
+    .footer-note {
+      color: var(--muted);
+    }
+
+    .hero p {
+      margin: 0;
+      max-width: 65ch;
+      line-height: 1.5;
+      font-size: 15px;
+    }
+
+    .hero-stats {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .hero-stat {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.58);
+    }
+
+    .hero-stat strong {
+      display: block;
+      font-size: 22px;
+      letter-spacing: -0.04em;
+      margin-top: 4px;
+    }
+
+    .panel {
+      padding: 18px;
+    }
+
+    .panel h2,
+    .app-head h3 {
+      margin: 0;
+      font-size: 16px;
+      letter-spacing: -0.02em;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .field label {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .field input {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: white;
+      color: var(--ink);
+      font: inherit;
+      padding: 11px 12px;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
+
+    button {
+      appearance: none;
+      border: 0;
+      border-radius: 999px;
+      padding: 11px 16px;
+      font: 700 13px/1 var(--sans);
+      letter-spacing: 0.02em;
+      cursor: pointer;
+      transition: transform 0.12s ease, opacity 0.12s ease, background 0.12s ease;
+    }
+
+    button:hover { transform: translateY(-1px); }
+    button:disabled { opacity: 0.45; cursor: wait; transform: none; }
+
+    .primary { background: var(--ink); color: white; }
+    .secondary { background: #ece5d8; color: var(--ink); }
+    .ghost { background: #eff6ff; color: var(--accent-3); }
+
+    .status {
+      margin-top: 14px;
+      min-height: 1.2em;
+      font-size: 14px;
+    }
+
+    .results-wrap {
+      margin: 18px 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.65);
+    }
+
+    th,
+    td {
+      padding: 12px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--line);
+      font-size: 14px;
+      vertical-align: top;
+    }
+
+    th {
+      font-family: var(--mono);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      background: rgba(236, 229, 216, 0.55);
+    }
+
+    tbody tr:last-child td { border-bottom: 0; }
+
+    .winner-vue { color: var(--accent-3); font-weight: 700; }
+    .winner-minix { color: var(--accent-2); font-weight: 700; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+
+    .app-shell {
+      overflow: hidden;
+      min-height: 560px;
+    }
+
+    .app-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(255,255,255,0.7), rgba(246,240,232,0.75));
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: #f4ede1;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: currentColor;
+    }
+
+    .app-frame {
+      padding: 14px;
+    }
+
+    .mount {
+      min-height: 500px;
+      border: 1px dashed var(--line);
+      border-radius: 16px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.64), rgba(255,255,255,0.82)),
+        repeating-linear-gradient(
+          0deg,
+          transparent 0,
+          transparent 28px,
+          rgba(216, 207, 191, 0.10) 28px,
+          rgba(216, 207, 191, 0.10) 29px
+        );
+      overflow: hidden;
+    }
+
+    .bench-app {
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .bench-toolbar,
+    .bench-summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .bench-search,
+    .bench-stat {
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 10px 12px;
+    }
+
+    .bench-search label,
+    .bench-stat .label {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .bench-search input {
+      width: 100%;
+      border: 0;
+      outline: none;
+      padding: 0;
+      font: inherit;
+      background: transparent;
+      color: var(--ink);
+    }
+
+    .bench-stat strong {
+      display: block;
+      font-size: 22px;
+      line-height: 1.05;
+      letter-spacing: -0.04em;
+    }
+
+    .bench-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 8px;
+    }
+
+    .bench-row {
+      display: grid;
+      grid-template-columns: 72px 1fr 72px 90px;
+      gap: 10px;
+      align-items: center;
+      padding: 10px 12px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.92);
+    }
+
+    .bench-row.is-active {
+      background: linear-gradient(90deg, rgba(15, 118, 110, 0.10), rgba(255,255,255,0.98));
+      border-color: rgba(15, 118, 110, 0.28);
+    }
+
+    .pill {
+      justify-self: start;
+      padding: 5px 9px;
+      border-radius: 999px;
+      background: #f4ede1;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+
+    .score {
+      justify-self: end;
+      font-family: var(--mono);
+      color: var(--accent-3);
+      font-weight: 700;
+    }
+
+    .state {
+      justify-self: end;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .footer-note {
+      margin-top: 16px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    @media (max-width: 1080px) {
+      .hero,
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .controls,
+      .bench-toolbar,
+      .bench-summary,
+      .hero-stats {
+        grid-template-columns: 1fr;
+      }
+
+      .bench-row {
+        grid-template-columns: 1fr;
+      }
+
+      .score,
+      .state {
+        justify-self: start;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="hero">
+      <article class="hero-card">
+        <div class="eyebrow">Browser Benchmark Harness</div>
+        <h1>Vue 3 vs MiniX</h1>
+        <p>
+          This page mounts the same list-heavy UI in both runtimes, then measures repeated
+          mount and update passes. The workload is deliberately boring: searchable rows,
+          derived counts, bulk mutation, reverse, and full replacement.
+        </p>
+        <div class="hero-stats">
+          <div class="hero-stat">
+            <div class="kicker">Workload</div>
+            <strong>Mount + Patch</strong>
+          </div>
+          <div class="hero-stat">
+            <div class="kicker">Vue Source</div>
+            <strong>CDN global build</strong>
+          </div>
+          <div class="hero-stat">
+            <div class="kicker">MiniX Source</div>
+            <strong>Local framework/mini-x.js</strong>
+          </div>
+        </div>
+      </article>
+
+      <aside class="panel">
+        <h2>Controls</h2>
+        <div class="controls">
+          <div class="field">
+            <label for="rowCount">Rows per mount</label>
+            <input id="rowCount" type="number" min="50" max="10000" step="50" value="1000" />
+          </div>
+          <div class="field">
+            <label for="iterations">Iterations per case</label>
+            <input id="iterations" type="number" min="1" max="50" step="1" value="7" />
+          </div>
+        </div>
+        <div class="actions">
+          <button class="primary" id="runSuite">Run Full Suite</button>
+          <button class="secondary" id="runMount">Run Mount Only</button>
+          <button class="ghost" id="resetApps">Reset Preview</button>
+        </div>
+        <div class="status" id="status">Ready.</div>
+        <p class="footer-note">
+          Vue 3 is loaded from <code>unpkg.com</code>. If that CDN is blocked, the Vue side will fail to initialize and the page will report it in the status area.
+        </p>
+      </aside>
+    </section>
+
+    <section class="panel results-wrap">
+      <h2>Results</h2>
+      <div id="results"></div>
+    </section>
+
+    <section class="grid">
+      <article class="app-shell">
+        <div class="app-head">
+          <div>
+            <div class="kicker">Live Preview</div>
+            <h3>Vue 3</h3>
+          </div>
+          <div class="tag"><span class="dot" style="color:#1d4ed8"></span>Reactive list workload</div>
+        </div>
+        <div class="app-frame">
+          <div class="mount" id="vue-root"></div>
+        </div>
+      </article>
+
+      <article class="app-shell">
+        <div class="app-head">
+          <div>
+            <div class="kicker">Live Preview</div>
+            <h3>MiniX</h3>
+          </div>
+          <div class="tag"><span class="dot" style="color:#0f766e"></span>Same dataset and actions</div>
+        </div>
+        <div class="app-frame">
+          <div class="mount" id="minix-root"></div>
+        </div>
+      </article>
+    </section>
+  </div>
+
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <script src="../mini-x.js"></script>
+  <script>
+    const els = {
+      rowCount: document.getElementById('rowCount'),
+      iterations: document.getElementById('iterations'),
+      status: document.getElementById('status'),
+      results: document.getElementById('results'),
+      runSuite: document.getElementById('runSuite'),
+      runMount: document.getElementById('runMount'),
+      resetApps: document.getElementById('resetApps'),
+      vueRoot: document.getElementById('vue-root'),
+      minixRoot: document.getElementById('minix-root')
+    };
+
+    const APP_MARKUP = {
+      vue: `
+        <section class="bench-app">
+          <div class="bench-toolbar">
+            <div class="bench-search">
+              <label>Query</label>
+              <input v-model="query" placeholder="Try 'north' or '#12'" />
+            </div>
+            <div class="bench-stat">
+              <span class="label">Visible</span>
+              <strong>{{ filteredRecords.length }}</strong>
+            </div>
+            <div class="bench-stat">
+              <span class="label">Active</span>
+              <strong>{{ activeCount }}</strong>
+            </div>
+            <div class="bench-stat">
+              <span class="label">Score</span>
+              <strong>{{ totalScore }}</strong>
+            </div>
+          </div>
+          <div class="bench-summary">
+            <div class="bench-stat">
+              <span class="label">Head</span>
+              <strong>{{ records[0] ? records[0].label : 'n/a' }}</strong>
+            </div>
+            <div class="bench-stat">
+              <span class="label">Tail</span>
+              <strong>{{ records.length ? records[records.length - 1].label : 'n/a' }}</strong>
+            </div>
+            <div class="bench-stat">
+              <span class="label">Filter</span>
+              <strong>{{ query || 'none' }}</strong>
+            </div>
+            <div class="bench-stat">
+              <span class="label">Rows</span>
+              <strong>{{ records.length }}</strong>
+            </div>
+          </div>
+          <ul class="bench-list">
+            <li
+              v-for="record in filteredRecords.slice(0, 36)"
+              :key="record.id"
+              class="bench-row"
+              :class="{ 'is-active': record.active }"
+            >
+              <span class="pill">{{ record.group }}</span>
+              <strong>{{ record.label }}</strong>
+              <span class="score">{{ record.score }}</span>
+              <span class="state">{{ record.active ? 'active' : 'idle' }}</span>
+            </li>
+          </ul>
+        </section>
+      `,
+      minix: `
+        <section class="bench-app">
+          <div class="bench-toolbar">
+            <div class="bench-search">
+              <label>Query</label>
+              <input x-model="query" placeholder="Try 'north' or '#12'" />
+            </div>
+            <div class="bench-stat">
+              <span class="label">Visible</span>
+              <strong x-text="filteredRecords.length"></strong>
+            </div>
+            <div class="bench-stat">
+              <span class="label">Active</span>
+              <strong x-text="activeCount"></strong>
+            </div>
+            <div class="bench-stat">
+              <span class="label">Score</span>
+              <strong x-text="totalScore"></strong>
+            </div>
+          </div>
+          <div class="bench-summary">
+            <div class="bench-stat">
+              <span class="label">Head</span>
+              <strong x-text="records[0] ? records[0].label : 'n/a'"></strong>
+            </div>
+            <div class="bench-stat">
+              <span class="label">Tail</span>
+              <strong x-text="records.length ? records[records.length - 1].label : 'n/a'"></strong>
+            </div>
+            <div class="bench-stat">
+              <span class="label">Filter</span>
+              <strong x-text="query || 'none'"></strong>
+            </div>
+            <div class="bench-stat">
+              <span class="label">Rows</span>
+              <strong x-text="records.length"></strong>
+            </div>
+          </div>
+          <ul class="bench-list">
+            <template x-for="record in filteredRecords.slice(0, 36)" :key="record.id">
+              <li class="bench-row" x-class="{ 'is-active': record.active }">
+                <span class="pill" x-text="record.group"></span>
+                <strong x-text="record.label"></strong>
+                <span class="score" x-text="record.score"></span>
+                <span class="state" x-text="record.active ? 'active' : 'idle'"></span>
+              </li>
+            </template>
+          </ul>
+        </section>
+      `
+    };
+
+    function clampInt(value, min, max, fallback) {
+      const n = Number.parseInt(value, 10);
+      if (!Number.isFinite(n)) return fallback;
+      return Math.max(min, Math.min(max, n));
+    }
+
+    function makeRecords(count, seed = 0) {
+      const groups = ['north', 'south', 'east', 'west', 'core', 'edge'];
+      const records = new Array(count);
+      for (let i = 0; i < count; i++) {
+        const id = seed * 100000 + i + 1;
+        const group = groups[(i + seed) % groups.length];
+        const label = `${group} node #${id}`;
+        records[i] = {
+          id,
+          group,
+          groupLower: group,
+          label,
+          labelLower: label.toLowerCase(),
+          score: ((i * 13) + (seed * 7)) % 997,
+          active: ((i + seed) % 3) === 0
+        };
+      }
+      return records;
+    }
+
+    function cloneRecords(records) {
+      const next = new Array(records.length);
+      for (let i = 0; i < records.length; i++) {
+        next[i] = { ...records[i] };
+      }
+      return next;
+    }
+
+    function computeActive(records) {
+      let count = 0;
+      for (let i = 0; i < records.length; i++) {
+        if (records[i].active) count++;
+      }
+      return count;
+    }
+
+    function computeTotal(records) {
+      let total = 0;
+      for (let i = 0; i < records.length; i++) {
+        total += records[i].score;
+      }
+      return total;
+    }
+
+    function filterRecords(records, query) {
+      const normalized = String(query || '').trim().toLowerCase();
+      if (!normalized) return records;
+      const next = [];
+      for (let i = 0; i < records.length; i++) {
+        const record = records[i];
+        if (record.labelLower.includes(normalized) || record.groupLower.includes(normalized)) {
+          next.push(record);
+        }
+      }
+      return next;
+    }
+
+    function reverseRecords(records) {
+      const next = new Array(records.length);
+      for (let i = 0, last = records.length - 1; i < records.length; i++, last--) {
+        next[i] = records[last];
+      }
+      return next;
+    }
+
+    function average(values) {
+      return values.reduce((sum, value) => sum + value, 0) / values.length;
+    }
+
+    function median(values) {
+      const sorted = [...values].sort((a, b) => a - b);
+      const mid = Math.floor(sorted.length / 2);
+      return sorted.length % 2 === 0
+        ? (sorted[mid - 1] + sorted[mid]) / 2
+        : sorted[mid];
+    }
+
+    function formatMs(value) {
+      return `${value.toFixed(2)} ms`;
+    }
+
+    function setStatus(message) {
+      els.status.textContent = message;
+    }
+
+    function setBusy(isBusy) {
+      els.runSuite.disabled = isBusy;
+      els.runMount.disabled = isBusy;
+      els.resetApps.disabled = isBusy;
+    }
+
+    function renderResults(rows, meta) {
+      if (!rows.length) {
+        els.results.innerHTML = '<div class="empty">No benchmark runs yet.</div>';
+        return;
+      }
+
+      const head = `
+        <div class="meta">
+          ${meta.rowCount} rows, ${meta.iterations} iteration${meta.iterations === 1 ? '' : 's'} per case
+        </div>
+      `;
+
+      const body = rows.map(row => {
+        const winnerClass = row.winner === 'Vue 3' ? 'winner-vue' : 'winner-minix';
+        return `
+          <tr>
+            <td><strong>${row.name}</strong></td>
+            <td>${formatMs(row.vue.avg)} <br><span class="meta">median ${formatMs(row.vue.median)}</span></td>
+            <td>${formatMs(row.minix.avg)} <br><span class="meta">median ${formatMs(row.minix.median)}</span></td>
+            <td class="${winnerClass}">${row.winner}</td>
+          </tr>
+        `;
+      }).join('');
+
+      els.results.innerHTML = `
+        ${head}
+        <table>
+          <thead>
+            <tr>
+              <th>Case</th>
+              <th>Vue 3 Avg</th>
+              <th>MiniX Avg</th>
+              <th>Fastest Avg</th>
+            </tr>
+          </thead>
+          <tbody>${body}</tbody>
+        </table>
+      `;
+    }
+
+    function createVueAdapter() {
+      if (!window.Vue || typeof window.Vue.createApp !== 'function') {
+        throw new Error('Vue 3 failed to load from CDN.');
+      }
+
+      return {
+        name: 'Vue 3',
+        app: null,
+        instance: null,
+        async mount(records) {
+          this.unmount();
+          const initialRecords = cloneRecords(records);
+          const Root = {
+            data() {
+              return {
+                query: '',
+                records: initialRecords
+              };
+            },
+            computed: {
+              filteredRecords() { return filterRecords(this.records, this.query); },
+              activeCount() { return computeActive(this.records); },
+              totalScore() { return computeTotal(this.records); }
+            },
+            methods: {
+              setQuery(next) { this.query = next; },
+              bulkShift() {
+                for (let i = 0; i < this.records.length; i++) {
+                  const item = this.records[i];
+                  item.active = !item.active;
+                  item.score = (item.score + ((i % 11) + 3)) % 1000;
+                }
+              },
+              reverseRecords() {
+                this.records = reverseRecords(this.records);
+              },
+              replaceAll(nextRecords) {
+                this.records = cloneRecords(nextRecords);
+              }
+            },
+            template: APP_MARKUP.vue
+          };
+
+          this.app = Vue.createApp(Root);
+          this.instance = this.app.mount(els.vueRoot);
+          await this.flush();
+          return this.instance;
+        },
+        async flush() {
+          await Vue.nextTick();
+          await new Promise(requestAnimationFrame);
+          await new Promise(requestAnimationFrame);
+        },
+        unmount() {
+          if (this.app) {
+            this.app.unmount();
+            this.app = null;
+            this.instance = null;
+          }
+          els.vueRoot.innerHTML = '';
+        }
+      };
+    }
+
+    function createMiniXAdapter() {
+      if (!window.MiniX || typeof window.MiniX.createApp !== 'function') {
+        throw new Error('MiniX failed to load from framework/mini-x.js.');
+      }
+
+      return {
+        name: 'MiniX',
+        app: null,
+        instance: null,
+        async mount(records) {
+          this.unmount();
+          const initialRecords = cloneRecords(records);
+
+          class MiniXBenchRoot {
+            data() {
+              return {
+                query: '',
+                records: initialRecords
+              };
+            }
+
+            computed = {
+              filteredRecords() { return filterRecords(this.records, this.query); },
+              activeCount() { return computeActive(this.records); },
+              totalScore() { return computeTotal(this.records); }
+            };
+
+            methods = {
+              setQuery(next) { this.query = next; },
+              bulkShift() {
+                for (let i = 0; i < this.records.length; i++) {
+                  const item = this.records[i];
+                  item.active = !item.active;
+                  item.score = (item.score + ((i % 11) + 3)) % 1000;
+                }
+              },
+              reverseRecords() {
+                this.records = reverseRecords(this.records);
+              },
+              replaceAll(nextRecords) {
+                this.records = cloneRecords(nextRecords);
+              }
+            };
+
+            view = APP_MARKUP.minix;
+          }
+
+          this.app = MiniX.createApp(MiniXBenchRoot);
+          this.instance = this.app.mount(els.minixRoot).instance;
+          await this.flush();
+          return this.instance;
+        },
+        async flush() {
+          await Promise.resolve();
+          await new Promise(requestAnimationFrame);
+          await new Promise(requestAnimationFrame);
+        },
+        unmount() {
+          if (this.app) {
+            this.app.unmount();
+            this.app = null;
+            this.instance = null;
+          }
+          els.minixRoot.innerHTML = '';
+        }
+      };
+    }
+
+    let adapters = null;
+    let runCounter = 0;
+
+    function getConfig() {
+      return {
+        rowCount: clampInt(els.rowCount.value, 50, 10000, 1000),
+        iterations: clampInt(els.iterations.value, 1, 50, 7)
+      };
+    }
+
+    async function ensureAdapters() {
+      if (!adapters) {
+        adapters = {
+          vue: createVueAdapter(),
+          minix: createMiniXAdapter()
+        };
+      }
+      return adapters;
+    }
+
+    async function resetPreview(rowCount) {
+      const current = await ensureAdapters();
+      const records = makeRecords(rowCount, 1);
+      await current.vue.mount(records);
+      await current.minix.mount(records);
+    }
+
+    async function timeMount(adapter, records) {
+      adapter.unmount();
+      const start = performance.now();
+      await adapter.mount(records);
+      const end = performance.now();
+      return end - start;
+    }
+
+    async function timeAction(adapter, baseRecords, action) {
+      const instance = await adapter.mount(baseRecords);
+      const start = performance.now();
+      await action(instance);
+      await adapter.flush();
+      const end = performance.now();
+      return end - start;
+    }
+
+    async function runBenchmarkCase(name, config, action) {
+      const vueTimes = [];
+      const minixTimes = [];
+
+      for (let i = 0; i < config.iterations; i++) {
+        const seed = i + 1;
+        const baseRecords = makeRecords(config.rowCount, seed);
+        const nextRecords = makeRecords(config.rowCount, seed + 50);
+        vueTimes.push(await action(adapters.vue, baseRecords, seed, nextRecords));
+        minixTimes.push(await action(adapters.minix, baseRecords, seed, nextRecords));
+      }
+
+      const vueAvg = average(vueTimes);
+      const minixAvg = average(minixTimes);
+
+      return {
+        name,
+        vue: { avg: vueAvg, median: median(vueTimes) },
+        minix: { avg: minixAvg, median: median(minixTimes) },
+        winner: vueAvg <= minixAvg ? 'Vue 3' : 'MiniX'
+      };
+    }
+
+    async function runSuite(mode) {
+      const currentRun = ++runCounter;
+      const config = getConfig();
+
+      setBusy(true);
+      setStatus(`Running ${mode === 'mount' ? 'mount' : 'full'} benchmark...`);
+
+      try {
+        await ensureAdapters();
+
+        const cases = [];
+        cases.push(await runBenchmarkCase('Mount fresh app', config, (adapter, baseRecords) => timeMount(adapter, baseRecords)));
+
+        if (mode !== 'mount') {
+          cases.push(await runBenchmarkCase('Bulk mutate every row', config, (adapter, baseRecords) => {
+            return timeAction(adapter, baseRecords, instance => instance.bulkShift());
+          }));
+
+          cases.push(await runBenchmarkCase('Filter to a narrow subset', config, (adapter, baseRecords) => {
+            return timeAction(adapter, baseRecords, instance => instance.setQuery('north'));
+          }));
+
+          cases.push(await runBenchmarkCase('Reverse keyed rows', config, (adapter, baseRecords) => {
+            return timeAction(adapter, baseRecords, instance => instance.reverseRecords());
+          }));
+
+          cases.push(await runBenchmarkCase('Replace entire dataset', config, (adapter, baseRecords, seed, nextRecords) => {
+            return timeAction(adapter, baseRecords, instance => instance.replaceAll(nextRecords));
+          }));
+        }
+
+        if (currentRun !== runCounter) return;
+
+        renderResults(cases, config);
+        await resetPreview(config.rowCount);
+        setStatus(`Completed ${cases.length} case${cases.length === 1 ? '' : 's'}.`);
+      } catch (error) {
+        console.error(error);
+        setStatus(error && error.message ? error.message : 'Benchmark failed.');
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    els.runSuite.addEventListener('click', () => { runSuite('full'); });
+    els.runMount.addEventListener('click', () => { runSuite('mount'); });
+    els.resetApps.addEventListener('click', async () => {
+      setBusy(true);
+      try {
+        const { rowCount } = getConfig();
+        await resetPreview(rowCount);
+        setStatus('Preview reset.');
+      } catch (error) {
+        console.error(error);
+        setStatus(error && error.message ? error.message : 'Reset failed.');
+      } finally {
+        setBusy(false);
+      }
+    });
+
+    renderResults([], getConfig());
+    resetPreview(getConfig().rowCount)
+      .then(() => setStatus('Ready.'))
+      .catch(error => {
+        console.error(error);
+        setStatus(error && error.message ? error.message : 'Initial load failed.');
+      });
+  </script>
+</body>
+</html>
