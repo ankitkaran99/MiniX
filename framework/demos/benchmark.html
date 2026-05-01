@@ -448,7 +448,7 @@
           </div>
           <div class="hero-stat">
             <div class="kicker">MiniX Source</div>
-            <strong>Local framework/mini-x.js</strong>
+            <strong>Local mini-x.js</strong>
           </div>
         </div>
       </article>
@@ -567,7 +567,7 @@
           </div>
           <ul class="bench-list">
             <li
-              v-for="record in filteredRecords.slice(0, 36)"
+              v-for="record in visibleRecords"
               :key="record.id"
               class="bench-row"
               :class="{ 'is-active': record.active }"
@@ -585,11 +585,11 @@
           <div class="bench-toolbar">
             <div class="bench-search">
               <label>Query</label>
-              <input x-model="query" placeholder="Try 'north' or '#12'" />
+              <input x-value="query" @input="updateQuery($event.target.value)" placeholder="Try 'north' or '#12'" />
             </div>
             <div class="bench-stat">
               <span class="label">Visible</span>
-              <strong x-text="filteredRecords.length"></strong>
+              <strong x-text="visibleCount"></strong>
             </div>
             <div class="bench-stat">
               <span class="label">Active</span>
@@ -619,8 +619,8 @@
             </div>
           </div>
           <ul class="bench-list">
-            <template x-for="record in filteredRecords.slice(0, 36)" :key="record.id">
-              <li class="bench-row" x-class="{ 'is-active': record.active }">
+            <template x-for="record in visibleRecords" :key="record.id">
+              <li class="bench-row" x-data="{}" x-class="{ 'is-active': record.active }">
                 <span class="pill" x-text="record.group"></span>
                 <strong x-text="record.label"></strong>
                 <span class="score" x-text="record.score"></span>
@@ -790,6 +790,7 @@
             },
             computed: {
               filteredRecords() { return filterRecords(this.records, this.query); },
+              visibleRecords() { return this.filteredRecords.slice(0, 36); },
               activeCount() { return computeActive(this.records); },
               totalScore() { return computeTotal(this.records); }
             },
@@ -848,32 +849,48 @@
 
           class MiniXBenchRoot {
             data() {
+              const query = '';
+              const filtered = filterRecords(initialRecords, query);
               return {
-                query: '',
-                records: initialRecords
+                query,
+                records: initialRecords,
+                visibleRecords: filtered.slice(0, 36),
+                visibleCount: filtered.length,
+                activeCount: computeActive(initialRecords),
+                totalScore: computeTotal(initialRecords)
               };
             }
 
-            computed = {
-              filteredRecords() { return filterRecords(this.records, this.query); },
-              activeCount() { return computeActive(this.records); },
-              totalScore() { return computeTotal(this.records); }
-            };
-
             methods = {
-              setQuery(next) { this.query = next; },
+              syncDerived() {
+                const filtered = filterRecords(this.records, this.query);
+                this.visibleRecords = filtered.slice(0, 36);
+                this.visibleCount = filtered.length;
+                this.activeCount = computeActive(this.records);
+                this.totalScore = computeTotal(this.records);
+              },
+              updateQuery(next) {
+                this.query = next;
+                this.syncDerived();
+              },
+              setQuery(next) {
+                this.updateQuery(next);
+              },
               bulkShift() {
                 for (let i = 0; i < this.records.length; i++) {
                   const item = this.records[i];
                   item.active = !item.active;
                   item.score = (item.score + ((i % 11) + 3)) % 1000;
                 }
+                this.syncDerived();
               },
               reverseRecords() {
                 this.records = reverseRecords(this.records);
+                this.syncDerived();
               },
               replaceAll(nextRecords) {
                 this.records = cloneRecords(nextRecords);
+                this.syncDerived();
               }
             };
 

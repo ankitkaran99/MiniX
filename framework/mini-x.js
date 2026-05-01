@@ -1,5 +1,14 @@
 // Evict the oldest ~10% of entries from a Map-based LRU cache.
 // Batch eviction amortises cost and prevents immediate re-eviction thrashing.
+// Pre-interned string representations of small non-negative integers.
+// Covers the vast majority of array-index link/unlink calls without any allocation.
+const _minix_intStrings = (() => {
+	const a = new Array(256);
+	for (let i = 0; i < 256; i++) a[i] = String(i);
+	return a;
+})();
+const _minix_intStr = (n) => (n >= 0 && n < 256) ? _minix_intStrings[n] : String(n);
+
 function _lruEvict(map) {
 	const evict = Math.ceil(map.size * 0.1) || 1;
 	const iter = map.keys();
@@ -287,7 +296,7 @@ class MiniX_State {
 
 	_unwrapProxy(value) {
 		if (!value || typeof value !== 'object') return value;
-		if ((this._proxySet.has(value) || MiniX_State._proxySet.has(value)) && value.__raw !== undefined) {
+		if (MiniX_State._proxySet.has(value) && value.__raw !== undefined) {
 			return value.__raw;
 		}
 		return value;
@@ -296,10 +305,7 @@ class MiniX_State {
 	_isWrappable(value) {
 		
 		if (value === null || typeof value !== 'object') return false;
-		
-		
-		
-		if (this._proxySet.has(value)) return false;
+		// Both instance and static proxySet are kept in sync — one check suffices.
 		if (MiniX_State._proxySet.has(value)) return false;
 		if (value[MiniX_State.RAW_FLAG]) return false;
 		if (MiniX_State._NodeClass && value instanceof MiniX_State._NodeClass) return false;
@@ -1074,28 +1080,28 @@ class MiniX_State {
 							if (prop === 'push') {
 								// Only link the newly appended items.
 								for (let i = oldSnapshot.length; i < obj.length; i++) {
-									this._linkTargetToParent(obj[i], obj, String(i));
+									this._linkTargetToParent(obj[i], obj, _minix_intStr(i));
 								}
 							} else if (prop === 'pop') {
-								this._unlinkTargetFromParent(oldSnapshot[oldSnapshot.length - 1], obj, String(oldSnapshot.length - 1));
+								this._unlinkTargetFromParent(oldSnapshot[oldSnapshot.length - 1], obj, _minix_intStr(oldSnapshot.length - 1));
 							} else if (prop === 'shift') {
 								// Unlink removed head; re-key remaining items (indices shifted by -1).
 								this._unlinkTargetFromParent(oldSnapshot[0], obj, '0');
 								for (let i = 0; i < obj.length; i++) {
-									this._linkTargetToParent(obj[i], obj, String(i));
+									this._linkTargetToParent(obj[i], obj, _minix_intStr(i));
 								}
 							} else if (prop === 'unshift') {
 								// Link only the newly prepended items; re-key all (indices shifted by +n).
 								for (let i = 0; i < obj.length; i++) {
-									this._linkTargetToParent(obj[i], obj, String(i));
+									this._linkTargetToParent(obj[i], obj, _minix_intStr(i));
 								}
 							} else {
 								// sort, reverse, splice: full relink.
 								for (let i = 0; i < oldSnapshot.length; i++) {
-									this._unlinkTargetFromParent(oldSnapshot[i], obj, String(i));
+									this._unlinkTargetFromParent(oldSnapshot[i], obj, _minix_intStr(i));
 								}
 								for (let i = 0; i < obj.length; i++) {
-									this._linkTargetToParent(obj[i], obj, String(i));
+									this._linkTargetToParent(obj[i], obj, _minix_intStr(i));
 								}
 							}
 							this._devCapture(`array:${prop}`, basePath, oldSnapshot, obj.slice(), { type: `array:${prop}` });
@@ -1112,6 +1118,10 @@ class MiniX_State {
 				
 				const hasEffect = MiniX_Effect.activeEffect !== null;
 				if (hasEffect && typeof prop === 'string') this._trackTargetEffect(obj, prop);
+				// Fast-path: primitives are never wrappable — skip the _isWrappable call.
+				const vtype = typeof value;
+				if (vtype !== 'object' && vtype !== 'function') return value;
+				if (value === null) return value;
 				if (!this._isWrappable(value)) return value;
 				
 				return this._wrap(value, this._joinPath(basePath, prop), true);
@@ -1139,10 +1149,10 @@ class MiniX_State {
 					const oldSnapshot = obj.slice();
 					Array.prototype.splice.call(obj, Number(prop), 1);
 					for (let i = 0; i < oldSnapshot.length; i++) {
-						this._unlinkTargetFromParent(oldSnapshot[i], obj, String(i));
+						this._unlinkTargetFromParent(oldSnapshot[i], obj, _minix_intStr(i));
 					}
 					for (let i = 0; i < obj.length; i++) {
-						this._linkTargetToParent(obj[i], obj, String(i));
+						this._linkTargetToParent(obj[i], obj, _minix_intStr(i));
 					}
 					if (this._dev) this._devCapture('array:delete', this._joinPath(basePath, prop), oldVal, undefined, { type: 'array:delete' });
 					this._bubbleTargetNotify(obj, prop, undefined, oldVal, { type: 'array:delete' });
@@ -1311,10 +1321,10 @@ class MiniX_State {
 			const oldVal = rawParent[last];
 			Array.prototype.splice.call(rawParent, Number(last), 1);
 			for (let i = 0; i < oldSnapshot.length; i++) {
-				this._unlinkTargetFromParent(oldSnapshot[i], rawParent, String(i));
+				this._unlinkTargetFromParent(oldSnapshot[i], rawParent, _minix_intStr(i));
 			}
 			for (let i = 0; i < rawParent.length; i++) {
-				this._linkTargetToParent(rawParent[i], rawParent, String(i));
+				this._linkTargetToParent(rawParent[i], rawParent, _minix_intStr(i));
 			}
 			this._devCapture('array:delete', raw, oldVal, undefined, { type: 'array:delete', api: 'delete()' });
 			this._bubbleTargetNotify(rawParent, last, undefined, oldVal, { type: 'array:delete' });
@@ -2517,7 +2527,7 @@ class MiniX_Effect {
 	static _queues = { pre: new Set(), post: new Set(), frame: new Set() };
 	static _flushing = false;
 	static _framePending = false;
-	static _flushPromise = null;
+	static _flushPending = false;
 	static _batchDepth = 0;
 
 	constructor(fn, options = {}) {
@@ -2552,9 +2562,6 @@ class MiniX_Effect {
 		} finally {
 			this._running = false;
 			MiniX_Effect.activeEffect = prev;
-			
-			
-			
 			if (this.deps && this.deps.size > 0) this._pruneStale();
 		}
 	}
@@ -2609,14 +2616,12 @@ class MiniX_Effect {
 	}
 
 	static _scheduleFlush() {
-		if (MiniX_Effect._batchDepth > 0 || MiniX_Effect._flushPromise) return;
-		MiniX_Effect._flushPromise = new Promise((resolve) =>
-			MiniX_State._scheduleMicrotask(() => {
-				MiniX_Effect._flushPromise = null;
-				MiniX_Effect._flushAll();
-				resolve();
-			})
-		);
+		if (MiniX_Effect._batchDepth > 0 || MiniX_Effect._flushPending) return;
+		MiniX_Effect._flushPending = true;
+		MiniX_State._scheduleMicrotask(() => {
+			MiniX_Effect._flushPending = false;
+			MiniX_Effect._flushAll();
+		});
 	}
 
 	static _enqueue(effect) {
@@ -4347,6 +4352,11 @@ class MiniX_Compiler {
 					return keyGetter ? keyGetter(keyScope, index) : index;
 				});
 
+		// Two alternating vnode buffers — avoids new Array(len) on every render cycle.
+		let bufA = [];
+		let bufB = [];
+		let newVnodesBuffer = bufB;
+
 		const stopEffect = this._effect(component, () => {
 			const runBaseScope = this.createScope(component, {}, marker.parentNode || resolveScopeAnchor());
 			Object.setPrototypeOf(renderScope, runBaseScope);
@@ -4375,7 +4385,8 @@ class MiniX_Compiler {
 				return;
 			}
 
-			const newVnodes = new Array(len);
+			const newVnodes = newVnodesBuffer;
+			newVnodes.length = len;
 			for (let index = 0; index < len; index++) {
 				const item = list[index];
 				const key = readItemKey(item, index);
@@ -4416,14 +4427,16 @@ class MiniX_Compiler {
 			}
 
 			if (parentNode) {
-				let batch = [];
+				// Reuse a module-level move-batch buffer to avoid [] allocation per render.
+				const batch = MiniX_Compiler._domMoveBatch;
+				batch.length = 0;
 				let batchRef = null;
 				const flushBatch = () => {
 					if (!batch.length) return;
 					const frag = document.createDocumentFragment();
-					for (const node of batch) frag.appendChild(node);
+					for (let bi = 0; bi < batch.length; bi++) frag.appendChild(batch[bi]);
 					parentNode.insertBefore(frag, this._resolveInsertionReference(parentNode, batchRef));
-					batch = [];
+					batch.length = 0;
 					batchRef = null;
 				};
 				for (let i = len - 1; i >= 0; i--) {
@@ -4443,7 +4456,10 @@ class MiniX_Compiler {
 
 			for (let i = 0; i < oldVnodes.length; i++) oldVnodes[i]._seen = false;
 			for (let i = 0; i < newVnodes.length; i++) newVnodes[i]._seen = false;
+			// Swap buffers: newVnodes becomes oldVnodes, and the old oldVnodes buffer
+			// becomes the scratch buffer for the next render.
 			oldVnodes = newVnodes;
+			newVnodesBuffer = (newVnodesBuffer === bufB) ? bufA : bufB;
 		});
 
 		return () => {
@@ -6124,6 +6140,26 @@ class MiniX_Compiler {
 
 
 MiniX_Compiler._normalizeClassValue = (value) => {
+	// Fast path: plain object with string keys (most common case: { 'cls': bool, ... })
+	// Build a stable cache key and reuse the Set if nothing changed.
+	if (value && typeof value === 'object' && !Array.isArray(value)) {
+		// Compute a lightweight string key: "cls1:1|cls2:0|..."
+		let cacheKey = '';
+		for (const cls in value) {
+			if (Object.prototype.hasOwnProperty.call(value, cls)) {
+				cacheKey += cls + (value[cls] ? '\x01' : '\x00');
+			}
+		}
+		const cached = MiniX_Compiler._classNormCache.get(cacheKey);
+		if (cached) return cached;
+		const next = new Set();
+		for (const cls in value) {
+			if (Object.prototype.hasOwnProperty.call(value, cls) && value[cls]) next.add(cls);
+		}
+		if (MiniX_Compiler._classNormCache.size >= 256) MiniX_Compiler._classNormCache.clear();
+		MiniX_Compiler._classNormCache.set(cacheKey, next);
+		return next;
+	}
 	const next = new Set();
 	if (typeof value === 'string') {
 		
@@ -6149,11 +6185,11 @@ MiniX_Compiler._normalizeClassValue = (value) => {
 				for (const cls in entry) { if (Object.prototype.hasOwnProperty.call(entry, cls) && entry[cls]) next.add(cls); }
 			}
 		});
-	} else if (value && typeof value === 'object') {
-		for (const cls in value) { if (Object.prototype.hasOwnProperty.call(value, cls) && value[cls]) next.add(cls); }
 	}
 	return next;
 };
+MiniX_Compiler._classNormCache = new Map();
+MiniX_Compiler._domMoveBatch = [];
 MiniX_Compiler._patchAttrValue = (el, attr, value) => {
 	const cache = el.__minix_attr_cache__ || (el.__minix_attr_cache__ = Object.create(null));
 	const normalized = value === true ? '' : (value == null || value === false ? null : String(value));
@@ -6842,7 +6878,9 @@ class MiniX_Component {
 		for (const key in snapshot) {
 			if (!Object.prototype.hasOwnProperty.call(snapshot, key)) continue;
 			Object.defineProperty(this.instance, key, {
-				get: () => this.state.get(key),
+				// Use the reactive proxy (state.raw()[key]) so reads inside computed
+				// effects and watchers register proper reactive dependencies.
+				get: () => this.state.raw()[key],
 				set: (value) => this.state.set(key, value),
 				configurable: true,
 				enumerable: true
@@ -6863,8 +6901,11 @@ class MiniX_Component {
 				
 				if (prop in target) return Reflect.get(target, prop, receiver);
 				
+				// Access through the reactive proxy (stateRef.raw()) so that any active
+				// effect (including computed getters) properly tracks the dependency.
+				// stateRef.get(prop) bypasses the proxy and skips tracking entirely.
 				if (typeof prop === 'string' && !prop.startsWith('__') && stateRef.raw() && prop in stateRef.raw()) {
-					return stateRef.get(prop);
+					return stateRef.raw()[prop];
 				}
 				return Reflect.get(target, prop, receiver);
 			},
@@ -6880,7 +6921,7 @@ class MiniX_Component {
 					
 					
 					Object.defineProperty(target, prop, {
-						get: () => stateRef.get(prop),
+						get: () => stateRef.raw()[prop],
 						set: (v) => stateRef.set(prop, v),
 						configurable: true,
 						enumerable: true
