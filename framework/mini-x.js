@@ -699,6 +699,83 @@ class MiniX_State {
 	// The stack holds triples: [parentTarget, parentKey, depth] packed flat.
 	static _parentLinkStack = new Array(256);
 
+	_queueBatchedTargetNotify(target, prop, newVal, oldVal, meta = {}) {
+		if (MiniX_State._flushingBatchedNotifications) return false;
+		if (MiniX_Effect._batchDepth <= 0) return false;
+
+		let stateQueue = MiniX_State._batchedNotifyQueue.get(this);
+		if (!stateQueue) {
+			stateQueue = new Map();
+			MiniX_State._batchedNotifyQueue.set(this, stateQueue);
+		}
+
+		let targetQueue = stateQueue.get(target);
+		if (!targetQueue) {
+			targetQueue = new Map();
+			stateQueue.set(target, targetQueue);
+		}
+
+		let record = targetQueue.get(prop);
+		if (!record) {
+			targetQueue.set(prop, {
+				target,
+				prop,
+				newVal,
+				oldVal,
+				meta
+			});
+		} else {
+			record.newVal = newVal;
+			if (meta?.structural || MiniX_State._STRUCTURAL_TYPES.has(meta?.type)) {
+				record.meta = {
+					...record.meta,
+					...meta,
+					structural: true
+				};
+			} else {
+				record.meta = {
+					...record.meta,
+					...meta
+				};
+			}
+		}
+
+		MiniX_State._batchedNotifyPending = true;
+		return true;
+	}
+
+	static _flushBatchedTargetNotifications() {
+		if (!MiniX_State._batchedNotifyPending) return;
+
+		const queue = MiniX_State._batchedNotifyQueue;
+		if (!queue.size) {
+			MiniX_State._batchedNotifyPending = false;
+			return;
+		}
+
+		MiniX_State._batchedNotifyPending = false;
+		MiniX_State._batchedNotifyQueue = new Map();
+		MiniX_State._flushingBatchedNotifications = true;
+
+		try {
+			for (const [state, stateQueue] of queue) {
+				for (const [, targetQueue] of stateQueue) {
+					for (const [, record] of targetQueue) {
+						state._bubbleTargetNotify(
+							record.target,
+							record.prop,
+							record.newVal,
+							record.oldVal,
+							record.meta
+						);
+					}
+				}
+			}
+		} finally {
+			MiniX_State._flushingBatchedNotifications = false;
+		}
+	}
+
 	// Shared parent-link traversal used by both branches of _bubbleTargetNotify.
 	_walkParentLinks(startTarget, newVal, oldVal, meta) {
 		const parentLinks = this._parentLinks.get(startTarget);
@@ -738,6 +815,7 @@ class MiniX_State {
 
 	_bubbleTargetNotify(target, prop, newVal, oldVal, meta = {}) {
 		if (!target || (typeof target !== 'object' && typeof target !== 'function')) return;
+		if (this._queueBatchedTargetNotify(target, prop, newVal, oldVal, meta)) return;
 
 		const metaType = meta.type;
 		if (metaType === 'set' || metaType === 'set:path') {
@@ -1472,6 +1550,9 @@ class MiniX_State {
 
 
 MiniX_State._notifyQueue = new Set();
+MiniX_State._batchedNotifyQueue = new Map();
+MiniX_State._batchedNotifyPending = false;
+MiniX_State._flushingBatchedNotifications = false;
 
 
 MiniX_State._STRUCTURAL_TYPES = new Set(['delete', 'delete:path']);
@@ -2610,6 +2691,7 @@ class MiniX_Effect {
 		MiniX_Effect._batchDepth--;
 		if (MiniX_Effect._batchDepth <= 0) {
 			MiniX_Effect._batchDepth = 0;
+			MiniX_State._flushBatchedTargetNotifications?.();
 			MiniX_Effect._scheduleFlush();
 			MiniX_State._scheduleCallbackFlush();
 		}
