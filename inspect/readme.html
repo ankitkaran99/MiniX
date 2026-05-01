@@ -176,6 +176,8 @@ document.querySelector('#userForm').addEventListener('submit', async (e) =&gt; {
             <p>Creates a new validator instance. The passed options are merged over the built-in defaults.</p>
           </div>
 <pre><code>const inspect = new Inspect({
+  warnOnMissingValidator: true,
+  singleCheckboxMode: 'boolean',
   messages: {
     required: '{1} cannot be blank.',
     email: 'Enter a correct email address.'
@@ -184,13 +186,9 @@ document.querySelector('#userForm').addEventListener('submit', async (e) =&gt; {
     // Custom UI rendering here
   }
 });</code></pre>
-          <div class="warn"><strong>Important:</strong> the options merge is shallow. If you pass <code>messages</code>, it replaces the entire default <code>messages</code> object, not just one key. For partial message override, merge manually.</div>
-<pre><code>const inspect = new Inspect({
-  messages: {
-    ...new Inspect().defaults.messages,
-    required: '{1} is compulsory.'
-  }
-});</code></pre>
+          <div class="note"><strong>Message merge:</strong> <code>options.messages</code> is merged with the built-in defaults, so you can override only the keys you need.</div>
+          <div class="note"><strong>Missing validator warnings:</strong> when <code>warnOnMissingValidator</code> is enabled, unknown rule names are logged once per field/rule pair. The default is enabled outside production and disabled in production.</div>
+          <div class="note"><strong>Single checkbox mode:</strong> the default parser returns the checkbox value when checked and an empty string when unchecked. Set <code>singleCheckboxMode: 'boolean'</code> if you want <code>true</code>/<code>false</code> instead.</div>
         </section>
 
         <section id="public-api" class="section-card">
@@ -250,7 +248,7 @@ await validator.validate(data, true);    // validates plain object</code></pre>
             <thead><tr><th>Field type</th><th>Returned value</th></tr></thead>
             <tbody>
               <tr><td>Normal input/select/textarea</td><td>Trimmed string value when possible.</td></tr>
-              <tr><td>Single checkbox</td><td>Checkbox value if checked, otherwise empty string.</td></tr>
+              <tr><td>Single checkbox</td><td>Checkbox value if checked, otherwise empty string. Use <code>singleCheckboxMode: 'boolean'</code> for <code>true</code>/<code>false</code>.</td></tr>
               <tr><td>Multiple checkboxes with same name</td><td>Array of checked values.</td></tr>
               <tr><td>Radio group</td><td>Selected value, otherwise empty string.</td></tr>
               <tr><td>Single file input</td><td>First <code>File</code> object or <code>null</code>.</td></tr>
@@ -318,11 +316,11 @@ if (result.valid) {
           </ul>
           <h3>Checkbox/radio groups</h3>
           <ul>
-            <li>Looks for nearest <code>.form-group</code>.</li>
+            <li>Looks for the nearest <code>.form-group</code>, <code>[data-inspect-group]</code>, <code>fieldset</code>, <code>.form-check</code>, or parent element.</li>
             <li>Adds <code>is-invalid</code> to all inputs of the same type inside that group.</li>
             <li>Creates <code>.invalid-feedback.d-block</code> inside the group.</li>
           </ul>
-          <div class="warn"><strong>Bootstrap 5 note:</strong> your checkbox/radio wrapper should include <code>.form-group</code> or the default grouped error display will not show. If your theme uses <code>.mb-3</code> only, use a custom error handler or add <code>form-group</code>.</div>
+          <div class="note"><strong>Wrapper note:</strong> <code>.form-group</code> still works, but it is no longer the only supported grouped wrapper. For custom markup, <code>data-inspect-group</code> is the clearest explicit hook.</div>
 
           <h3>Custom error handler example</h3>
 <pre><code>const inspect = new Inspect({
@@ -439,9 +437,10 @@ if (result.valid) {
           </table>
 
           <h3>Date and time validators</h3>
+          <p>Date validators use strict <code>YYYY-MM-DD</code> parsing for predictable comparisons.</p>
           <table class="table table-bordered table-sm api-table">
             <tbody>
-              <tr><td>date</td><td>Valid according to <code>Date.parse()</code>.</td></tr>
+              <tr><td>date</td><td>Valid <code>YYYY-MM-DD</code> date.</td></tr>
               <tr><td>date_min</td><td>Date must be greater than or equal.</td></tr>
               <tr><td>date_max</td><td>Date must be less than or equal.</td></tr>
               <tr><td>date_exact</td><td>Date timestamp must exactly match.</td></tr>
@@ -467,19 +466,19 @@ if (result.valid) {
   pretty: 'Profile photo',
   rules: {
     required: true,
-    file_format_in: ['jpg', 'jpeg', 'png', 'webp'],
+    file_format_in: ['jpg', 'jpeg', 'png', 'image/webp'],
     file_size_max: 2048
   }
 }</code></pre>
           <table class="table table-bordered table-sm api-table">
             <tbody>
-              <tr><td>file_format_in</td><td>Every selected file must have an allowed extension.</td></tr>
-              <tr><td>file_format_nin</td><td>No selected file may have a disallowed extension.</td></tr>
+              <tr><td>file_format_in</td><td>Every selected file must match an allowed extension or MIME token.</td></tr>
+              <tr><td>file_format_nin</td><td>No selected file may match a disallowed extension or MIME token.</td></tr>
               <tr><td>file_size_min</td><td>Every selected file must be at least N KB.</td></tr>
               <tr><td>file_size_max</td><td>Every selected file must be at most N KB.</td></tr>
             </tbody>
           </table>
-          <div class="note">Extension checks use the file name extension, not MIME type. That is fast and simple, but server-side validation is still required. Browser-side validation is the gatekeeper, not the bouncer with a legal badge.</div>
+          <div class="note">Client checks support file extensions like <code>png</code> or <code>.png</code> and MIME tokens like <code>image/png</code> or <code>image/*</code>. This is still client-side only, so validate uploads again on the server.</div>
         </section>
 
         <section id="state" class="section-card">
@@ -508,6 +507,20 @@ if (result.valid) {
   pretty: 'Billing city',
   rules: {
     required_if: 'shipping.same_as_billing,false'
+  }
+}
+
+{
+  field: 'notes',
+  rules: {
+    required_if: ['status', 'needs,review']
+  }
+}
+
+{
+  field: 'notes',
+  rules: {
+    required_if: { field: 'status', value: 'needs,review' }
   }
 }</code></pre>
           <div class="warn"><strong>Current limitation:</strong> <code>validateData()</code> reads values directly by <code>payload.data[fieldName]</code>. So nested field names like <code>billing.city</code> are not automatically resolved for the main field value. Nested paths are supported inside some comparison validators, but not as the primary field key unless your data object also has a literal key named <code>billing.city</code>.</div>
@@ -622,29 +635,13 @@ const validator = inspect.init(document.querySelector('#registerForm'), [
 
         <section id="gotchas" class="section-card">
           <h2>15. Gotchas, Edge Cases, and Improvement Notes</h2>
-          <div class="warn"><strong>1. Shallow config merge:</strong> passing <code>messages</code> replaces all default messages. Merge manually if needed.</div>
-          <div class="warn"><strong>2. Unknown validators are ignored:</strong> if a rule name is misspelled, validation silently skips it. For development, you may want to log missing validators.</div>
-          <div class="warn"><strong>3. Date parsing:</strong> <code>Date.parse()</code> is flexible but can be inconsistent for non-ISO formats. Prefer <code>YYYY-MM-DD</code> for predictable behavior.</div>
-          <div class="warn"><strong>4. File extension validation:</strong> checks extension only. Always validate files again on the server.</div>
-          <div class="warn"><strong>5. Single checkbox:</strong> unchecked means empty string. For boolean-style state, convert it yourself if needed.</div>
-          <div class="warn"><strong>6. Checkbox/radio UI:</strong> default grouped error handler expects <code>.form-group</code>.</div>
-          <div class="warn"><strong>7. <code>required_if</code> param format:</strong> currently expects a string like <code>'status,active'</code>. Commas inside values are not supported.</div>
-
-          <h3>Recommended small improvement: warn on unknown rule</h3>
-<pre><code>if (!validator) {
-  console.warn(`Inspect: unknown validator "${ruleName}" for field "${rule.field}"`);
-  continue;
-}</code></pre>
-
-          <h3>Recommended small improvement: deep merge messages</h3>
-<pre><code>this.config = {
-  ...this.defaults,
-  ...options,
-  messages: {
-    ...this.defaults.messages,
-    ...(options.messages || {})
-  }
-};</code></pre>
+          <div class="note"><strong>1. Message overrides:</strong> <code>messages</code> now deep-merge with defaults, so partial overrides are safe.</div>
+          <div class="note"><strong>2. Unknown validators:</strong> missing validator names can log a warning in development through <code>warnOnMissingValidator</code>.</div>
+          <div class="note"><strong>3. Date parsing:</strong> date rules are intentionally strict and expect <code>YYYY-MM-DD</code>.</div>
+          <div class="note"><strong>4. File validation:</strong> client checks can inspect extension and MIME-style tokens, but upload validation must still happen on the server.</div>
+          <div class="note"><strong>5. Single checkbox:</strong> default output is still <code>value</code> or empty string for compatibility; switch to <code>singleCheckboxMode: 'boolean'</code> if your state wants booleans.</div>
+          <div class="note"><strong>6. Checkbox/radio UI:</strong> grouped error rendering supports several wrapper patterns, with <code>data-inspect-group</code> as an explicit fallback hook.</div>
+          <div class="note"><strong>7. <code>required_if</code> params:</strong> strings still use the first comma as the separator, but arrays and objects are safer when the compared value itself contains commas.</div>
         </section>
 
         <section id="reference" class="section-card">

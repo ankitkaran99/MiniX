@@ -1,11 +1,13 @@
 class Inspect {
     constructor(options = {}) {
         this.defaults = {
+            warnOnMissingValidator: Inspect._isDevelopmentEnv(),
+            singleCheckboxMode: 'value',
             errorHandler: (field, message, config, show = true) => {
                 if (!field || typeof field.closest !== 'function') return;
 
                 if (field.type === 'checkbox' || field.type === 'radio') {
-                    const formGroup = field.closest('.form-group');
+                    const formGroup = Inspect._resolveGroupedFieldContainer(field);
                     if (!formGroup) return;
 
                     if (show) {
@@ -128,11 +130,16 @@ class Inspect {
 
         this.config = {
             ...this.defaults,
-            ...options
+            ...options,
+            messages: {
+                ...this.defaults.messages,
+                ...(options.messages || {})
+            }
         };
 
         this.rules = {};
         this.formElement = null;
+        this.missingValidators = new Set();
     }
 
     init(container, rules) {
@@ -228,7 +235,10 @@ class Inspect {
             if (ruleName === 'required') continue;
 
             const validator = Inspect.validators[ruleName];
-            if (!validator) continue;
+            if (!validator) {
+                this.logMissingValidator(ruleName, rule);
+                continue;
+            }
 
             const validatorValue = (
                 isFileField &&
@@ -281,6 +291,9 @@ class Inspect {
         }
 
         if (field.type === 'checkbox') {
+            if (this.config.singleCheckboxMode === 'boolean') {
+                return field.checked;
+            }
             return field.checked ? field.value : '';
         }
 
@@ -317,6 +330,93 @@ class Inspect {
         const seconds = Number(match[3] || 0);
         if (hours > 23 || minutes > 59 || seconds > 59) return NaN;
         return hours * 60 + minutes + (seconds / 60);
+    }
+
+    static _isDevelopmentEnv() {
+        const env = globalThis?.process?.env?.NODE_ENV;
+        return env !== 'production';
+    }
+
+    static _resolveGroupedFieldContainer(field) {
+        return (
+            field.closest('.form-group') ||
+            field.closest('[data-inspect-group]') ||
+            field.closest('fieldset') ||
+            field.closest('.form-check') ||
+            field.parentElement
+        );
+    }
+
+    static _parseDateValue(value) {
+        if (value instanceof Date && !Number.isNaN(value.getTime())) {
+            return Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate());
+        }
+
+        const match = String(value ?? '').trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!match) return NaN;
+
+        const year = Number(match[1]);
+        const month = Number(match[2]);
+        const day = Number(match[3]);
+        const parsed = new Date(Date.UTC(year, month - 1, day));
+
+        if (
+            parsed.getUTCFullYear() !== year ||
+            parsed.getUTCMonth() !== month - 1 ||
+            parsed.getUTCDate() !== day
+        ) {
+            return NaN;
+        }
+
+        return parsed.getTime();
+    }
+
+    static _normalizeRequiredIfParams(params) {
+        if (Array.isArray(params)) {
+            return [params[0], params.slice(1).join(',')];
+        }
+
+        if (params && typeof params === 'object') {
+            return [params.field ?? params.name ?? '', params.value ?? ''];
+        }
+
+        const raw = String(params ?? '');
+        const separatorIndex = raw.indexOf(',');
+        if (separatorIndex === -1) return [raw.trim(), ''];
+
+        return [
+            raw.slice(0, separatorIndex).trim(),
+            raw.slice(separatorIndex + 1)
+        ];
+    }
+
+    static _matchesFileRule(file, token) {
+        const normalizedToken = String(token ?? '').trim().toLowerCase();
+        if (!normalizedToken) return false;
+
+        const fileName = String(file?.name ?? '').toLowerCase();
+        const extension = fileName.includes('.') ? fileName.split('.').pop() : '';
+        const mimeType = String(file?.type ?? '').toLowerCase();
+
+        if (normalizedToken.includes('/')) {
+            if (normalizedToken.endsWith('/*')) {
+                return mimeType.startsWith(normalizedToken.slice(0, -1));
+            }
+            return mimeType === normalizedToken;
+        }
+
+        const normalizedExtension = normalizedToken.startsWith('.') ? normalizedToken.slice(1) : normalizedToken;
+        return extension === normalizedExtension;
+    }
+
+    logMissingValidator(ruleName, rule) {
+        if (!this.config.warnOnMissingValidator) return;
+
+        const cacheKey = `${rule?.field || ''}:${ruleName}`;
+        if (this.missingValidators.has(cacheKey)) return;
+        this.missingValidators.add(cacheKey);
+
+        console.warn(`[Inspect] Unknown validator "${ruleName}" on field "${rule?.field || 'unknown'}".`);
     }
 
     showError(field, message) {
@@ -416,13 +516,13 @@ class Inspect {
             const escaped = allowedChars.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             return new RegExp(`^[${escaped}]+$`).test(String(v));
         },
-        date: (v) => v === '' || !isNaN(Date.parse(v)),
-        date_min: (v, minDate) => v === '' || new Date(v) >= new Date(minDate),
-        date_max: (v, maxDate) => v === '' || new Date(v) <= new Date(maxDate),
-        date_exact: (v, exactDate) => v === '' || new Date(v).getTime() === new Date(exactDate).getTime(),
-        date_lower: (v, limitDate) => v === '' || new Date(v) < new Date(limitDate),
-        date_higher: (v, limitDate) => v === '' || new Date(v) > new Date(limitDate),
-        date_equal: (v, equalDate) => v === '' || new Date(v).getTime() === new Date(equalDate).getTime(),
+        date: (v) => v === '' || !Number.isNaN(Inspect._parseDateValue(v)),
+        date_min: (v, minDate) => v === '' || (Inspect._parseDateValue(v) >= Inspect._parseDateValue(minDate)),
+        date_max: (v, maxDate) => v === '' || (Inspect._parseDateValue(v) <= Inspect._parseDateValue(maxDate)),
+        date_exact: (v, exactDate) => v === '' || (Inspect._parseDateValue(v) === Inspect._parseDateValue(exactDate)),
+        date_lower: (v, limitDate) => v === '' || (Inspect._parseDateValue(v) < Inspect._parseDateValue(limitDate)),
+        date_higher: (v, limitDate) => v === '' || (Inspect._parseDateValue(v) > Inspect._parseDateValue(limitDate)),
+        date_equal: (v, equalDate) => v === '' || (Inspect._parseDateValue(v) === Inspect._parseDateValue(equalDate)),
         time: (v) => v === '' || /^([01]?[0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$/.test(v),
         time_min: function(v, t) {
             return v === '' || Inspect._timeToMinutes(v) >= Inspect._timeToMinutes(t);
@@ -437,12 +537,12 @@ class Inspect {
         file_format_in: (files, a) => {
             if (!files || files.length === 0) return true;
             const allowed = Array.isArray(a) ? a : String(a).split(',').map(part => part.trim().toLowerCase()).filter(Boolean);
-            return Array.from(files).every(f => allowed.includes(f.name.split('.').pop().toLowerCase()));
+            return Array.from(files).every(f => allowed.some(token => Inspect._matchesFileRule(f, token)));
         },
         file_format_nin: (files, a) => {
             if (!files || files.length === 0) return true;
             const disallowed = Array.isArray(a) ? a : String(a).split(',').map(part => part.trim().toLowerCase()).filter(Boolean);
-            return Array.from(files).every(f => !disallowed.includes(f.name.split('.').pop().toLowerCase()));
+            return Array.from(files).every(f => !disallowed.some(token => Inspect._matchesFileRule(f, token)));
         },
         file_size_min: (files, m) => {
             if (!files || files.length === 0) return true;
@@ -481,7 +581,7 @@ class Inspect {
         hex_color: (v) => v === '' || /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.test(String(v)),
         slug: (v) => v === '' || /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(String(v)),
         required_if: function(v, params, field, allData) {
-            const [otherName, otherVal] = String(params).split(',');
+            const [otherName, otherVal] = Inspect._normalizeRequiredIfParams(params);
             const stateValue = Inspect._getByPath(allData, otherName);
             if (stateValue !== undefined) {
                 return String(stateValue) === String(otherVal)

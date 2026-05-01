@@ -7857,7 +7857,7 @@ class MiniX {
 			renderer: new MiniX_Renderer(),
 			sanitizer: new MiniX_Sanitizer(),
 			compiler: new MiniX_Compiler(),
-			eventBus: new MiniX_Event_Bus(),
+			eventBus: MiniX.$bus,
 			provider: new MiniX_Provider(),
 			scopeFactories: [],
 			request: null,
@@ -7870,6 +7870,14 @@ class MiniX {
 
 	static createApp(rootComponent, options = {}) {
 		return new MiniX(rootComponent, options);
+	}
+
+	get instance() {
+		return this._instance;
+	}
+
+	get bus() {
+		return this.options.eventBus;
 	}
 
 	
@@ -7941,6 +7949,10 @@ class MiniX {
 		return this;
 	}
 
+	inject(key, fallback = undefined) {
+		return this.options.provider.inject(key, fallback);
+	}
+
 	mount(target) {
 		if (this.options.request) {
 			this.options.provider.provide('__minix_request__', this.options.request);
@@ -7975,6 +7987,8 @@ class MiniX {
 }
 
 MiniX._globalScopeState = new MiniX_State({ version: 0 });
+MiniX.$bus = new MiniX_Event_Bus();
+MiniX.bus = MiniX.$bus;
 MiniX.readGlobalScopeVersion = function() {
 	return MiniX._globalScopeState.get('version') || 0;
 };
