@@ -125,6 +125,7 @@
 			fullPath: route.fullPath,
 			path: route.path,
 			name: route.name || null,
+			qualifiedName: route.qualifiedName || route.name || null,
 			params: copyOwnObject(route.params),
 			query: copyOwnObject(route.query),
 			hash: route.hash || "",
@@ -525,11 +526,13 @@
 		const currentRoute = RouteState
 		? new RouteState({
 			fullPath: "/", path: "/", name: null,
+			qualifiedName: null,
 			params: {}, query: {}, hash: "",
 			meta: {}, matched: [], redirectedFrom: null
 		}).raw()
 		: {
 			fullPath: "/", path: "/", name: null,
+			qualifiedName: null,
 			params: {}, query: {}, hash: "",
 			meta: {}, matched: [], redirectedFrom: null
 		};
@@ -606,6 +609,25 @@
 
 		// ── Route record normalization ─────────────────────────────────────────
 
+		function getQualifiedRouteName(routeName, parent) {
+			if (!routeName) return null;
+			const ownName = String(routeName).trim();
+			if (!ownName) return null;
+			const parentQualifiedName = parent && (parent.qualifiedName || parent.name) ? String(parent.qualifiedName || parent.name).trim() : "";
+			if (!parentQualifiedName) return ownName;
+			if (ownName.startsWith(parentQualifiedName + ".")) return ownName;
+			return parentQualifiedName + "." + ownName;
+		}
+
+		function registerRouteName(record, routeName) {
+			if (!routeName) return;
+			const existing = recordsByName.get(routeName);
+			if (existing && existing !== record) {
+				throw new Error('[MiniXRouter] Duplicate route name: "' + routeName + '"');
+			}
+			recordsByName.set(routeName, record);
+		}
+
 		function normalizeRouteRecord(route, parent, parentPath) {
 			if (!route || typeof route !== "object") return null;
 			const path = route.path == null ? "" : String(route.path);
@@ -638,6 +660,7 @@
 				path,
 				fullPath,
 				name: route.name || null,
+				qualifiedName: getQualifiedRouteName(route.name || null, parent),
 				redirect: route.redirect,
 				component: route.component || null,
 				components: route.components || null,
@@ -657,7 +680,11 @@
 			record._chain.push(record);
 
 			records.push(record);
-			if (record.name) recordsByName.set(record.name, record);
+			if (record.qualifiedName && record.qualifiedName !== record.name) {
+				registerRouteName(record, record.qualifiedName);
+			} else if (record.name) {
+				registerRouteName(record, record.name);
+			}
 			if (record.keys.length === 0) staticRecordsByPath.set(record.fullPath, record);
 
 			for (const child of (Array.isArray(route.children) ? route.children : [])) {
@@ -781,9 +808,10 @@
 					query: targetQuery,
 					hash: targetHash,
 					params: extractParams(leaf, target.path),
-								name: leaf.name || null,
-								meta: mergeMeta(matched),
-								matched
+					name: leaf.qualifiedName || leaf.name || null,
+					qualifiedName: leaf.qualifiedName || leaf.name || null,
+					meta: mergeMeta(matched),
+					matched
 				})
 				: leaf.redirect;
 			return resolve(redirected, redirectedFrom || targetFullPath, debug, seen);
@@ -796,7 +824,8 @@
 			const route = {
 				fullPath: targetFullPath,
 				path: target.path,
-				name: leaf ? leaf.name || null : null,
+				name: leaf ? leaf.qualifiedName || leaf.name || null : null,
+				qualifiedName: leaf ? leaf.qualifiedName || leaf.name || null : null,
 				params,
 				query: targetQuery,
 				hash: targetHash,
@@ -861,6 +890,7 @@
 			currentRoute.fullPath = next.fullPath;
 			currentRoute.path = next.path;
 			currentRoute.name = next.name;
+			currentRoute.qualifiedName = next.qualifiedName || next.name || null;
 			currentRoute.params = copyOwnObject(next.params);
 			currentRoute.query = copyOwnObject(next.query);
 			currentRoute.hash = next.hash || "";

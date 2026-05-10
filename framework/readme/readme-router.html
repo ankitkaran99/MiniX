@@ -331,31 +331,80 @@ MiniX.createApp(AppShell)
   beforeEnter: (to, from) => { /* custom guard */ },
   children: [
     { path: '', component: 'WorkspaceOverview', name: 'workspace' },
-    { path: 'projects', component: 'WorkspaceProjects' }
+    { path: 'projects', component: 'WorkspaceProjects', name: 'workspaceProjects' },
+    { path: 'activity', component: 'WorkspaceActivity', name: 'workspaceActivity' }
   ]
 },
 {
   path: '/users/:id',
-  component: 'UserProfile',
-  props: true, // pass params as props
-  name: 'userDetails'
+  component: 'UserLayout',
+  children: [
+    {
+      path: '',
+      component: 'UserProfile',
+      props: true, // pass params as props
+      name: 'userDetails'
+    }
+  ]
 }</code></pre>
+
+    <h3>Nested named routes</h3>
+    <p>Route names are registered per record, including child records. When a child sits under a named parent, it resolves by its hierarchical name only. For example, a child named <code>login</code> under a parent named <code>auth</code> resolves as <code>auth.login</code>, not plain <code>login</code>. In route snapshots, <code>route.name</code> also reports the hierarchical name so it stays usable for round-tripping navigation.</p>
+    <pre><code>const router = MiniXRouter.createRouter({
+  routes: [
+    {
+      path: '/settings',
+      name: 'settings',
+      component: 'SettingsLayout',
+      children: [
+        { path: 'profile', name: 'settingsProfile', component: 'SettingsProfile' },
+        { path: 'billing', name: 'settingsBilling', component: 'SettingsBilling' }
+      ]
+    },
+    {
+      path: '/auth',
+      name: 'auth',
+      component: 'AuthLayout',
+      children: [
+        { path: 'login', name: 'login', component: 'Login' }
+      ]
+    },
+    {
+      path: '/users/:id',
+      component: 'UserLayout',
+      children: [
+        { path: '', name: 'userDetails', component: 'UserDetails', props: true }
+      ]
+    }
+  ]
+});
+
+router.push({ name: 'settings.settingsBilling' });         // /settings/billing
+router.push({ name: 'userDetails', params: { id: 42 } }); // /users/42
+
+// auth children resolve by nested name only
+router.push({ name: 'auth.login' });  // /auth/login</code></pre>
 
     <h3>Route meta fields</h3>
     <p><code>meta.title</code> (string or function) sets document title automatically. <code>meta.keepAlive</code> enables component caching. Custom meta like <code>requiresAuth</code> can be used in guards.</p>
 
     <h2 id="navigation">🖱️ Navigation & Directives</h2>
-    <h3>Programmatic navigation</h3>
-    <pre><code>// inside component context (this.$router)
+<h3>Programmatic navigation</h3>
+<pre><code>// inside component context (this.$router)
 this.$router.push('/analytics')
 this.$router.push({ name: 'userDetails', params: { id: 5 }, query: { tab: 'billing' } })
+this.$router.push({ name: 'workspaceProjects' })
+this.$router.push({ name: 'settings.settingsBilling' })
+this.$router.push({ name: 'auth.login' })
 this.$router.replace('/home')
 this.$router.back()</code></pre>
 
     <h3>Directives: x-link & x-route</h3>
     <p><strong>x-link</strong> accepts a path string, <strong>x-route</strong> accepts route name or object literal. Both provide automatic active class and handle SPA navigation.</p>
     <pre><code>&lt;a x-link="/dashboard" x-active="active" x-active-mode="startsWith"&gt;Dashboard&lt;/a&gt;
-&lt;a x-route="{ name: 'settingsProfile', params: { id: user.id } }" x-replace&gt;Profile&lt;/a&gt;</code></pre>
+&lt;a x-route="settings.settingsBilling"&gt;Billing&lt;/a&gt;
+&lt;a x-route="{ name: 'userDetails', params: { id: user.id } }" x-replace&gt;Profile&lt;/a&gt;</code></pre>
+    <p>For nested named routes under a named parent, pass the hierarchical name. If the parent path contains params, include them in <code>params</code> when navigating by name.</p>
     <ul>
       <li><code>x-active</code> – CSS class when route matches (default "active")</li>
       <li><code>x-active-mode</code> – <code>exact</code> or <code>startsWith</code></li>
