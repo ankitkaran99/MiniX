@@ -331,12 +331,13 @@
 	// ─── MiniX_Loader (embedded) ──────────────────────────────────────────────────
 
 	class MiniX_Loader {
-		constructor(baseDir, options = {}) {
+		constructor(baseDir, options = {}, isLayoutLoader = false) {
 			this.baseDir = baseDir.replace(/\/+$/, '') + '/';
 			this.ext = options.ext || '.js';
 			this.retries = options.retries ?? 2;
 			this.retryDelay = options.retryDelay ?? 300;
 			this.timeout = options.timeout ?? 10000;
+			this.isLayoutLoader = !!isLayoutLoader;
 			this._cache = new Map();
 			this._pending = new Map();
 		}
@@ -460,12 +461,33 @@
 		let loader = null;
 		if (options.loader) {
 			if (options.loader instanceof MiniX_Loader) {
+				if (options.loader.isLayoutLoader) {
+					throw new Error("MiniXRouter.createRouter: options.loader must use a component loader, not a layout loader.");
+				}
 				loader = options.loader;
 			} else if (typeof options.loader === "object") {
+				if (options.loader.isLayoutLoader) {
+					throw new Error("MiniXRouter.createRouter: options.loader config cannot be marked as a layout loader.");
+				}
 				loader = new MiniX_Loader(options.loader.baseDir || '/components', options.loader);
 			}
 		}
-		const layoutLoader = typeof options.layoutLoader === "function" ? options.layoutLoader : null;
+		let layoutLoader = null;
+		if (typeof options.layoutLoader === "function") {
+			layoutLoader = options.layoutLoader;
+		} else if (options.layoutLoader instanceof MiniX_Loader) {
+			if (!options.layoutLoader.isLayoutLoader) {
+				throw new Error("MiniXRouter.createRouter: options.layoutLoader must use new MiniXRouter.Loader(baseDir, options, true).");
+			}
+			layoutLoader = (name) => options.layoutLoader.load(name);
+		} else if (typeof options.layoutLoader === "object" && options.layoutLoader) {
+			const internalLayoutLoader = new MiniX_Loader(
+				options.layoutLoader.baseDir || '/layouts',
+				options.layoutLoader,
+				true
+			);
+			layoutLoader = (name) => internalLayoutLoader.load(name);
+		}
 
 		const records = [];
 		const recordsByName = new Map();
@@ -967,6 +989,24 @@
 		const _loaderFn = loader ? (name) => loader.load(name) : null;
 		const _pendingLazyLoads = new Map();
 
+		function normalizeResolvedComponentName(value, requestedComponentName = null) {
+			const resolved = value?.default ?? value ?? requestedComponentName ?? null;
+			if (!resolved) return null;
+			if (typeof resolved === "string") {
+				const registered = getResolvedComponentDefinition(resolved);
+				if (registered) return resolved;
+				if (requestedComponentName) {
+					throw new Error(`MiniXRouter: component "${requestedComponentName}" loaded but did not register a resolvable component.`);
+				}
+				return resolved;
+			}
+			const anonymousName = registerAnonymousComponent(resolved);
+			if (!anonymousName) {
+				throw new Error("MiniXRouter: failed to register loaded component definition.");
+			}
+			return anonymousName;
+		}
+
 		async function resolveViewComponentName(componentValue, routeRecord, viewName) {
 			if (!componentValue) return null;
 			if (typeof componentValue === "string") {
@@ -976,14 +1016,15 @@
 					if (routeRecord) routeRecord._loadedViews[cacheKey] = componentValue;
 					return componentValue;
 				}
-				if (!_loaderFn) return componentValue;
+				if (!_loaderFn) {
+					throw new Error(`MiniXRouter: component "${componentValue}" is not registered and no loader is configured.`);
+				}
 				const cacheKey = viewName || "default";
 				const pendingKey = routeRecord ? routeRecord.fullPath + "::" + cacheKey : componentValue;
 				if (_pendingLazyLoads.has(pendingKey)) return _pendingLazyLoads.get(pendingKey);
 				emitDebug("lazy:load:start", { route: routeRecord?.fullPath || null, viewName: cacheKey, componentName: componentValue });
 				const loadPromise = Promise.resolve(_loaderFn(componentValue)).then((resolvedValue) => {
-					const resolved = resolvedValue?.default ?? resolvedValue ?? componentValue;
-					const name = typeof resolved === "string" ? resolved : registerAnonymousComponent(resolved);
+					const name = normalizeResolvedComponentName(resolvedValue, componentValue);
 					if (routeRecord) routeRecord._loadedViews[cacheKey] = name;
 					_pendingLazyLoads.delete(pendingKey);
 					emitDebug("lazy:load:finish", { route: routeRecord?.fullPath || null, viewName: cacheKey, componentName: name });
@@ -996,46 +1037,10 @@
 				return loadPromise;
 			}
 
-			// If componentValue is a function that expects a loader (arity >= 1) and we have a loader
-			if (typeof componentValue === "function" && componentValue.length >= 1 && _loaderFn) {
-				const result = componentValue(_loaderFn);
-				const resolved = isPromise(result) ? await result : result;
-				return resolveViewComponentName(resolved, routeRecord, viewName);
-			}
-
 			const cacheKey = viewName || "default";
 			if (routeRecord && routeRecord._loadedViews[cacheKey]) return routeRecord._loadedViews[cacheKey];
 
-			const looksLikeLazyLoader =
-			typeof componentValue === "function" &&
-			!(componentValue.prototype?.constructor === componentValue) &&
-			!componentValue.prototype?.view &&
-			!componentValue.prototype?.render &&
-			!componentValue.prototype?.data &&
-			!componentValue.prototype?.mounted;
-
-			if (looksLikeLazyLoader) {
-				const pendingKey = routeRecord ? routeRecord.fullPath + "::" + cacheKey : null;
-				if (pendingKey && _pendingLazyLoads.has(pendingKey)) {
-					return _pendingLazyLoads.get(pendingKey);
-				}
-				emitDebug("lazy:load:start", { route: routeRecord?.fullPath || null, viewName: cacheKey });
-				const loadPromise = Promise.resolve(componentValue()).then((resolvedValue) => {
-					const resolved = resolvedValue?.default ?? resolvedValue;
-					const name = registerAnonymousComponent(resolved);
-					if (routeRecord) routeRecord._loadedViews[cacheKey] = name;
-					if (pendingKey) _pendingLazyLoads.delete(pendingKey);
-					emitDebug("lazy:load:finish", { route: routeRecord?.fullPath || null, viewName: cacheKey, componentName: name });
-					return name;
-				}).catch((err) => {
-					if (pendingKey) _pendingLazyLoads.delete(pendingKey);
-					throw err;
-				});
-				if (pendingKey) _pendingLazyLoads.set(pendingKey, loadPromise);
-				return loadPromise;
-			}
-
-			const name = registerAnonymousComponent(componentValue);
+			const name = normalizeResolvedComponentName(componentValue, null);
 			if (routeRecord) routeRecord._loadedViews[cacheKey] = name;
 			return name;
 		}
@@ -1078,10 +1083,28 @@
 			return typeof value === "string" && value.trim().startsWith("<");
 		}
 
+		function normalizeResolvedLayout(value, requestedLayoutName = null) {
+			const resolvedLayout = value?.default ?? value ?? null;
+			if (resolvedLayout == null || resolvedLayout === false) return null;
+			if (typeof resolvedLayout === "string") {
+				if (looksLikeInlineHtmlLayout(resolvedLayout)) return resolvedLayout;
+				const registeredLayout = getResolvedComponentDefinition(resolvedLayout);
+				if (registeredLayout) return registeredLayout;
+				if (requestedLayoutName) {
+					throw new Error(`MiniXRouter: layout "${requestedLayoutName}" loaded but did not register a resolvable layout component.`);
+				}
+				return null;
+			}
+			return resolvedLayout;
+		}
+
 		async function resolveLayoutValue(layoutValue, routeRecord, route, componentDefinition) {
 			if (layoutValue == null || layoutValue === false) return null;
 
 			if (typeof layoutValue === "string") {
+				if (looksLikeInlineHtmlLayout(layoutValue)) return layoutValue;
+				const registeredLayout = getResolvedComponentDefinition(layoutValue);
+				if (registeredLayout) return registeredLayout;
 				if (layoutLoader) {
 					const loadedLayout = layoutLoader(layoutValue, _loaderFn, {
 						route: cloneRoute(route),
@@ -1089,15 +1112,12 @@
 						component: componentDefinition
 					});
 					const resolvedLayout = isPromise(loadedLayout) ? await loadedLayout : loadedLayout;
-					return resolvedLayout?.default ?? resolvedLayout ?? null;
+					return normalizeResolvedLayout(resolvedLayout, layoutValue);
 				}
-				const registeredLayout = getResolvedComponentDefinition(layoutValue);
-				if (registeredLayout) return registeredLayout;
-				if (looksLikeInlineHtmlLayout(layoutValue)) return layoutValue;
-				return null;
+				throw new Error(`MiniXRouter: layout "${layoutValue}" is not registered and no layoutLoader is configured.`);
 			}
 
-			return layoutValue?.default ?? layoutValue;
+			return normalizeResolvedLayout(layoutValue, null);
 		}
 
 		// ── Shared link-directive helpers ──────────────────────────────────────
@@ -1631,6 +1651,12 @@
 			},
 
 			start() {
+				if (!installed || !appRef) {
+					throw new Error("MiniXRouter.start() requires the router to be installed on an app first.");
+				}
+				if (typeof unlisten === "function") {
+					return router;
+				}
 				attachHistoryListener();
 				Promise.resolve(handleHistoryNavigation(getHistoryLocation(), { initial: true })).catch((error) => {
 					emitDebug("navigation:error", { source: "start", error: String(error?.message || error), location: getHistoryLocation() });

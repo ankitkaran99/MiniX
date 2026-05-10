@@ -6,7 +6,7 @@ class AdminLayout {
           <div style="font-size: 1.15rem; font-weight: 700;">Admin Workspace</div>
         </header>
         <div style="padding: 22px;">
-          <div x-router-view></div>
+          <template x-yield></template>
         </div>
       </section>
     `;

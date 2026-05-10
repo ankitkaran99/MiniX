@@ -5,7 +5,7 @@ class CustomerLayout {
           <strong>Customer Area</strong>
         </header>
         <div style="padding: 22px;">
-          <div x-router-view></div>
+          <template x-yield></template>
         </div>
       </section>
     `;

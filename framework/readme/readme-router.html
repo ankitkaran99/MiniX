@@ -426,13 +426,13 @@ const router = MiniXRouter.createRouter({
     <p>The loader caches successful loads, so subsequent visits to the same route will reuse the component without a second network request.</p>
 
     <h3>Lazy Layouts</h3>
-    <p>Layouts can be resolved lazily too. Configure <code>layoutLoader</code> once on the router, then let a route or the loaded component declare which layout it needs.</p>
+    <p>Layouts can be resolved lazily too. Configure <code>layoutLoader</code> once on the router, then let a route or the loaded component declare which layout it needs. When passing a loader instance, use <code>new MiniXRouter.Loader(baseDir, options, true)</code> so the router can distinguish it from a component loader.</p>
     <pre><code>const pageLoader = new MiniXRouter.Loader('./components', { ext: '.js' });
-const layoutAssetLoader = new MiniXRouter.Loader('./layouts', { ext: '.js' });
+const layoutLoader = new MiniXRouter.Loader('./layouts', { ext: '.js' }, true);
 
 const router = MiniXRouter.createRouter({
   loader: pageLoader,
-  layoutLoader: (layoutName) => layoutAssetLoader.load(layoutName),
+  layoutLoader: layoutLoader,
   routes: [
     {
       path: '/reports',
@@ -452,7 +452,7 @@ class CustomerPage {
 }
 
 MiniX_Component.register('ReportsPage', ReportsPage);</code></pre>
-    <p>The component only returns the layout name. <code>layoutLoader</code> does the actual loading. If a route needs to override the component layout, set <code>layout</code> directly on the route record.</p>
+    <p>The component only returns the layout name. The router first checks registered layouts and inline HTML layouts, then uses the configured layout loader only when that name still needs to be fetched. The lazy layout file must register a resolvable layout component such as <code>AdminLayout</code> and should use <code>&lt;template x-yield&gt;&lt;/template&gt;</code> as the content insertion point. If a route needs to override the component layout, set <code>layout</code> directly on the route record.</p>
 
     <h3>Example: Lazy Component File (<code>Customer.js</code>)</h3>
     <pre><code>class Customer {
@@ -470,14 +470,12 @@ if (typeof MiniX_Component !== 'undefined') {
 loader.preload('Customer');       // fetches but doesn't execute (browser cache)</code></pre>
     <p>Clear cached components with <code>loader.clearCache('Customer')</code> or <code>loader.clearCache()</code> to force re‑fetch.</p>
 
-    <div class="note">📌 <strong>Legacy async components</strong> (functions returning <code>Promise&lt;Component&gt;</code>) are still fully supported. The new loader pattern is recommended for zero‑build, file‑based lazy loading.</div>
-
     <h2 id="api">🔧 API Reference</h2>
     <div class="table-wrap">
       <table>
         <thead><tr><th>Method / Property</th><th>Description</th></tr></thead>
         <tbody>
-          <tr><td><code>createRouter(options)</code></td><td>Creates router instance. Options: <code>routes</code>, <code>history</code>, <code>debug</code>, <code>loader</code> (config or Loader instance), <code>layoutLoader</code> (optional lazy layout resolver).</td></tr>
+          <tr><td><code>createRouter(options)</code></td><td>Creates router instance. Options: <code>routes</code>, <code>history</code>, <code>debug</code>, <code>loader</code> (config or component Loader instance; must not be marked as a layout loader), <code>layoutLoader</code> (optional callback, config, or layout <code>Loader</code> instance created with the third argument set to <code>true</code>).</td></tr>
           <tr><td><code>createWebHistory(base)</code></td><td>HTML5 history mode (pushState).</td></tr>
           <tr><td><code>createWebHashHistory(base)</code></td><td>Hash mode (fallback for file://).</td></tr>
           <tr><td><code>router.push(to)</code> / <code>replace(to)</code></td><td>Navigate programmatically.</td></tr>
@@ -487,7 +485,7 @@ loader.preload('Customer');       // fetches but doesn't execute (browser cache)
           <tr><td><code>router.beforeRouteLeave(fn)</code></td><td>Called before a view is unmounted (useful for exit animations).</td></tr>
           <tr><td><code>router.afterRouteEnter(fn)</code></td><td>Called after view is mounted/restored.</td></tr>
           <tr><td><code>router.clearKeepAlive(key?)</code></td><td>Clear all or specific keep-alive cache.</td></tr>
-          <tr><td><code>router.getLoader()</code></td><td>Returns the internal <code>MiniX_Loader</code> instance (if configured).</td></tr>
+          <tr><td><code>router.getLoader()</code></td><td>Returns the internal component <code>MiniX_Loader</code> instance (if configured).</td></tr>
           <tr><td><code>router.onDebug(listener)</code></td><td>Subscribe to internal debug events.</td></tr>
           <tr><td><code>router.currentRoute</code></td><td>Reactive route object with <code>path</code>, <code>params</code>, <code>query</code>, <code>meta</code>, <code>fullPath</code>.</td></tr>
         </tbody>
