@@ -323,7 +323,7 @@ MiniX.createApp(AppShell)
     <p>Inside your template, use <code>&lt;div x-router-view&gt;&lt;/div&gt;</code> as outlet.</p>
 
     <h2 id="routes">🧩 Route Definition</h2>
-    <p>Routes support paths, names, nested children, named views, redirects, meta, and props.</p>
+    <p>Routes support paths, names, nested children, named views, redirects, meta, and props. Child paths are always resolved relative to their parent, so both <code>projects</code> and <code>/projects</code> under <code>/workspace</code> resolve to <code>/workspace/projects</code>.</p>
     <pre><code>{
   path: '/workspace',
   components: { default: 'WorkspaceLayout', sidebar: 'SidebarComp' },
@@ -366,7 +366,7 @@ MiniX.createApp(AppShell)
       name: 'auth',
       component: 'AuthLayout',
       children: [
-        { path: 'login', name: 'login', component: 'Login' }
+        { path: '/login', name: 'login', component: 'Login' }
       ]
     },
     {
@@ -384,6 +384,7 @@ router.push({ name: 'userDetails', params: { id: 42 } }); // /users/42
 
 // auth children resolve by nested name only
 router.push({ name: 'auth.login' });  // /auth/login</code></pre>
+    <p>A leading slash on a child path does not make it absolute. Inside <code>children</code>, <code>path: '/login'</code> and <code>path: 'login'</code> both resolve to <code>/auth/login</code>.</p>
 
     <h3>Route meta fields</h3>
     <p><code>meta.title</code> (string or function) sets document title automatically. <code>meta.keepAlive</code> enables component caching. Custom meta like <code>requiresAuth</code> can be used in guards.</p>

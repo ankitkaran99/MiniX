@@ -70,6 +70,13 @@
 		return normalizePath(a + "/" + b);
 	}
 
+	function resolveRoutePath(parentPath, childPath, hasParent) {
+		const raw = childPath == null ? "" : String(childPath).trim();
+		if (!raw) return normalizePath(parentPath || "/");
+		if (!hasParent) return joinPaths(parentPath || "/", raw);
+		return joinPaths(parentPath || "/", raw.replace(/^\/+/, ""));
+	}
+
 	function parseQuery(search) {
 		const out = {};
 		const raw = String(search || "").replace(/^\?/, "");
@@ -631,7 +638,7 @@
 		function normalizeRouteRecord(route, parent, parentPath) {
 			if (!route || typeof route !== "object") return null;
 			const path = route.path == null ? "" : String(route.path);
-			const fullPath = path === "" ? normalizePath(parentPath || "/") : joinPaths(parentPath || "/", path);
+			const fullPath = resolveRoutePath(parentPath || "/", path, !!parent);
 			const compiled = compileRoutePattern(fullPath);
 			const normalizedSegments = compiled.path === "/" ? [] : compiled.path.split("/").filter(Boolean);
 			const namedBuildParts = [];
