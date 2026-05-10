@@ -7888,18 +7888,46 @@ class MiniX_Component {
 			dev: this.options.dev
 		});
 
-		if (meta.slots) element.__minix_slots__ = meta.slots;
-		childComponent.mount(element);
+		const finishMount = () => {
+			if (meta.slots) element.__minix_slots__ = meta.slots;
+			childComponent.mount(element);
 
-		if (meta.slots && Object.keys(meta.slots).length) {
-			this.compiler._projectSlots(element, childComponent.root);
-			if (typeof childComponent._compilerCleanup === 'function') childComponent._compilerCleanup();
-			childComponent._compilerCleanup = childComponent.compiler.compile(childComponent.root, childComponent);
+			if (meta.slots && Object.keys(meta.slots).length) {
+				this.compiler._projectSlots(element, childComponent.root);
+				if (typeof childComponent._compilerCleanup === 'function') childComponent._compilerCleanup();
+				childComponent._compilerCleanup = childComponent.compiler.compile(childComponent.root, childComponent);
+			}
+
+			this._childRecords.set(element, { name: normalizedName, component: childComponent, slots: meta.slots || {} });
+			this._syncChildrenArray();
+			return childComponent;
+		};
+
+		if (typeof meta.beforeMount === 'function') {
+			try {
+				const setupResult = meta.beforeMount(childComponent);
+				if (setupResult && typeof setupResult.then === 'function') {
+					return setupResult.then(
+						() => finishMount(),
+						(error) => {
+							try { childComponent.destroy(); } catch (_) {}
+							if (this.options.dev) {
+								console.warn('[MiniX] mountChild beforeMount hook failed.', error);
+							}
+							throw error;
+						}
+					);
+				}
+			} catch (error) {
+				try { childComponent.destroy(); } catch (_) {}
+				if (this.options.dev) {
+					console.warn('[MiniX] mountChild beforeMount hook failed.', error);
+				}
+				throw error;
+			}
 		}
 
-		this._childRecords.set(element, { name: normalizedName, component: childComponent, slots: meta.slots || {} });
-		this._syncChildrenArray();
-		return childComponent;
+		return finishMount();
 	}
 
 	destroy() {

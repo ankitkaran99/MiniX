@@ -1,5 +1,9 @@
 // ReportsPage.js – lazy component definition
 class ReportsPage {
+  static layout() {
+    return 'AdminLayout';
+  }
+
   data() {
     return {
       period: 'month',

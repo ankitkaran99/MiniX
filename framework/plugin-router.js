@@ -465,6 +465,7 @@
 				loader = new MiniX_Loader(options.loader.baseDir || '/components', options.loader);
 			}
 		}
+		const layoutLoader = typeof options.layoutLoader === "function" ? options.layoutLoader : null;
 
 		const records = [];
 		const recordsByName = new Map();
@@ -589,6 +590,7 @@
 				redirect: route.redirect,
 				component: route.component || null,
 				components: route.components || null,
+				layout: Object.prototype.hasOwnProperty.call(route, "layout") ? route.layout : undefined,
 				props: route.props,
 				meta: route.meta || {},
 				beforeEnter: route.beforeEnter || null,
@@ -967,7 +969,32 @@
 
 		async function resolveViewComponentName(componentValue, routeRecord, viewName) {
 			if (!componentValue) return null;
-			if (typeof componentValue === "string") return componentValue;
+			if (typeof componentValue === "string") {
+				const registered = getResolvedComponentDefinition(componentValue);
+				if (registered) {
+					const cacheKey = viewName || "default";
+					if (routeRecord) routeRecord._loadedViews[cacheKey] = componentValue;
+					return componentValue;
+				}
+				if (!_loaderFn) return componentValue;
+				const cacheKey = viewName || "default";
+				const pendingKey = routeRecord ? routeRecord.fullPath + "::" + cacheKey : componentValue;
+				if (_pendingLazyLoads.has(pendingKey)) return _pendingLazyLoads.get(pendingKey);
+				emitDebug("lazy:load:start", { route: routeRecord?.fullPath || null, viewName: cacheKey, componentName: componentValue });
+				const loadPromise = Promise.resolve(_loaderFn(componentValue)).then((resolvedValue) => {
+					const resolved = resolvedValue?.default ?? resolvedValue ?? componentValue;
+					const name = typeof resolved === "string" ? resolved : registerAnonymousComponent(resolved);
+					if (routeRecord) routeRecord._loadedViews[cacheKey] = name;
+					_pendingLazyLoads.delete(pendingKey);
+					emitDebug("lazy:load:finish", { route: routeRecord?.fullPath || null, viewName: cacheKey, componentName: name });
+					return name;
+				}).catch((err) => {
+					_pendingLazyLoads.delete(pendingKey);
+					throw err;
+				});
+				_pendingLazyLoads.set(pendingKey, loadPromise);
+				return loadPromise;
+			}
 
 			// If componentValue is a function that expects a loader (arity >= 1) and we have a loader
 			if (typeof componentValue === "function" && componentValue.length >= 1 && _loaderFn) {
@@ -1030,6 +1057,47 @@
 			if (typeof propsConfig === "function") return propsConfig(cloneRoute(route)) || {};
 			if (isPlainObject(propsConfig)) return copyOwnObject(propsConfig);
 			return {};
+		}
+
+		function getResolvedComponentDefinition(componentName) {
+			if (!componentName || !global.MiniX_Component || typeof global.MiniX_Component.resolve !== "function") return null;
+			return global.MiniX_Component.resolve(componentName) || null;
+		}
+
+		function getComponentDeclaredLayout(componentDefinition) {
+			if (typeof componentDefinition !== "function") return undefined;
+
+			if ("layout" in componentDefinition) {
+				const staticLayout = componentDefinition.layout;
+				return typeof staticLayout === "function" ? staticLayout() : staticLayout;
+			}
+			return undefined;
+		}
+
+		function looksLikeInlineHtmlLayout(value) {
+			return typeof value === "string" && value.trim().startsWith("<");
+		}
+
+		async function resolveLayoutValue(layoutValue, routeRecord, route, componentDefinition) {
+			if (layoutValue == null || layoutValue === false) return null;
+
+			if (typeof layoutValue === "string") {
+				if (layoutLoader) {
+					const loadedLayout = layoutLoader(layoutValue, _loaderFn, {
+						route: cloneRoute(route),
+						record: routeRecord,
+						component: componentDefinition
+					});
+					const resolvedLayout = isPromise(loadedLayout) ? await loadedLayout : loadedLayout;
+					return resolvedLayout?.default ?? resolvedLayout ?? null;
+				}
+				const registeredLayout = getResolvedComponentDefinition(layoutValue);
+				if (registeredLayout) return registeredLayout;
+				if (looksLikeInlineHtmlLayout(layoutValue)) return layoutValue;
+				return null;
+			}
+
+			return layoutValue?.default ?? layoutValue;
 		}
 
 		// ── Shared link-directive helpers ──────────────────────────────────────
@@ -1408,7 +1476,16 @@
 						el.appendChild(host);
 						let child = null;
 						try {
-							child = component.mountChild(resolvedName, host, props, {});
+							child = await component.mountChild(resolvedName, host, props, {
+								async beforeMount(childComponent) {
+									const componentLayout = getComponentDeclaredLayout(childComponent.ComponentClass);
+									const declaredLayout = record && Object.prototype.hasOwnProperty.call(record, "layout") && record.layout !== undefined
+										? record.layout
+										: (childComponent.instance.layout ?? componentLayout);
+									const resolvedLayout = await resolveLayoutValue(declaredLayout, record, route, childComponent.ComponentClass);
+									if (resolvedLayout !== undefined) childComponent.instance.layout = resolvedLayout;
+								}
+							});
 						} catch (error) {
 							if (host.parentNode === el) el.removeChild(host);
 							router._emitDebug("view:mount:error", {

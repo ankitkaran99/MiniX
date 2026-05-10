@@ -1,5 +1,7 @@
 // Customer.js – lazy component definition
 class Customer {
+  layout = 'CustomerLayout';
+
   data() {
     return {
       name: '',

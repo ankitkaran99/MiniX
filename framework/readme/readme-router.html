@@ -403,7 +403,7 @@ const router = MiniXRouter.createRouter({
   routes: [
     {
       path: '/customer',
-      component: (load) => load('Customer')   // load function is provided
+      component: 'Customer'   // router loads Customer.js on first visit
     }
   ]
 });
@@ -417,13 +417,42 @@ const router = MiniXRouter.createRouter({
 
     <h3>How It Works</h3>
     <ol>
-      <li>When a route with <code>component: (load) => load('Customer')</code> is activated for the first time, the router calls the function and passes a <code>load(name)</code> function.</li>
-      <li>The <code>load</code> function uses the configured loader to fetch <code>/components/Customer.js</code> (or the specified baseDir + name + ext).</li>
+      <li>When a route with <code>component: 'Customer'</code> is activated for the first time, the router checks whether the component is already registered.</li>
+      <li>If it is missing, the configured loader fetches <code>/components/Customer.js</code> (or the specified baseDir + name + ext).</li>
       <li>The loader injects a <code>&lt;script&gt;</code> tag, waits for the file to load, and resolves the promise.</li>
       <li>The component file <strong>must</strong> register itself with <code>MiniX_Component.register('Customer', CustomerClass)</code>.</li>
       <li>The router then resolves to the registered component and renders it.</li>
     </ol>
     <p>The loader caches successful loads, so subsequent visits to the same route will reuse the component without a second network request.</p>
+
+    <h3>Lazy Layouts</h3>
+    <p>Layouts can be resolved lazily too. Configure <code>layoutLoader</code> once on the router, then let a route or the loaded component declare which layout it needs.</p>
+    <pre><code>const pageLoader = new MiniXRouter.Loader('./components', { ext: '.js' });
+const layoutAssetLoader = new MiniXRouter.Loader('./layouts', { ext: '.js' });
+
+const router = MiniXRouter.createRouter({
+  loader: pageLoader,
+  layoutLoader: (layoutName) => layoutAssetLoader.load(layoutName),
+  routes: [
+    {
+      path: '/reports',
+      component: 'ReportsPage'
+    }
+  ]
+});
+
+class ReportsPage {
+  static layout() {
+    return 'AdminLayout';
+  }
+}
+
+class CustomerPage {
+  layout = 'DashboardLayout';
+}
+
+MiniX_Component.register('ReportsPage', ReportsPage);</code></pre>
+    <p>The component only returns the layout name. <code>layoutLoader</code> does the actual loading. If a route needs to override the component layout, set <code>layout</code> directly on the route record.</p>
 
     <h3>Example: Lazy Component File (<code>Customer.js</code>)</h3>
     <pre><code>class Customer {
@@ -448,7 +477,7 @@ loader.preload('Customer');       // fetches but doesn't execute (browser cache)
       <table>
         <thead><tr><th>Method / Property</th><th>Description</th></tr></thead>
         <tbody>
-          <tr><td><code>createRouter(options)</code></td><td>Creates router instance. Options: <code>routes</code>, <code>history</code>, <code>debug</code>, <code>loader</code> (config or Loader instance).</td></tr>
+          <tr><td><code>createRouter(options)</code></td><td>Creates router instance. Options: <code>routes</code>, <code>history</code>, <code>debug</code>, <code>loader</code> (config or Loader instance), <code>layoutLoader</code> (optional lazy layout resolver).</td></tr>
           <tr><td><code>createWebHistory(base)</code></td><td>HTML5 history mode (pushState).</td></tr>
           <tr><td><code>createWebHashHistory(base)</code></td><td>Hash mode (fallback for file://).</td></tr>
           <tr><td><code>router.push(to)</code> / <code>replace(to)</code></td><td>Navigate programmatically.</td></tr>
@@ -486,7 +515,7 @@ const router = MiniXRouter.createRouter({
   loader: { baseDir: './components', ext: '.js', retries: 1 },
   routes: [
     { path: '/', component: 'HomePage' },
-    { path: '/customer', component: (load) => load('Customer') }
+    { path: '/customer', component: 'Customer' }
   ]
 });
 

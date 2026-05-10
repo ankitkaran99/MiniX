@@ -102,7 +102,9 @@
             <strong>How it works:</strong>
             <ul>
               <li>The <code>Customer</code> and <code>ReportsPage</code> components are <strong>not</strong> loaded upfront.</li>
-              <li>When you navigate to <code>/customer</code> or <code>/reports</code>, the router calls <code>loader.load('Customer')</code>.</li>
+              <li>When you navigate to <code>/customer</code> or <code>/reports</code>, the router resolves the string component name and lazy-loads it if needed.</li>
+              <li><code>ReportsPage</code> uses <code>static layout() { return 'AdminLayout'; }</code> and <code>Customer</code> uses <code>layout = 'CustomerLayout'</code>.</li>
+              <li>A separate layout loader fetches layout files from <code>./layouts</code> only when a page asks for them.</li>
               <li>The built‑in <code>MiniX_Loader</code> injects a <code>&lt;script&gt;</code> tag, waits for the file to load, and resolves the component.</li>
               <li>After registration, the router renders the component.</li>
             </ul>
@@ -111,17 +113,25 @@
       `;
         }
 
+        const pageLoader = new MiniXRouter.Loader('./components', {
+            ext: '.js',
+            retries: 1,
+            timeout: 5000
+        });
+
+        const demoLayoutLoader = new MiniXRouter.Loader('./layouts', {
+            ext: '.js',
+            retries: 1,
+            timeout: 5000
+        });
+
         // Create router with integrated lazy loader
         const router = MiniXRouter.createRouter({
             // Use hash history for easy file:// testing; switch to createWebHistory() if you have a server
             history: MiniXRouter.createWebHashHistory(),
             debug: true, // see console logs for lazy loading events
-            loader: {
-                baseDir: './components', // directory where .js component files live
-                ext: '.js', // file extension
-                retries: 1, // retry once on failure
-                timeout: 5000 // 5 seconds timeout
-            },
+            loader: pageLoader,
+            layoutLoader: (layoutName) => demoLayoutLoader.load(layoutName),
             routes: [{
                 path: '/',
                 name: 'home',
@@ -130,12 +140,12 @@
             {
                 path: '/customer',
                 name: 'customer',
-                component: (load) => load('Customer') // the router passes the `load` function
+                component: 'Customer'
             },
             {
                 path: '/reports',
                 name: 'reports',
-                component: (load) => load('ReportsPage')
+                component: 'ReportsPage'
             }
             ]
         });
@@ -153,7 +163,7 @@
             <div x-router-view></div>
           </div>
           <div class="loader-info">
-            🧩 Components are lazy‑loaded when you visit their route for the first time.<br>
+            🧩 Components and layouts are lazy‑loaded when you visit their route for the first time.<br>
             Open the browser console to see load events.
           </div>
         </div>
