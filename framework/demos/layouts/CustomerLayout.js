@@ -12,5 +12,5 @@ class CustomerLayout {
 }
 
 if (typeof MiniX_Component !== 'undefined') {
-  MiniX_Component.register('CustomerLayout', CustomerLayout);
+  MiniX_Component.registerLayout('CustomerLayout', CustomerLayout);
 }

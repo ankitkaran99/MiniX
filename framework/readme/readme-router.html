@@ -452,7 +452,7 @@ class CustomerPage {
 }
 
 MiniX_Component.register('ReportsPage', ReportsPage);</code></pre>
-    <p>The component only returns the layout name. The router first checks registered layouts and inline HTML layouts, then uses the configured layout loader only when that name still needs to be fetched. The lazy layout file must register a resolvable layout component such as <code>AdminLayout</code> and should use <code>&lt;template x-yield&gt;&lt;/template&gt;</code> as the content insertion point. If a route needs to override the component layout, set <code>layout</code> directly on the route record.</p>
+    <p>The component only returns the layout name. The router first checks registered layouts and inline HTML layouts, then uses the configured layout loader only when that name still needs to be fetched. Lazy layout files should register a resolvable layout such as <code>AdminLayout</code> with <code>MiniX_Component.registerLayout(...)</code>. For eager app bootstrapping, use <code>app.layout('AdminLayout', AdminLayout)</code>. Layout templates should use <code>&lt;template x-yield&gt;&lt;/template&gt;</code> as the content insertion point. If a route needs to override the component layout, set <code>layout</code> directly on the route record.</p>
 
     <h3>Example: Lazy Component File (<code>Customer.js</code>)</h3>
     <pre><code>class Customer {

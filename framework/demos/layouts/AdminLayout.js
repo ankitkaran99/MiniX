@@ -13,5 +13,5 @@ class AdminLayout {
 }
 
 if (typeof MiniX_Component !== 'undefined') {
-  MiniX_Component.register('AdminLayout', AdminLayout);
+  MiniX_Component.registerLayout('AdminLayout', AdminLayout);
 }

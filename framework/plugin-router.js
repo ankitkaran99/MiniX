@@ -403,9 +403,9 @@
 					if (done) return;
 					done = true;
 					cleanup();
-					const comp = this._resolveComponent(name);
-					if (comp) {
-						resolve(comp);
+					const resolvedDefinition = this._resolveRegisteredDefinition(name);
+					if (resolvedDefinition) {
+						resolve(resolvedDefinition);
 					} else {
 						resolve(name);
 					}
@@ -422,9 +422,13 @@
 			});
 		}
 
-		_resolveComponent(name) {
+		_resolveRegisteredDefinition(name) {
 			const MiniX_Component = global.MiniX_Component;
-			return (MiniX_Component && typeof MiniX_Component.resolve === "function")
+			if (!MiniX_Component) return null;
+			if (this.isLayoutLoader && typeof MiniX_Component.resolveLayout === "function") {
+				return MiniX_Component.resolveLayout(name) || null;
+			}
+			return typeof MiniX_Component.resolve === "function"
 			? MiniX_Component.resolve(name)
 			: null;
 		}
@@ -491,6 +495,8 @@
 
 		const records = [];
 		const recordsByName = new Map();
+		const staticRecordsByPath = new Map();
+		const matchedChainCache = new Map();
 		const mountedComponents = new Set();
 		const keepAliveStore = new Map();
 		const beforeEachHooks = [];
@@ -513,6 +519,7 @@
 		let activeLinkRefreshScheduled = false;
 		let navigationId = 0;
 		let installed = false;
+		const matchedChainCacheLimit = 200;
 
 		const RouteState = global.MiniX_State || null;
 		const currentRoute = RouteState
@@ -604,6 +611,28 @@
 			const path = route.path == null ? "" : String(route.path);
 			const fullPath = path === "" ? normalizePath(parentPath || "/") : joinPaths(parentPath || "/", path);
 			const compiled = compileRoutePattern(fullPath);
+			const normalizedSegments = compiled.path === "/" ? [] : compiled.path.split("/").filter(Boolean);
+			const namedBuildParts = [];
+			let keyIndex = 0;
+			for (const segment of normalizedSegments) {
+				if (segment === "*") {
+					namedBuildParts.push({ key: "pathMatch", optional: false, catchAll: true, zeroOrMore: false });
+					continue;
+				}
+				if (!segment.startsWith(":")) {
+					namedBuildParts.push(segment);
+					continue;
+				}
+				const keyInfo = compiled.keys[keyIndex++] || null;
+				const catchAllMatch = segment.match(/^:([^()]+)\(\.\*\)$/);
+				const key = catchAllMatch ? catchAllMatch[1] : segment.slice(1).replace(/\?$/, "").replace(/\*$/, "");
+				namedBuildParts.push({
+					key,
+					optional: !!keyInfo?.optional,
+					catchAll: !!keyInfo?.catchAll,
+					zeroOrMore: !!keyInfo?.zeroOrMore
+				});
+			}
 
 			const record = {
 				path,
@@ -619,12 +648,17 @@
 				parent: parent || null,
 				children: [],
 				depth: parent ? parent.depth + 1 : 0,
+				_chain: parent ? parent._chain.concat() : [],
+				_namedBuildParts: namedBuildParts,
 				_loadedViews: Object.create(null),
+				_loadedLayouts: Object.create(null),
  ...compiled
 			};
+			record._chain.push(record);
 
 			records.push(record);
 			if (record.name) recordsByName.set(record.name, record);
+			if (record.keys.length === 0) staticRecordsByPath.set(record.fullPath, record);
 
 			for (const child of (Array.isArray(route.children) ? route.children : [])) {
 				const childRecord = normalizeRouteRecord(child, record, record.fullPath);
@@ -651,42 +685,31 @@
 
 		function getMatchedChain(path) {
 			const normalizedPath = normalizePath(path);
+			const staticRecord = staticRecordsByPath.get(normalizedPath);
+			if (staticRecord) return staticRecord._chain;
+			const cachedChain = matchedChainCache.get(normalizedPath);
+			if (cachedChain) return cachedChain;
 			const leaf = records.find((record) => record.exactRegex.test(normalizedPath));
 			if (!leaf) return [];
-			const chain = [];
-			let cursor = leaf;
-			while (cursor) {
-				chain.unshift(cursor);
-				cursor = cursor.parent;
+			const chain = leaf._chain;
+			if (matchedChainCache.size >= matchedChainCacheLimit) {
+				const oldestKey = matchedChainCache.keys().next().value;
+				if (oldestKey !== undefined) matchedChainCache.delete(oldestKey);
 			}
+			matchedChainCache.set(normalizedPath, chain);
 			return chain;
 		}
 
 		function buildPathFromNamedRoute(record, params) {
-			const parts = record.fullPath.split("/").filter(Boolean);
-			const built = parts
+			const built = record._namedBuildParts
 			.map((part) => {
-				if (part === "*") {
-					const key = "pathMatch";
-					if (!params || !Object.prototype.hasOwnProperty.call(params, key) || params[key] == null || String(params[key]) === "") {
-						throw new Error('[MiniXRouter] Missing param "' + key + '" for route "' + (record.name || record.fullPath) + '"');
-					}
-					return String(params[key])
-					.split("/")
-					.filter(Boolean)
-					.map((segment) => encodeURIComponent(segment))
-					.join("/");
-				}
-				if (!part.startsWith(":")) return part;
-				const catchAllMatch = part.match(/^:([^()]+)\(\.\*\)$/);
-				const optional = !catchAllMatch && part.endsWith("?");
-				const key = catchAllMatch ? catchAllMatch[1] : part.slice(1).replace(/\?$/, "").replace(/\*$/, "");
-				const keyInfo = record.keys.find((entry) => entry.name === key);
+				if (typeof part === "string") return part;
+				const key = part.key;
 				const hasParam = !!(params && Object.prototype.hasOwnProperty.call(params, key) && params[key] != null);
 				if (hasParam) {
-					if (keyInfo && keyInfo.catchAll) {
+					if (part.catchAll) {
 						const rawValue = String(params[key]);
-						if (!rawValue && !keyInfo.zeroOrMore) {
+						if (!rawValue && !part.zeroOrMore) {
 							throw new Error('[MiniXRouter] Missing param "' + key + '" for route "' + (record.name || record.fullPath) + '"');
 						}
 						return rawValue
@@ -697,7 +720,7 @@
 					}
 					return encodeURIComponent(String(params[key]));
 				}
-				if (optional) return null;
+				if (part.optional) return null;
 				throw new Error('[MiniXRouter] Missing param "' + key + '" for route "' + (record.name || record.fullPath) + '"');
 			})
 			.filter(Boolean);
@@ -740,12 +763,14 @@
 
 		function resolve(input, redirectedFrom = null, debug = false, visited = null) {
 			const target = normalizeRawTarget(input);
-			const fullTargetKey = target.path + stringifyQuery(target.query) + normalizeHash(target.hash);
+			const targetQuery = target.query || {};
+			const targetHash = normalizeHash(target.hash);
+			const targetFullPath = target.path + stringifyQuery(targetQuery) + targetHash;
 			const seen = visited || new Set();
-			if (seen.has(fullTargetKey)) {
-				throw new Error("[MiniXRouter] Redirect loop detected for " + fullTargetKey);
+			if (seen.has(targetFullPath)) {
+				throw new Error("[MiniXRouter] Redirect loop detected for " + targetFullPath);
 			}
-			seen.add(fullTargetKey);
+			seen.add(targetFullPath);
 			const matched = getMatchedChain(target.path);
 			const leaf = matched.length ? matched[matched.length - 1] : null;
 			if (leaf && leaf.redirect) {
@@ -753,15 +778,15 @@
 				typeof leaf.redirect === "function"
 				? leaf.redirect({
 					path: target.path,
-					query: target.query,
-					hash: target.hash,
+					query: targetQuery,
+					hash: targetHash,
 					params: extractParams(leaf, target.path),
 								name: leaf.name || null,
 								meta: mergeMeta(matched),
 								matched
 				})
 				: leaf.redirect;
-			return resolve(redirected, redirectedFrom || fullTargetKey, debug, seen);
+			return resolve(redirected, redirectedFrom || targetFullPath, debug, seen);
 			}
 			const params = {};
 			for (const record of matched) {
@@ -769,12 +794,12 @@
 				for (const key of Object.keys(recordParams)) setOwn(params, key, recordParams[key]);
 			}
 			const route = {
-				fullPath: target.path + stringifyQuery(target.query) + normalizeHash(target.hash),
+				fullPath: targetFullPath,
 				path: target.path,
 				name: leaf ? leaf.name || null : null,
 				params,
-				query: target.query || {},
-				hash: normalizeHash(target.hash),
+				query: targetQuery,
+				hash: targetHash,
 				meta: mergeMeta(matched),
 				matched,
 				redirectedFrom: redirectedFrom || null
@@ -988,6 +1013,7 @@
 
 		const _loaderFn = loader ? (name) => loader.load(name) : null;
 		const _pendingLazyLoads = new Map();
+		const _pendingLayoutLoads = new Map();
 
 		function normalizeResolvedComponentName(value, requestedComponentName = null) {
 			const resolved = value?.default ?? value ?? requestedComponentName ?? null;
@@ -1069,6 +1095,14 @@
 			return global.MiniX_Component.resolve(componentName) || null;
 		}
 
+		function getResolvedLayoutDefinition(layoutName) {
+			if (!layoutName || !global.MiniX_Component) return null;
+			if (typeof global.MiniX_Component.resolveLayout === "function") {
+				return global.MiniX_Component.resolveLayout(layoutName) || null;
+			}
+			return null;
+		}
+
 		function getComponentDeclaredLayout(componentDefinition) {
 			if (typeof componentDefinition !== "function") return undefined;
 
@@ -1088,7 +1122,7 @@
 			if (resolvedLayout == null || resolvedLayout === false) return null;
 			if (typeof resolvedLayout === "string") {
 				if (looksLikeInlineHtmlLayout(resolvedLayout)) return resolvedLayout;
-				const registeredLayout = getResolvedComponentDefinition(resolvedLayout);
+				const registeredLayout = getResolvedLayoutDefinition(resolvedLayout);
 				if (registeredLayout) return registeredLayout;
 				if (requestedLayoutName) {
 					throw new Error(`MiniXRouter: layout "${requestedLayoutName}" loaded but did not register a resolvable layout component.`);
@@ -1103,16 +1137,33 @@
 
 			if (typeof layoutValue === "string") {
 				if (looksLikeInlineHtmlLayout(layoutValue)) return layoutValue;
-				const registeredLayout = getResolvedComponentDefinition(layoutValue);
-				if (registeredLayout) return registeredLayout;
+				if (routeRecord && Object.prototype.hasOwnProperty.call(routeRecord._loadedLayouts, layoutValue)) {
+					return routeRecord._loadedLayouts[layoutValue];
+				}
+				const registeredLayout = getResolvedLayoutDefinition(layoutValue);
+				if (registeredLayout) {
+					if (routeRecord) routeRecord._loadedLayouts[layoutValue] = registeredLayout;
+					return registeredLayout;
+				}
 				if (layoutLoader) {
-					const loadedLayout = layoutLoader(layoutValue, _loaderFn, {
-						route: cloneRoute(route),
-						record: routeRecord,
-						component: componentDefinition
-					});
-					const resolvedLayout = isPromise(loadedLayout) ? await loadedLayout : loadedLayout;
-					return normalizeResolvedLayout(resolvedLayout, layoutValue);
+					if (_pendingLayoutLoads.has(layoutValue)) return _pendingLayoutLoads.get(layoutValue);
+					const loadPromise = (async () => {
+						try {
+							const loadedLayout = layoutLoader(layoutValue, _loaderFn, {
+								route: cloneRoute(route),
+								record: routeRecord,
+								component: componentDefinition
+							});
+							const resolvedLayout = isPromise(loadedLayout) ? await loadedLayout : loadedLayout;
+							const normalizedLayout = normalizeResolvedLayout(resolvedLayout, layoutValue);
+							if (routeRecord) routeRecord._loadedLayouts[layoutValue] = normalizedLayout;
+							return normalizedLayout;
+						} finally {
+							_pendingLayoutLoads.delete(layoutValue);
+						}
+					})();
+					_pendingLayoutLoads.set(layoutValue, loadPromise);
+					return loadPromise;
 				}
 				throw new Error(`MiniXRouter: layout "${layoutValue}" is not registered and no layoutLoader is configured.`);
 			}

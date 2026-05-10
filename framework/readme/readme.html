@@ -223,6 +223,7 @@ class Dashboard {
   }
 }</code></pre>
 <div class="note">Layouts do not consume <code>{{ content }}</code>. The layout renders insertion points with <code>x-yield</code>. Unnamed <code>x-yield</code> receives the main body, and named targets like <code>x-yield="sidebar"</code> receive matching <code>x-section="sidebar"</code> fragments.</div>
+<p>When a route or component refers to a layout by string name, register it explicitly as a layout with <code>app.layout('AdminLayout', AdminLayout)</code> during app setup or <code>MiniX_Component.registerLayout('AdminLayout', AdminLayout)</code> in a lazy-loaded layout file.</p>
 <h3>Slot</h3><pre><code>&lt;div x-component="Panel"&gt;
   &lt;template x-slot="header"&gt;User Details&lt;/template&gt;
   &lt;p&gt;Body content here&lt;/p&gt;

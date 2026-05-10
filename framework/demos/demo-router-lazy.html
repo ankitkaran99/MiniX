@@ -104,7 +104,7 @@
               <li>The <code>Customer</code> and <code>ReportsPage</code> components are <strong>not</strong> loaded upfront.</li>
               <li>When you navigate to <code>/customer</code> or <code>/reports</code>, the router resolves the string component name and lazy-loads it if needed.</li>
               <li><code>ReportsPage</code> uses <code>static layout() { return 'AdminLayout'; }</code> and <code>Customer</code> uses <code>layout = 'CustomerLayout'</code>.</li>
-              <li>A dedicated layout loader fetches files from <code>./layouts</code> only when a page asks for them.</li>
+              <li>A dedicated layout loader fetches files from <code>./layouts</code> only when a page asks for them, and each lazy layout file registers itself with <code>MiniX_Component.registerLayout(...)</code>.</li>
               <li>The built‑in <code>MiniX_Loader</code> injects a <code>&lt;script&gt;</code> tag, waits for the file to load, and resolves the component.</li>
               <li>After registration, the router renders the component.</li>
             </ul>

@@ -6354,6 +6354,7 @@ MiniX_Compiler._loopTemplateMetaWeakCache = new WeakMap();
 
 class MiniX_Component {
 	static registry = new Map();
+	static layoutRegistry = new Map();
 
 	static register(name, definition) {
 		if (!name || typeof name !== 'string') throw new Error('MiniX_Component.register requires valid name');
@@ -6361,8 +6362,18 @@ class MiniX_Component {
 		return definition;
 	}
 
+	static registerLayout(name, definition) {
+		if (!name || typeof name !== 'string') throw new Error('MiniX_Component.registerLayout requires valid name');
+		this.layoutRegistry.set(name, definition);
+		return definition;
+	}
+
 	static resolve(name, localRegistry = {}) {
 		return localRegistry?.[name] || this.registry.get(name) || null;
+	}
+
+	static resolveLayout(name) {
+		return this.layoutRegistry.get(name) || null;
 	}
 
 	constructor(ComponentClass, options = {}) {
@@ -8007,6 +8018,11 @@ class MiniX {
 
 	component(name, definition) {
 		MiniX_Component.register(name, definition);
+		return this;
+	}
+
+	layout(name, definition) {
+		MiniX_Component.registerLayout(name, definition);
 		return this;
 	}
 
