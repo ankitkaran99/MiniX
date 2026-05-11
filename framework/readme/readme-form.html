@@ -1,18 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MiniX Validate + Ajax - README</title>
-<style>
-body{font-family:Arial;background:#0f1115;color:#e8eaed;margin:0;padding:40px}
-h1{color:#91f25c}
-code,pre{background:#171a21;padding:10px;border-radius:6px;display:block;overflow:auto}
-.section{margin-bottom:30px}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>MiniX Validate + Ajax - README</title>
+  <link rel="stylesheet" href="../../readme-assets/router-doc-theme.css">
 </head>
-<body>
-
+<body data-doc-product="Mini-X Validate + Ajax" data-doc-summary="Validation and ajax form handling for Mini-X, including reactive errors, form rules, and submit lifecycle helpers." data-doc-badges="Validation|Ajax submit|Reactive errors|Forms" data-doc-highlights="x-validate rule-driven form checks|Reactive $errors object in templates|MiniXValidatePlugin and MiniXAjaxPlugin working together" data-doc-metrics="Rules::Field validation|Errors::Reactive scope|Ajax::Submit flow|Helpers::$validate APIs" data-doc-sidebar="Use this guide to wire validation rules, show field errors, and connect validated forms to ajax submission callbacks.">
+  <div data-doc-root class="doc-source">
 <h1>MiniX Validate + Ajax Plugin - Usage Guide</h1>
 
 <div class="section">
@@ -60,7 +55,7 @@ class MyApp {
 <div class="section">
 <h2>4. Available Helpers</h2>
 <pre>
-this.$errors          // reactive object — read per field: this.$errors.email
+this.$errors          // reactive object â€” read per field: this.$errors.email
 this.$validate()      // run validation, returns Promise&lt;boolean&gt;
 this.$validateForm()  // alias for $validate()
 this.$clearErrors()   // reset all field errors
@@ -69,7 +64,7 @@ this.$clearErrors()   // reset all field errors
 
 <div class="section">
 <h2>5. Error Display</h2>
-<p>Errors are exposed via the reactive <b>$errors</b> scope object. Bind directly in the template using <b>x-show</b> and <b>x-text</b> — no <code>data-error-for</code> nodes or manual DOM writes needed:</p>
+<p>Errors are exposed via the reactive <b>$errors</b> scope object. Bind directly in the template using <b>x-show</b> and <b>x-text</b> â€” no <code>data-error-for</code> nodes or manual DOM writes needed:</p>
 <pre>
 &lt;!-- one div per field --&gt;
 &lt;div class="err" x-show="$errors.email"   x-text="$errors.email   || ''"&gt;&lt;/div&gt;
@@ -103,11 +98,12 @@ MiniX.createApp(MyApp)
 <ul>
 <li>Validation blocks submit automatically</li>
 <li>Inspect.js is required</li>
-<li>Do <b>not</b> use <code>data-error-for</code> — it is no longer supported. Use <code>x-show="$errors.field"</code> and <code>x-text="$errors.field || ''"</code> instead</li>
-<li>Each field in <code>rules()</code> must have a corresponding <code>data()</code> entry is <em>not</em> required — errors live in plugin-managed state, not component data</li>
+<li>Do <b>not</b> use <code>data-error-for</code> â€” it is no longer supported. Use <code>x-show="$errors.field"</code> and <code>x-text="$errors.field || ''"</code> instead</li>
+<li>Each field in <code>rules()</code> must have a corresponding <code>data()</code> entry is <em>not</em> required â€” errors live in plugin-managed state, not component data</li>
 <li><code>x-validate-on="blur|input"</code> enables live validation as the user types or leaves a field</li>
 </ul>
 </div>
-
+  </div>
+  <script src="../../readme-assets/router-doc-theme.js"></script>
 </body>
 </html>

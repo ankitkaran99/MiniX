@@ -1,139 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>MiniX DataTable Plugin - README</title>
-  <style>
-    :root {
-      --bg: #0b1020;
-      --panel: #121a2b;
-      --panel-2: #172036;
-      --text: #e8edf7;
-      --muted: #a9b4c8;
-      --accent: #7cc4ff;
-      --border: #28324a;
-      --code: #0f1524;
-      --good: #7ee787;
-      --warn: #ffd580;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: Arial, Helvetica, sans-serif;
-      background: linear-gradient(180deg, #0b1020 0%, #0e1424 100%);
-      color: var(--text);
-      line-height: 1.55;
-    }
-    .wrap {
-      max-width: 1100px;
-      margin: 0 auto;
-      padding: 32px 20px 80px;
-    }
-    .hero {
-      background: linear-gradient(135deg, #121a2b, #172036);
-      border: 1px solid var(--border);
-      border-radius: 18px;
-      padding: 28px;
-      margin-bottom: 24px;
-      box-shadow: 0 12px 40px rgba(0,0,0,.22);
-    }
-    h1, h2, h3 { line-height: 1.2; }
-    h1 { margin: 0 0 12px; font-size: 34px; }
-    h2 { margin: 30px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); font-size: 24px; }
-    h3 { margin: 24px 0 10px; font-size: 18px; }
-    p { margin: 10px 0; color: var(--text); }
-    .muted { color: var(--muted); }
-    .card {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 18px;
-      margin: 16px 0;
-    }
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
-      gap: 14px;
-      margin-top: 14px;
-    }
-    .pill {
-      display: inline-block;
-      padding: 4px 10px;
-      border-radius: 999px;
-      border: 1px solid var(--border);
-      background: var(--panel-2);
-      color: var(--accent);
-      font-size: 12px;
-      margin-right: 6px;
-      margin-bottom: 6px;
-    }
-    ul { padding-left: 20px; }
-    li { margin: 6px 0; }
-    code {
-      background: rgba(255,255,255,0.05);
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 6px;
-      padding: 2px 6px;
-      color: #d6e9ff;
-      font-family: Consolas, Monaco, monospace;
-      font-size: 0.95em;
-    }
-    pre {
-      margin: 12px 0 0;
-      padding: 16px;
-      overflow: auto;
-      background: var(--code);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      color: #dfe8ff;
-      font-family: Consolas, Monaco, monospace;
-      font-size: 13px;
-      line-height: 1.5;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-    .note, .warn, .ok {
-      border-left: 4px solid var(--accent);
-      padding: 12px 14px;
-      border-radius: 10px;
-      background: rgba(124,196,255,0.08);
-      margin: 14px 0;
-    }
-    .warn {
-      border-left-color: var(--warn);
-      background: rgba(255,213,128,0.08);
-    }
-    .ok {
-      border-left-color: var(--good);
-      background: rgba(126,231,135,0.08);
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin: 12px 0;
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      overflow: hidden;
-    }
-    th, td {
-      text-align: left;
-      padding: 12px;
-      border-bottom: 1px solid var(--border);
-      vertical-align: top;
-    }
-    th { background: var(--panel-2); }
-    .footer {
-      margin-top: 36px;
-      color: var(--muted);
-      font-size: 14px;
-      text-align: center;
-    }
-  </style>
+  <link rel="stylesheet" href="../../readme-assets/router-doc-theme.css">
 </head>
-<body>
-  <div class="wrap">
+<body data-doc-product="Mini-X DataTable" data-doc-summary="Bridge DataTables with Mini-X cell components while letting DataTables keep control of the table DOM." data-doc-badges="DataTables|Cell mounts|Lifecycle bridge|x-ignore" data-doc-highlights="Mount Mini-X components inside table cells|Clean redraw and destroy handling|Safe integration with x-ignore table regions" data-doc-metrics="Bridge::Lifecycle sync|Cells::Component renderers|Redraw::Cleanup aware|Tables::DOM ownership" data-doc-sidebar="Everything here focuses on mounting Mini-X components into DataTables cells, refreshing them across redraws, and avoiding DOM ownership conflicts.">
+  <div data-doc-root class="doc-source">
+<div class="wrap">
     <section class="hero">
       <div class="pill">MiniX</div>
       <div class="pill">DataTables</div>
@@ -587,5 +462,7 @@ app.$dataTable.attach(dt);
       MiniX DataTable Plugin README
     </div>
   </div>
+  </div>
+  <script src="../../readme-assets/router-doc-theme.js"></script>
 </body>
 </html>

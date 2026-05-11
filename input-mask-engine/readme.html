@@ -1,14 +1,13 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>InputMaskEngine + MaskEngineDOM Deep Documentation</title>
-<style>
-:root{--bg:#f7f8fb;--card:#fff;--ink:#172033;--muted:#5b6475;--line:#dfe4ee;--soft:#eef3ff;--accent:#315bdc;--codebg:#f4f6fb;--ok:#0f7b55;--warn:#a15c00}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;line-height:1.62;font-size:15px}.layout{display:grid;grid-template-columns:290px minmax(0,1fr);min-height:100vh}.sidebar{position:sticky;top:0;height:100vh;overflow:auto;padding:22px 18px;background:#111827;color:#eef2ff}.sidebar h2{font-size:18px;margin:0 0 14px}.sidebar a{display:block;color:#d9e2ff;text-decoration:none;padding:7px 8px;border-radius:8px;font-size:14px}.sidebar a:hover{background:rgba(255,255,255,.09)}main{padding:34px 28px 80px;max-width:1120px}.hero,.card{background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:0 12px 30px rgba(15,23,42,.05)}.hero{padding:30px;margin-bottom:22px}.card{padding:24px;margin:18px 0}h1{font-size:32px;line-height:1.15;margin:0 0 10px}h2{font-size:24px;margin:0 0 14px;border-bottom:1px solid var(--line);padding-bottom:8px}h3{font-size:18px;margin:24px 0 10px}.muted{color:var(--muted)}code{background:var(--codebg);padding:2px 6px;border-radius:6px;font-family:Consolas,Menlo,monospace;font-size:.93em}pre{background:#0b1020;color:#e6edf3;border-radius:14px;padding:16px;overflow:auto;border:1px solid #20283d}pre code{background:transparent;color:inherit;padding:0}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px}.mini{border:1px solid var(--line);border-radius:14px;background:#fff;padding:14px}.tag{display:inline-block;border-radius:999px;background:var(--soft);color:#193c9a;padding:3px 9px;font-size:12px;font-weight:700;margin:2px}table{width:100%;border-collapse:collapse;margin:10px 0;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff}th,td{border-bottom:1px solid var(--line);padding:10px 12px;text-align:left;vertical-align:top}th{background:#f1f4fa;font-size:13px}tr:last-child td{border-bottom:0}.callout{border-left:4px solid var(--accent);background:#eef3ff;padding:12px 14px;border-radius:10px;margin:14px 0}.warnbox{border-left-color:#c77900;background:#fff7ed}.toc-title{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#93a4c7;margin:18px 8px 6px}@media(max-width:900px){.layout{display:block}.sidebar{position:relative;height:auto}.sidebar nav{columns:2}main{padding:22px 14px}.hero{padding:22px}h1{font-size:27px}}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>InputMaskEngine + MaskEngineDOM Deep Documentation</title>
+  <link rel="stylesheet" href="../readme-assets/router-doc-theme.css">
 </head>
-<body>
+<body data-doc-product="Input Mask Engine" data-doc-summary="Deep documentation for the InputMaskEngine core and its vanilla DOM adapter, including tokens, caret handling, paste rules, and integration patterns." data-doc-badges="Engine core|Vanilla adapter|Caret aware|Custom tokens" data-doc-highlights="DOM-free masking engine with compile/apply APIs|Browser adapter for data-mask and data-mask-free|Fixed masks, free masks, and custom token flows" data-doc-metrics="Engine::Pure logic|Adapter::DOM binding|Tokens::Custom rules|Caret::Precise edits" data-doc-sidebar="This document covers the masking engine itself, the DOM adapter behavior, token semantics, edge cases, and testing guidance.">
+  <div data-doc-root class="doc-source">
 <div class="layout">
 <aside class="sidebar">
 <h2>Mask Docs</h2>
@@ -77,8 +76,8 @@ console.log(state.value); // "(98"</code></pre>
 <section class="card" id="tokens"><h2>4. Token system</h2>
 <p>Tokens define which characters are accepted and how they are transformed.</p>
 <table><thead><tr><th>Token</th><th>Accepts</th><th>Transform</th><th>Example</th></tr></thead><tbody>
-<tr><td><code>A</code></td><td>Letters only</td><td>Uppercase</td><td><code>a</code> → <code>A</code></td></tr>
-<tr><td><code>a</code></td><td>Letters only</td><td>Lowercase</td><td><code>B</code> → <code>b</code></td></tr>
+<tr><td><code>A</code></td><td>Letters only</td><td>Uppercase</td><td><code>a</code> â†’ <code>A</code></td></tr>
+<tr><td><code>a</code></td><td>Letters only</td><td>Lowercase</td><td><code>B</code> â†’ <code>b</code></td></tr>
 <tr><td><code>9</code></td><td>Digits only</td><td>No change</td><td><code>7</code></td></tr>
 <tr><td><code>X</code></td><td>Letters or digits</td><td>No change</td><td><code>A</code>, <code>8</code></td></tr>
 <tr><td><code>*</code></td><td>Any single character</td><td>No change</td><td><code>@</code>, <code>a</code>, <code>5</code></td></tr>
@@ -244,5 +243,7 @@ assert.equal(r.value, '(987) 654 - 3210');</code></pre>
 <section class="card"><h2>16. Final implementation notes</h2><p>This package is already split cleanly: the engine owns logic, while the adapter owns browser behavior. Keep that separation. Any future framework adapter should call the same engine methods instead of copying rules into UI code.</p><p class="muted">Generated documentation for the uploaded <code>InputMaskEngine</code>, <code>MaskEngineDOM</code>, and vanilla demo files.</p></section>
 </main>
 </div>
+  </div>
+  <script src="../readme-assets/router-doc-theme.js"></script>
 </body>
 </html>
