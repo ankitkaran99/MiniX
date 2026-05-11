@@ -6436,6 +6436,7 @@ class MiniX_Component {
 		this._effects = new Set();
 		this._childRecords = new Map();
 		this._compilerCleanup = null;
+		this._activeLayoutInst = null;
 	
 		this._initialTemplate = null;
 		this._initialTemplateCaptured = false;
@@ -7524,6 +7525,29 @@ class MiniX_Component {
 		return null;
 	}
 
+	_callLayoutHook(inst, name, meta = {}) {
+		if (!inst || typeof inst[name] !== 'function') return;
+		try {
+			return inst[name].call(inst, {
+				name,
+				component: this.instance,
+				props: this.props,
+				root: this.root,
+				...meta
+			});
+		} catch (error) {
+			if (this.options.dev) console.warn(`[MiniX] layout hook "${name}" failed.`, error);
+		}
+	}
+
+	_syncActiveLayout(nextInst, meta = {}) {
+		const prevInst = this._activeLayoutInst;
+		if (prevInst === nextInst) return;
+		if (prevInst) this._callLayoutHook(prevInst, 'deactivated', meta);
+		this._activeLayoutInst = nextInst || null;
+		if (nextInst) this._callLayoutHook(nextInst, 'activated', meta);
+	}
+
 	// Pre-compiled helpers used by _extractSections — defined once to avoid per-call regex construction.
 	static _TEMPLATE_CHAR_AFTER_RE = /[\s>]/;
 
@@ -7706,6 +7730,7 @@ class MiniX_Component {
 		// _resolveLayoutTemplate returns { html, inst } or null.
 		const layoutHtml = layoutResult?.html ?? null;
 		const layoutInst = layoutResult?.inst ?? null;
+		this._syncActiveLayout(layoutInst, { reason: layoutHtml ? 'render' : 'layout-removed' });
 
 		// Compose: if a layout exists, inject the view into its yield slots.
 		// Otherwise render the view directly (legacy behaviour preserved).
@@ -7957,6 +7982,7 @@ class MiniX_Component {
 		this._baseScopeCache = null;
 		this._staticScopeCache = null;
 		this._staticScopeDirty = false;
+		this._syncActiveLayout(null, { reason: 'destroy' });
 		if (this._inlineMount) {
 			const nodes = this._inlineNodes || [];
 			for (const node of nodes) node.remove();

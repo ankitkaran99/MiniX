@@ -440,7 +440,7 @@ router.afterRouteEnter(({ el }) => el.classList.add('fade-in'));</code></pre>
     <p>Mini-X Router provides a powerful, integrated lazy‑loading system that works without any build tools. You can load components on demand by simply placing them in separate <code>.js</code> files and letting the router handle the injection.</p>
 
     <h3>Built‑in Loader (<code>MiniXRouter.Loader</code>)</h3>
-    <p>The router includes a <strong>MiniX_Loader</strong> class that dynamically injects <code>&lt;script&gt;</code> tags, supports retries, timeouts, and caching. You can either pass a loader instance or a configuration object directly to <code>createRouter</code>.</p>
+    <p>The router includes a <strong>MiniX_Loader</strong> class that dynamically injects <code>&lt;script&gt;</code> tags for lazy components, supports retries, timeouts, and caching, and can also manage preapproved stylesheets and scripts through constructor registries. You can either pass a loader instance or a configuration object directly to <code>createRouter</code>.</p>
     <pre><code>// Option 1: Pass loader config (router creates internal loader)
 const router = MiniXRouter.createRouter({
   history: createWebHistory(),
@@ -448,7 +448,16 @@ const router = MiniXRouter.createRouter({
     baseDir: '/components',   // directory where .js files live
     ext: '.js',               // file extension
     retries: 1,               // number of retries on failure
-    timeout: 5000             // load timeout in ms
+    timeout: 5000,            // load timeout in ms
+    styleRegistry: {
+      customerTheme: '/assets/customer/theme.css'
+    },
+    scriptRegistry: {
+      chartsLib: {
+        url: '/assets/vendor/charts.js',
+        cleanup: 'CustomerCharts.destroy'
+      }
+    }
   },
   routes: [
     {
@@ -459,11 +468,28 @@ const router = MiniXRouter.createRouter({
 });
 
 // Option 2: Use a custom loader instance
-const myLoader = new MiniXRouter.Loader('/lazy', { retries: 2 });
+const myLoader = new MiniXRouter.Loader('/lazy', {
+  retries: 2,
+  styleRegistry: {
+    pageTheme: '/assets/lazy/page.css'
+  },
+  scriptRegistry: {
+    chartsLib: {
+      url: '/assets/vendor/charts.js',
+      cleanup: 'CustomerCharts.destroy'
+    }
+  }
+});
 const router = MiniXRouter.createRouter({
   loader: myLoader,
   routes: [ /* ... */ ]
-});</code></pre>
+});
+
+// Later, only declared asset ids can be used
+await myLoader.loadStyle('pageTheme');
+await myLoader.loadScript('chartsLib');
+myLoader.unloadStyle('pageTheme');
+myLoader.unloadScript('chartsLib');</code></pre>
 
     <h3>How It Works</h3>
     <ol>
@@ -473,7 +499,7 @@ const router = MiniXRouter.createRouter({
       <li>The component file <strong>must</strong> register itself with <code>MiniX_Component.register('Customer', CustomerClass)</code>.</li>
       <li>The router then resolves to the registered component and renders it.</li>
     </ol>
-    <p>The loader caches successful loads, so subsequent visits to the same route will reuse the component without a second network request.</p>
+    <p>The loader caches successful component loads, so subsequent visits to the same route will reuse the component without a second network request. For auxiliary assets, <code>loadStyle(id)</code> and <code>loadScript(id)</code> only resolve identifiers that were declared in the loader constructor via <code>styleRegistry</code> and <code>scriptRegistry</code>. Script entries may be a plain URL string or an object like <code>{ url, cleanup }</code>.</p>
 
     <h3>Lazy Layouts</h3>
     <p>Layouts can be resolved lazily too. Configure <code>layoutLoader</code> once on the router, then let a route or the loaded component declare which layout it needs. When passing a loader instance, use <code>new MiniXRouter.Loader(baseDir, options, true)</code> so the router can distinguish it from a component loader.</p>
@@ -515,17 +541,20 @@ if (typeof MiniX_Component !== 'undefined') {
 }</code></pre>
 
     <h3>Preloading & Cache Management</h3>
-    <p>You can preload components during idle time to reduce latency:</p>
+    <p>You can preload components during idle time to reduce latency, and use the same loader instance for registered support assets:</p>
     <pre><code>const loader = router.getLoader(); // returns the internal loader instance
-loader.preload('Customer');       // fetches but doesn't execute (browser cache)</code></pre>
+loader.preload('Customer');       // fetches but doesn't execute (browser cache)
+await loader.loadStyle('customerTheme');
+await loader.loadScript('chartsLib');</code></pre>
     <p>Clear cached components with <code>loader.clearCache('Customer')</code> or <code>loader.clearCache()</code> to force re‑fetch.</p>
 
     <h2 id="api">🔧 API Reference</h2>
+    <p>Support assets can also be removed with <code>loader.unloadStyle('customerTheme')</code> and <code>loader.unloadScript('chartsLib')</code>. For scripts, unload runs the registered cleanup handler first, then removes the <code>&lt;script&gt;</code> tag.</p>
     <div class="table-wrap">
       <table>
         <thead><tr><th>Method / Property</th><th>Description</th></tr></thead>
         <tbody>
-          <tr><td><code>createRouter(options)</code></td><td>Creates router instance. Options: <code>routes</code>, <code>history</code>, <code>debug</code>, <code>loader</code> (config or component Loader instance; must not be marked as a layout loader), <code>layoutLoader</code> (optional callback, config, or layout <code>Loader</code> instance created with the third argument set to <code>true</code>).</td></tr>
+          <tr><td><code>createRouter(options)</code></td><td>Creates router instance. Options: <code>routes</code>, <code>history</code>, <code>debug</code>, <code>loader</code> (config or component Loader instance; may include constructor-scoped <code>styleRegistry</code> and <code>scriptRegistry</code>; script entries support <code>{ url, cleanup }</code>; must not be marked as a layout loader), <code>layoutLoader</code> (optional callback, config, or layout <code>Loader</code> instance created with the third argument set to <code>true</code>).</td></tr>
           <tr><td><code>createWebHistory(base)</code></td><td>HTML5 history mode (pushState).</td></tr>
           <tr><td><code>createWebHashHistory(base)</code></td><td>Hash mode (fallback for file://).</td></tr>
           <tr><td><code>router.push(to)</code> / <code>replace(to)</code></td><td>Navigate programmatically.</td></tr>
@@ -535,7 +564,7 @@ loader.preload('Customer');       // fetches but doesn't execute (browser cache)
           <tr><td><code>router.beforeRouteLeave(fn)</code></td><td>Called before a view is unmounted (useful for exit animations).</td></tr>
           <tr><td><code>router.afterRouteEnter(fn)</code></td><td>Called after view is mounted/restored.</td></tr>
           <tr><td><code>router.clearKeepAlive(key?)</code></td><td>Clear all or specific keep-alive cache.</td></tr>
-          <tr><td><code>router.getLoader()</code></td><td>Returns the internal component <code>MiniX_Loader</code> instance (if configured).</td></tr>
+          <tr><td><code>router.getLoader()</code></td><td>Returns the internal component <code>MiniX_Loader</code> instance (if configured), including <code>preload()</code>, <code>clearCache()</code>, <code>loadStyle(id)</code>, <code>loadScript(id)</code>, <code>unloadStyle(id)</code>, and <code>unloadScript(id)</code>.</td></tr>
           <tr><td><code>router.onDebug(listener)</code></td><td>Subscribe to internal debug events.</td></tr>
           <tr><td><code>router.currentRoute</code></td><td>Reactive route object with <code>path</code>, <code>params</code>, <code>query</code>, <code>meta</code>, <code>fullPath</code>.</td></tr>
         </tbody>

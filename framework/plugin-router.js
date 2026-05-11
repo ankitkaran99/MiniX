@@ -346,8 +346,144 @@
 			this.retryDelay = options.retryDelay ?? 300;
 			this.timeout = options.timeout ?? 10000;
 			this.isLayoutLoader = !!isLayoutLoader;
+			this.styleRegistry = { ...(options.styleRegistry || {}) };
+			this.scriptRegistry = { ...(options.scriptRegistry || {}) };
 			this._cache = new Map();
 			this._pending = new Map();
+		}
+
+		loadStyle(identifier) {
+			return this._loadAsset('style', identifier);
+		}
+
+		loadScript(identifier) {
+			return this._loadAsset('script', identifier);
+		}
+
+		unloadStyle(identifier) {
+			return this._unloadAsset('style', identifier);
+		}
+
+		unloadScript(identifier) {
+			return this._unloadAsset('script', identifier);
+		}
+
+		_assetSelector(type, identifier) {
+			return `[data-minix-${type}="${String(identifier)}"]`;
+		}
+
+		_resolveAssetEntry(type, identifier) {
+			const registry = type === 'style' ? this.styleRegistry : this.scriptRegistry;
+			const entry = registry[identifier];
+			if (!entry) {
+				throw new Error(`Unknown ${type} asset id: ${identifier}`);
+			}
+			if (typeof entry === 'string') {
+				return { url: entry };
+			}
+			if (typeof entry === 'object' && typeof entry.url === 'string' && entry.url) {
+				return entry;
+			}
+			throw new Error(`Invalid ${type} asset entry for id: ${identifier}`);
+		}
+
+		_resolveAssetUrl(type, identifier) {
+			return this._resolveAssetEntry(type, identifier).url;
+		}
+
+		_resolveCleanupHandler(handler) {
+			if (typeof handler === 'function') return handler;
+			if (typeof handler !== 'string' || !handler) return null;
+
+			let current = global;
+			const parts = handler.split('.');
+			for (const part of parts) {
+				if (!current || !(part in current)) return null;
+				current = current[part];
+			}
+			return typeof current === 'function' ? current : null;
+		}
+
+		_runScriptCleanup(identifier) {
+			let entry;
+			try {
+				entry = this._resolveAssetEntry('script', identifier);
+			} catch (_) {
+				return;
+			}
+
+			const cleanup = this._resolveCleanupHandler(entry.cleanup);
+			if (!cleanup) return;
+			cleanup({
+				id: identifier,
+				url: entry.url,
+				loader: this,
+				global
+			});
+		}
+
+		_loadAsset(type, identifier) {
+			return new Promise((resolve, reject) => {
+				const doc = global.document;
+				if (!doc) {
+					reject(new Error(`MiniX_Loader.${type === 'style' ? 'loadStyle' : 'loadScript'} requires document access.`));
+					return;
+				}
+
+				let url;
+				try {
+					url = this._resolveAssetUrl(type, identifier);
+				} catch (error) {
+					reject(error);
+					return;
+				}
+
+				const attr = type === 'style' ? 'href' : 'src';
+				const tagName = type === 'style' ? 'link' : 'script';
+				const selector = this._assetSelector(type, identifier);
+				const existing = doc.head.querySelector(selector) || doc.body?.querySelector(selector);
+
+				if (existing) {
+					if (existing.getAttribute(attr) !== url) existing.setAttribute(attr, url);
+					resolve(existing);
+					return;
+				}
+
+				const node = doc.createElement(tagName);
+				node.setAttribute(`data-minix-${type}`, String(identifier));
+
+				if (type === 'style') {
+					node.rel = 'stylesheet';
+					node.href = url;
+				} else {
+					node.src = url;
+					node.async = true;
+				}
+
+				node.onload = () => resolve(node);
+				node.onerror = () => {
+					if (node.parentNode) node.parentNode.removeChild(node);
+					reject(new Error(`Failed to load ${type}: ${url}`));
+				};
+
+				doc.head.appendChild(node);
+			});
+		}
+
+		_unloadAsset(type, identifier) {
+			const doc = global.document;
+			if (!doc) return false;
+
+			const selector = this._assetSelector(type, identifier);
+			const existing = doc.head.querySelector(selector) || doc.body?.querySelector(selector);
+			if (!existing) return false;
+
+			if (type === 'script') {
+				this._runScriptCleanup(identifier);
+			}
+
+			if (existing.parentNode) existing.parentNode.removeChild(existing);
+			return true;
 		}
 
 		load(name) {
@@ -1037,14 +1173,22 @@
 
 		// ── View helpers with integrated loader support ─────────────────────────
 
-		function getRouteRecordForView(route, depth) {
-			return (route?.matched || [])[depth] || null;
-		}
-
 		function getViewComponentFromRecord(record, viewName) {
 			if (!record) return null;
 			if (record.components && typeof record.components === "object") return record.components[viewName] || null;
 			if (viewName === "default") return record.component || null;
+			return null;
+		}
+
+		function getRouteRecordForView(route, depth, viewName = "default") {
+			const matched = route?.matched || [];
+			let renderableIndex = 0;
+			for (let i = 0; i < matched.length; i++) {
+				const record = matched[i];
+				if (!getViewComponentFromRecord(record, viewName)) continue;
+				if (renderableIndex === depth) return record;
+				renderableIndex++;
+			}
 			return null;
 		}
 
@@ -1529,7 +1673,7 @@
 						if (el.__minix_router_view_ctrl__ !== ctrl || ctrl.instanceId !== instanceId || ctrl.destroyed) return;
 						const token = ++ctrl.renderToken;
 						const route = cloneRoute(router.currentRoute);
-						const record = getRouteRecordForView(route, depth);
+						const record = getRouteRecordForView(route, depth, viewName);
 						const componentValue = getViewComponentFromRecord(record, viewName);
 						const renderKey = [viewName, depth, route.fullPath, record ? record.fullPath : "null"].join("::");
 						router._emitDebug("view:render", { viewName, depth, record: record ? record.fullPath : null, route });
