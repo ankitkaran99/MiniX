@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>Mini-X Router · documentation</title>
+  <title>Mini-X Router Â· documentation</title>
   <style>
     * {
       margin: 0;
@@ -261,49 +261,49 @@
 <body>
 <div class="doc-wrapper">
   <aside class="doc-sidebar">
-    <h3>📘 Mini-X Router</h3>
+    <h3>ðŸ“˜ Mini-X Router</h3>
     <nav>
       <ul>
-        <li><a href="#intro">✨ Introduction</a></li>
-        <li><a href="#install">📦 Installation</a></li>
-        <li><a href="#basics">⚡ Basic Setup</a></li>
-        <li><a href="#routes">🧩 Route Definition</a></li>
-        <li><a href="#navigation">🖱️ Navigation & Directives</a></li>
-        <li><a href="#views">🖼️ Router View & KeepAlive</a></li>
-        <li><a href="#guards">🛡️ Guards & Hooks</a></li>
-        <li><a href="#lazy">⏳ Lazy Loading</a></li>
-        <li><a href="#api">🔧 API Reference</a></li>
-        <li><a href="#debug">🐞 Debugging & Events</a></li>
+        <li><a href="#intro">âœ¨ Introduction</a></li>
+        <li><a href="#install">ðŸ“¦ Installation</a></li>
+        <li><a href="#basics">âš¡ Basic Setup</a></li>
+        <li><a href="#routes">ðŸ§© Route Definition</a></li>
+        <li><a href="#navigation">ðŸ–±ï¸ Navigation & Directives</a></li>
+        <li><a href="#views">ðŸ–¼ï¸ Router View & KeepAlive</a></li>
+        <li><a href="#guards">ðŸ›¡ï¸ Guards & Hooks</a></li>
+        <li><a href="#lazy">â³ Lazy Loading</a></li>
+        <li><a href="#api">ðŸ”§ API Reference</a></li>
+        <li><a href="#debug">ðŸž Debugging & Events</a></li>
       </ul>
     </nav>
   </aside>
 
   <main class="doc-content">
     <h1>Mini-X Router <span style="font-weight: 400; font-size: 1rem;">advanced SPA router for Mini-X</span></h1>
-    <p><strong>Lightweight, feature-rich</strong> routing for <strong>Mini-X</strong> reactive framework. Nested layouts, named views, lazy loading, keep-alive, navigation guards, and full reactive route state — all in ~8kb gzipped.</p>
+    <p><strong>Lightweight, feature-rich</strong> routing for <strong>Mini-X</strong> reactive framework. Nested layouts, named views, lazy loading, keep-alive, navigation guards, and full reactive route state â€” all in ~8kb gzipped.</p>
 
     <div class="feature-grid">
-      <div class="feature-card"><strong>🎯 Nested routes</strong> with deep linking</div>
-      <div class="feature-card"><strong>🧩 Named views</strong> (sidebar + main + etc)</div>
-      <div class="feature-card"><strong>💾 KeepAlive</strong> preserve component state</div>
-      <div class="feature-card"><strong>⏱️ Lazy loading</strong> dynamic component import</div>
-      <div class="feature-card"><strong>🔐 Guards</strong> (global, per-route)</div>
-      <div class="feature-card"><strong>📜 HTML5 / Hash history</strong> auto fallback</div>
-      <div class="feature-card"><strong>⚛️ Reactive $route / $params</strong> auto updates</div>
-      <div class="feature-card"><strong>🎬 Transition hooks</strong> beforeRouteLeave/Enter</div>
+      <div class="feature-card"><strong>ðŸŽ¯ Nested routes</strong> with deep linking</div>
+      <div class="feature-card"><strong>ðŸ§© Named views</strong> (sidebar + main + etc)</div>
+      <div class="feature-card"><strong>ðŸ’¾ KeepAlive</strong> preserve component state</div>
+      <div class="feature-card"><strong>â±ï¸ Lazy loading</strong> dynamic component import</div>
+      <div class="feature-card"><strong>ðŸ” Guards</strong> (global, per-route)</div>
+      <div class="feature-card"><strong>ðŸ“œ HTML5 / Hash history</strong> auto fallback</div>
+      <div class="feature-card"><strong>âš›ï¸ Reactive $route / $params</strong> auto updates</div>
+      <div class="feature-card"><strong>ðŸŽ¬ Transition hooks</strong> beforeRouteLeave/Enter</div>
     </div>
 
-    <h2 id="intro">✨ Introduction</h2>
-    <p>Mini-X Router is the official routing solution for <strong>Mini-X</strong> — a tiny reactive UI library. It offers a Vue Router–like API but deeply integrated with Mini-X reactivity, directives, and component lifecycle. Perfect for SPAs, dashboards, and advanced demos.</p>
-    <div class="note">✅ Works with <code>mini-x.js</code> core. Provides <code>x-router-view</code>, <code>x-link</code>, <code>x-route</code> directives, programmatic navigation, and route meta fields.</div>
+    <h2 id="intro">âœ¨ Introduction</h2>
+    <p>Mini-X Router is the official routing solution for <strong>Mini-X</strong> â€” a tiny reactive UI library. It offers a Vue Routerâ€“like API but deeply integrated with Mini-X reactivity, directives, and component lifecycle. Perfect for SPAs, dashboards, and advanced demos.</p>
+    <div class="note">âœ… Works with <code>mini-x.js</code> core. Provides <code>x-router-view</code>, <code>x-link</code>, <code>x-route</code> directives, programmatic navigation, and route meta fields.</div>
 
-    <h2 id="install">📦 Installation</h2>
+    <h2 id="install">ðŸ“¦ Installation</h2>
     <p>Include <code>mini-x.js</code> (core) and <code>plugin-router.js</code> in your HTML:</p>
     <pre><code>&lt;script src="./mini-x.js"&gt;&lt;/script&gt;
 &lt;script src="./plugin-router.js"&gt;&lt;/script&gt;</code></pre>
     <p>Then create a router instance and install it into your Mini-X app.</p>
 
-    <h2 id="basics">⚡ Basic Setup</h2>
+    <h2 id="basics">âš¡ Basic Setup</h2>
     <pre><code>const routes = [
   { path: '/', component: 'HomePage', name: 'home' },
   { path: '/about', component: 'AboutPage', name: 'about' }
@@ -322,7 +322,7 @@ MiniX.createApp(AppShell)
   .mount('#app');</code></pre>
     <p>Inside your template, use <code>&lt;div x-router-view&gt;&lt;/div&gt;</code> as outlet.</p>
 
-    <h2 id="routes">🧩 Route Definition</h2>
+    <h2 id="routes">ðŸ§© Route Definition</h2>
     <p>Routes support paths, names, nested children, named views, redirects, meta, and props. Child paths are always resolved relative to their parent, so both <code>projects</code> and <code>/projects</code> under <code>/workspace</code> resolve to <code>/workspace/projects</code>.</p>
     <pre><code>{
   path: '/workspace',
@@ -389,7 +389,7 @@ router.push({ name: 'auth.login' });  // /auth/login</code></pre>
     <h3>Route meta fields</h3>
     <p><code>meta.title</code> (string or function) sets document title automatically. <code>meta.keepAlive</code> enables component caching. Custom meta like <code>requiresAuth</code> can be used in guards.</p>
 
-    <h2 id="navigation">🖱️ Navigation & Directives</h2>
+    <h2 id="navigation">ðŸ–±ï¸ Navigation & Directives</h2>
 <h3>Programmatic navigation</h3>
 <pre><code>// inside component context (this.$router)
 this.$router.push('/analytics')
@@ -407,18 +407,18 @@ this.$router.back()</code></pre>
 &lt;a x-route="{ name: 'userDetails', params: { id: user.id } }" x-replace&gt;Profile&lt;/a&gt;</code></pre>
     <p>For nested named routes under a named parent, pass the hierarchical name. If the parent path contains params, include them in <code>params</code> when navigating by name.</p>
     <ul>
-      <li><code>x-active</code> – CSS class when route matches (default "active")</li>
-      <li><code>x-active-mode</code> – <code>exact</code> or <code>startsWith</code></li>
-      <li><code>x-replace</code> – use replace instead of push</li>
+      <li><code>x-active</code> â€“ CSS class when route matches (default "active")</li>
+      <li><code>x-active-mode</code> â€“ <code>exact</code> or <code>startsWith</code></li>
+      <li><code>x-replace</code> â€“ use replace instead of push</li>
     </ul>
 
-    <h2 id="views">🖼️ Router View & KeepAlive</h2>
+    <h2 id="views">ðŸ–¼ï¸ Router View & KeepAlive</h2>
     <p><code>&lt;div x-router-view&gt;&lt;/div&gt;</code> renders matched component. Supports named views via attribute: <code>x-router-view="sidebar"</code>. Depth is automatically detected for nested routes.</p>
     <p><strong>Keep-alive</strong> : when a route record has <code>meta: { keepAlive: true }</code>, the component instance is cached and reused on revisit. You can clear cache with <code>router.clearKeepAlive()</code>.</p>
     <pre><code>&lt;div x-router-view&gt;&lt;/div&gt;          &lt;!-- main outlet --&gt;
 &lt;div x-router-view="sidebar"&gt;&lt;/div&gt; &lt;!-- named view --&gt;</code></pre>
 
-    <h2 id="guards">🛡️ Guards & Hooks</h2>
+    <h2 id="guards">ðŸ›¡ï¸ Guards & Hooks</h2>
     <p>Global guards, per-route guards, and view transition hooks. Guards can return <code>true</code>, <code>false</code>, a string path, or a location object to cancel/redirect.</p>
     <pre><code>// Global beforeEach
 router.beforeEach((to, from) => {
@@ -436,10 +436,10 @@ router.beforeRouteLeave(async ({ el }) => {
 });
 router.afterRouteEnter(({ el }) => el.classList.add('fade-in'));</code></pre>
 
-    <h2 id="lazy">⏳ Lazy Loading</h2>
-    <p>Mini-X Router provides a powerful, integrated lazy‑loading system that works without any build tools. You can load components on demand by simply placing them in separate <code>.js</code> files and letting the router handle the injection.</p>
+    <h2 id="lazy">Lazy Loading</h2>
+    <p>Mini-X Router provides a powerful, integrated lazy-loading system that works without any build tools. You can load components on demand by simply placing them in separate <code>.js</code> files and letting the router handle the injection.</p>
 
-    <h3>Built‑in Loader (<code>MiniXRouter.Loader</code>)</h3>
+    <h3>Built-in Loader (<code>MiniXRouter.Loader</code>)</h3>
     <p>The router includes a <strong>MiniX_Loader</strong> class that dynamically injects <code>&lt;script&gt;</code> tags for lazy components, supports retries, timeouts, and caching, and can also manage preapproved stylesheets and scripts through constructor registries. You can either pass a loader instance or a configuration object directly to <code>createRouter</code>.</p>
     <pre><code>// Option 1: Pass loader config (router creates internal loader)
 const router = MiniXRouter.createRouter({
@@ -546,9 +546,9 @@ if (typeof MiniX_Component !== 'undefined') {
 loader.preload('Customer');       // fetches but doesn't execute (browser cache)
 await loader.loadStyle('customerTheme');
 await loader.loadScript('chartsLib');</code></pre>
-    <p>Clear cached components with <code>loader.clearCache('Customer')</code> or <code>loader.clearCache()</code> to force re‑fetch.</p>
+    <p>Clear cached components with <code>loader.clearCache('Customer')</code> or <code>loader.clearCache()</code> to force re-fetch.</p>
 
-    <h2 id="api">🔧 API Reference</h2>
+    <h2 id="api">API Reference</h2>
     <p>Support assets can also be removed with <code>loader.unloadStyle('customerTheme')</code> and <code>loader.unloadScript('chartsLib')</code>. For scripts, unload runs the registered cleanup handler first, then removes the <code>&lt;script&gt;</code> tag.</p>
     <div class="table-wrap">
       <table>
@@ -579,13 +579,13 @@ await loader.loadScript('chartsLib');</code></pre>
   &lt;button @click="$router.push('/')"&gt;Home&lt;/button&gt;
 &lt;/template&gt;</code></pre>
 
-    <h2 id="debug">🐞 Debugging & Events</h2>
+    <h2 id="debug">Debugging & Events</h2>
     <p>Enable debug mode: <code>router.enableDebug()</code> or set <code>debug: true</code> in options. Debug events are logged to console and can be captured with <code>router.onDebug(fn)</code>.</p>
     <p>Events: <code>navigation:start</code>, <code>navigation:finish</code>, <code>lazy:load:start</code>, <code>keepalive:hit</code>, <code>route:resolved</code>, etc.</p>
-    <div class="note">📌 <strong>File protocol support:</strong> Router auto-detects <code>file://</code> and falls back to hash history. Perfect for local demos without a dev server.</div>
+    <div class="note"><strong>File protocol support:</strong> Router auto-detects <code>file://</code> and falls back to hash history. Perfect for local demos without a dev server.</div>
 
     <hr>
-    <h3>📁 Complete Example (with lazy loader)</h3>
+    <h3>Complete Example (with lazy loader)</h3>
     <pre><code>// router setup
 const router = MiniXRouter.createRouter({
   history: MiniXRouter.createWebHashHistory(),
@@ -600,10 +600,10 @@ const router = MiniXRouter.createRouter({
 class Customer { /* ... */ }
 MiniX_Component.register('Customer', Customer);</code></pre>
 
-    <h3>🔄 Nested router-view behavior</h3>
+    <h3>Nested router-view behavior</h3>
     <p>The router automatically resolves depth based on parent <code>x-router-view</code> containers. Nested routes render inside the nearest matching router-view without extra configuration.</p>
 
-    <h3>🎨 Advanced: named views + multiple outlets</h3>
+    <h3>Advanced: named views + multiple outlets</h3>
     <pre><code>components: {
   default: 'MainContent',
   sidebar: 'SidebarPanel',
@@ -612,11 +612,11 @@ MiniX_Component.register('Customer', Customer);</code></pre>
     <p>In your layout: <code>&lt;div x-router-view&gt;&lt;/div&gt;</code>, <code>&lt;div x-router-view="sidebar"&gt;&lt;/div&gt;</code>, etc.</p>
 
     <div class="note">
-      <strong>⚡ Performance tip:</strong> Use <code>meta.keepAlive</code> for heavy dashboards. Manage cache with <code>router.clearKeepAlive()</code> when needed.
+      <strong>Performance tip:</strong> Use <code>meta.keepAlive</code> for heavy dashboards. Manage cache with <code>router.clearKeepAlive()</code> when needed.
     </div>
 
     <p style="margin-top: 2rem; text-align: center; color: var(--doc-muted); border-top: 1px solid var(--doc-border); padding-top: 1.5rem;">
-      Built for Mini-X · Full control over SPA routing · Inspired by modern routers
+      Built for Mini-X | Full control over SPA routing | Inspired by modern routers
     </p>
   </main>
 </div>
