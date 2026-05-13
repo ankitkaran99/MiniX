@@ -19,20 +19,20 @@ edge-triggered loading, and support for both normal and reverse (chat-style) lis
 
 <hr/>
 
-<h2>âœ¨ Features</h2>
+<h2>✨ Features</h2>
 
 <ul>
-  <li>ðŸ”¥ Bottom infinite scroll (feeds, lists)</li>
-  <li>ðŸ’¬ Top reverse scroll (chat apps)</li>
-  <li>ðŸ§  Scroll position preservation (no jump)</li>
-  <li>âš¡ Edge-triggered (no infinite loop spam)</li>
-  <li>ðŸª¶ requestAnimationFrame optimized</li>
-  <li>ðŸ”„ Works with async + callback style loading</li>
+  <li>🔥 Bottom infinite scroll (feeds, lists)</li>
+  <li>💬 Top reverse scroll (chat apps)</li>
+  <li>🧠 Scroll position preservation (no jump)</li>
+  <li>⚡ Edge-triggered (no infinite loop spam)</li>
+  <li>🪶 requestAnimationFrame optimized</li>
+  <li>🔄 Works with async + callback style loading</li>
 </ul>
 
 <hr/>
 
-<h2>ðŸ“¦ Installation</h2>
+<h2>📦 Installation</h2>
 
 <pre>
 &lt;script src="mini-x.js"&gt;&lt;/script&gt;
@@ -47,7 +47,7 @@ MiniX.createApp(App)
 
 <hr/>
 
-<h2>ðŸš€ Basic Usage</h2>
+<h2>🚀 Basic Usage</h2>
 
 <pre>
 &lt;div
@@ -64,7 +64,7 @@ MiniX.createApp(App)
 
 <hr/>
 
-<h2>âš™ï¸ Attributes</h2>
+<h2>⚙️ Attributes</h2>
 
 <table>
 <tr><th>Attribute</th><th>Description</th></tr>
@@ -93,7 +93,7 @@ MiniX.createApp(App)
 
 <hr/>
 
-<h2>ðŸ§  How It Works</h2>
+<h2>🧠 How It Works</h2>
 
 <ul>
 <li>Listens to scroll events on the element</li>
@@ -104,7 +104,7 @@ MiniX.createApp(App)
 
 <hr/>
 
-<h2>ðŸ“ Scroll Preservation (Important)</h2>
+<h2>📍 Scroll Preservation (Important)</h2>
 
 <p>
 When new items are appended, the plugin preserves the previous scroll position.
@@ -126,7 +126,7 @@ el.scrollTop = prevTop
 
 <hr/>
 
-<h2>ðŸ’¬ Reverse Scroll (Chat Style)</h2>
+<h2>💬 Reverse Scroll (Chat Style)</h2>
 
 <pre>
 &lt;div
@@ -146,9 +146,9 @@ For top loading, scroll position is adjusted automatically to prevent jump.
 
 <hr/>
 
-<h2>â³ Async Handling</h2>
+<h2>⏳ Async Handling</h2>
 
-<h3>âœ… Promise-based (auto)</h3>
+<h3>✅ Promise-based (auto)</h3>
 
 <pre>
 async loadMore() {
@@ -157,7 +157,7 @@ async loadMore() {
 }
 </pre>
 
-<h3>âš ï¸ Callback / setTimeout style</h3>
+<h3>⚠️ Callback / setTimeout style</h3>
 
 You MUST call <code>ctx.done()</code>
 
@@ -172,7 +172,7 @@ loadMore(el, ctx) {
 
 <hr/>
 
-<h2>âš ï¸ Common Mistakes</h2>
+<h2>⚠️ Common Mistakes</h2>
 
 <table>
 <tr><th>Issue</th><th>Cause</th></tr>
@@ -196,7 +196,7 @@ loadMore(el, ctx) {
 
 <hr/>
 
-<h2>ðŸ§ª Recommended Pattern</h2>
+<h2>🧪 Recommended Pattern</h2>
 
 <pre>
 loadMore(el, ctx) {
@@ -219,7 +219,7 @@ loadMore(el, ctx) {
 
 <hr/>
 
-<h2>ðŸ’¡ Notes</h2>
+<h2>💡 Notes</h2>
 
 <ul>
 <li>Container must have <code>overflow-y: auto</code></li>
@@ -230,7 +230,7 @@ loadMore(el, ctx) {
 
 <hr/>
 
-<h2>ðŸ“Œ Summary</h2>
+<h2>📌 Summary</h2>
 
 <ul>
 <li>No sentinels needed</li>

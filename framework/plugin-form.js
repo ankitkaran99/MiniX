@@ -597,6 +597,16 @@
                     _defineMethod(rawInstance, '$clearErrors',  clearErrors);
                 }
 
+                // $errors / $validate are installed after the component's initial
+                // render-scope cache may already have been built. Invalidate that
+                // cache so directives like x-show/x-text can resolve the new API.
+                component._baseScopeCache = null;
+                component._staticScopeCache = null;
+                component._staticScopeDirty = true;
+                if (typeof global.MiniX_Compiler !== 'undefined') {
+                    global.MiniX_Compiler._scopeGen = (global.MiniX_Compiler._scopeGen || 0) + 1;
+                }
+
                 if (triggers.length) {
                     // [FIX-14] Guard against concurrent trigger-initiated runs (e.g.
                     //          rapid keystrokes each firing a new runValidation before

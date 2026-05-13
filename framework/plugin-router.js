@@ -346,10 +346,23 @@
 			this.retryDelay = options.retryDelay ?? 300;
 			this.timeout = options.timeout ?? 10000;
 			this.isLayoutLoader = !!isLayoutLoader;
-			this.styleRegistry = { ...(options.styleRegistry || {}) };
-			this.scriptRegistry = { ...(options.scriptRegistry || {}) };
+			this._styleRegistry = MiniX_Loader._freezeRegistry(options.styleRegistry || {});
+			this._scriptRegistry = MiniX_Loader._freezeRegistry(options.scriptRegistry || {});
+			this._assetPending = new Map();
 			this._cache = new Map();
 			this._pending = new Map();
+		}
+
+		static _freezeRegistry(registry) {
+			const normalized = {};
+			for (const [key, value] of Object.entries(registry)) {
+				if (value && typeof value === 'object' && !Array.isArray(value)) {
+					normalized[key] = Object.freeze({ ...value });
+				} else {
+					normalized[key] = value;
+				}
+			}
+			return Object.freeze(normalized);
 		}
 
 		loadStyle(identifier) {
@@ -368,12 +381,29 @@
 			return this._unloadAsset('script', identifier);
 		}
 
-		_assetSelector(type, identifier) {
-			return `[data-minix-${type}="${String(identifier)}"]`;
+		_assetKey(type, identifier, url = '') {
+			return `${type}:${String(identifier)}:${String(url)}`;
+		}
+
+		_findAssetNode(doc, type, identifier) {
+			const attr = `data-minix-${type}`;
+			const value = String(identifier);
+			if (global.CSS && typeof global.CSS.escape === 'function') {
+				const selector = `[${attr}="${global.CSS.escape(value)}"]`;
+				const direct = doc.head?.querySelector(selector) || doc.body?.querySelector(selector);
+				if (direct) return direct;
+			}
+			const scopes = [doc.head, doc.body].filter(Boolean);
+			for (const scope of scopes) {
+				for (const node of scope.querySelectorAll(`[${attr}]`)) {
+					if (node.getAttribute(attr) === value) return node;
+				}
+			}
+			return null;
 		}
 
 		_resolveAssetEntry(type, identifier) {
-			const registry = type === 'style' ? this.styleRegistry : this.scriptRegistry;
+			const registry = type === 'style' ? this._styleRegistry : this._scriptRegistry;
 			const entry = registry[identifier];
 			if (!entry) {
 				throw new Error(`Unknown ${type} asset id: ${identifier}`);
@@ -414,43 +444,79 @@
 
 			const cleanup = this._resolveCleanupHandler(entry.cleanup);
 			if (!cleanup) return;
-			cleanup({
-				id: identifier,
-				url: entry.url,
-				loader: this,
-				global
-			});
+			try {
+				cleanup({
+					id: identifier,
+					url: entry.url,
+					loader: this,
+					global
+				});
+			} catch (error) {
+				if (global.console && typeof global.console.error === 'function') {
+					global.console.error(`MiniX_Loader cleanup failed for script "${identifier}"`, error);
+				}
+			}
 		}
 
 		_loadAsset(type, identifier) {
-			return new Promise((resolve, reject) => {
+			let url;
+			try {
+				url = this._resolveAssetUrl(type, identifier);
+			} catch (error) {
+				return Promise.reject(error);
+			}
+
+			const key = this._assetKey(type, identifier, url);
+			const pendingRecord = this._assetPending.get(key);
+			if (pendingRecord) return pendingRecord.promise;
+			const sharedPending = MiniX_Loader._globalAssetPending.get(key);
+			if (sharedPending) return sharedPending.promise;
+
+			let record = null;
+			const promise = new Promise((resolve, reject) => {
 				const doc = global.document;
 				if (!doc) {
 					reject(new Error(`MiniX_Loader.${type === 'style' ? 'loadStyle' : 'loadScript'} requires document access.`));
 					return;
 				}
 
-				let url;
-				try {
-					url = this._resolveAssetUrl(type, identifier);
-				} catch (error) {
-					reject(error);
-					return;
-				}
-
 				const attr = type === 'style' ? 'href' : 'src';
 				const tagName = type === 'style' ? 'link' : 'script';
-				const selector = this._assetSelector(type, identifier);
-				const existing = doc.head.querySelector(selector) || doc.body?.querySelector(selector);
+				const existing = this._findAssetNode(doc, type, identifier);
 
 				if (existing) {
-					if (existing.getAttribute(attr) !== url) existing.setAttribute(attr, url);
+					if (existing.getAttribute(attr) !== url) {
+						reject(new Error(`Registered ${type} asset id "${identifier}" is already attached with a different URL.`));
+						return;
+					}
+					if (existing.getAttribute('data-minix-status') === 'loading') {
+						const existingPending = MiniX_Loader._globalAssetPending.get(key);
+						if (existingPending) {
+							resolve(existingPending.promise);
+							return;
+						}
+					}
 					resolve(existing);
 					return;
 				}
 
 				const node = doc.createElement(tagName);
+				record = { promise: null, node, settled: false, reject, cleanup: null };
 				node.setAttribute(`data-minix-${type}`, String(identifier));
+				node.setAttribute('data-minix-status', 'loading');
+				const cleanup = () => {
+					clearTimeout(timer);
+					node.onload = null;
+					node.onerror = null;
+				};
+				record.cleanup = cleanup;
+				const timer = setTimeout(() => {
+					if (record.settled) return;
+					record.settled = true;
+					cleanup();
+					if (node.parentNode) node.parentNode.removeChild(node);
+					reject(new Error(`Timeout loading ${type}: ${url}`));
+				}, this.timeout);
 
 				if (type === 'style') {
 					node.rel = 'stylesheet';
@@ -460,23 +526,62 @@
 					node.async = true;
 				}
 
-				node.onload = () => resolve(node);
+				node.onload = () => {
+					if (record.settled) return;
+					record.settled = true;
+					cleanup();
+					node.setAttribute('data-minix-status', 'loaded');
+					resolve(node);
+				};
 				node.onerror = () => {
+					if (record.settled) return;
+					record.settled = true;
+					cleanup();
+					node.setAttribute('data-minix-status', 'error');
 					if (node.parentNode) node.parentNode.removeChild(node);
 					reject(new Error(`Failed to load ${type}: ${url}`));
 				};
 
+				this._assetPending.set(key, record);
+				MiniX_Loader._globalAssetPending.set(key, record);
 				doc.head.appendChild(node);
+			}).finally(() => {
+				this._assetPending.delete(key);
+				const shared = MiniX_Loader._globalAssetPending.get(key);
+				if (shared && shared.promise === promise) {
+					MiniX_Loader._globalAssetPending.delete(key);
+				}
 			});
+
+			if (record) record.promise = promise;
+			return promise;
 		}
 
 		_unloadAsset(type, identifier) {
 			const doc = global.document;
 			if (!doc) return false;
 
-			const selector = this._assetSelector(type, identifier);
-			const existing = doc.head.querySelector(selector) || doc.body?.querySelector(selector);
-			if (!existing) return false;
+			let url = '';
+			try {
+				url = this._resolveAssetUrl(type, identifier);
+			} catch (_) {}
+			const key = this._assetKey(type, identifier, url);
+			const pendingRecord = this._assetPending.get(key);
+			const sharedPending = MiniX_Loader._globalAssetPending.get(key);
+			const activePending = pendingRecord || sharedPending;
+			let removedPending = false;
+			if (activePending && activePending.node && !activePending.settled) {
+				activePending.settled = true;
+				if (typeof activePending.cleanup === 'function') activePending.cleanup();
+				activePending.node.setAttribute('data-minix-status', 'cancelled');
+				if (activePending.node.parentNode) activePending.node.parentNode.removeChild(activePending.node);
+				this._assetPending.delete(key);
+				MiniX_Loader._globalAssetPending.delete(key);
+				removedPending = true;
+			}
+
+			const existing = this._findAssetNode(doc, type, identifier);
+			if (!existing) return removedPending;
 
 			if (type === 'script') {
 				this._runScriptCleanup(identifier);
@@ -598,6 +703,8 @@
 	}
 
 	// ─── Router Factory ───────────────────────────────────────────────────────────
+
+	MiniX_Loader._globalAssetPending = new Map();
 
 	function createRouter(options = {}) {
 		const isFileProtocol = () => global.location && global.location.protocol === "file:";
