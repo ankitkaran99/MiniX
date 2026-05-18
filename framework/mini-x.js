@@ -3785,9 +3785,12 @@ class MiniX_Compiler {
 		const parent = el.parentNode;
 		if (!parent) return () => { };
 
-		const anchor = document.createComment('x-if-group');
+		const startAnchor = document.createComment('x-if-group-start');
 		const scopeAnchor = parent;
-		parent.insertBefore(anchor, el);
+		parent.insertBefore(startAnchor, el);
+
+		const endAnchor = document.createComment('x-if-group-end');
+		parent.insertBefore(endAnchor, cursor && cursor.parentNode === parent ? cursor : null);
 
 		const templates = branches.map((branch) => {
 			const template = branch.el.cloneNode(true);
@@ -3854,7 +3857,7 @@ class MiniX_Compiler {
 			// Insert immediately before the anchor so new nodes sit in the correct
 			// DOM position. Inserting after anchor.nextSibling would push content
 			// past any existing sibling that follows the anchor.
-			anchor.parentNode.insertBefore(clone, anchor);
+			endAnchor.parentNode.insertBefore(clone, endAnchor);
 			const cleanups = [];
 			for (const node of nodes) {
 				const cleanup = compileBranchNode(node);
@@ -3870,7 +3873,8 @@ class MiniX_Compiler {
 		return () => {
 			stopEffect?.();
 			clearMounted();
-			anchor.remove();
+			endAnchor.remove();
+			startAnchor.remove();
 		};
 	}
 
@@ -4212,6 +4216,15 @@ class MiniX_Compiler {
 		});
 	}
 
+	_stampScopeProviderSubtree(node, scopeProvider) {
+		if (!node || node.nodeType !== Node.ELEMENT_NODE || typeof scopeProvider !== 'function') return;
+		node.__minix_scope_provider__ = scopeProvider;
+		const children = node.childNodes || [];
+		for (let i = 0; i < children.length; i++) {
+			this._stampScopeProviderSubtree(children[i], scopeProvider);
+		}
+	}
+
 	_createLoopBlockHost(component) {
 		let proto = MiniX_Compiler._loopComponentProtoCache.get(component);
 		if (proto) return proto;
@@ -4347,24 +4360,26 @@ class MiniX_Compiler {
 		marker.parentNode?.insertBefore(endMarker, marker.nextSibling);
 
 		const resolveScopeAnchor = () => marker.parentNode || connectedScopeAnchor || el;
-		const sourceGetter = this._compileGetter(sourceExpr);
-		const keyGetter = keyAttr ? this._compileGetter(keyAttr) : null;
+		const sourceGetter = (scope, fallback = []) => this._evaluate(sourceExpr, scope, fallback);
+		const keyGetter = keyAttr
+			? ((scope, fallback = undefined) => this._evaluate(keyAttr, scope, fallback))
+			: null;
 		const sourceIsSimplePath = this._isSimplePath(sourceExpr);
-		const sourcePath = sourceIsSimplePath ? sourceExpr.split('.').filter(Boolean) : null;
+		const sourcePath = sourceIsSimplePath ? this._parseSimplePathSegments(sourceExpr) : null;
 
 		const renderScope = Object.create(null);
 		const keyScope = Object.create(null);
 		const exprText = String(fastMeta.expression || fastMeta.getter?.__minix_expr__ || '');
 		const directTextExpr = (() => {
-			const parts = exprText.split('.');
-			if (parts.length >= 2 && parts[0] === vars[0]) return parts.slice(1);
+			const parts = this._isSimplePath(exprText) ? this._parseSimplePathSegments(exprText) : null;
+			if (parts && parts.length >= 2 && parts[0] === vars[0]) return parts.slice(1);
 			return null;
 		})();
 		const directKeyExpr = (() => {
 			if (!keyAttr) return null;
 			const expr = String(keyAttr).trim();
-			const parts = expr.split('.');
-			if (parts.length >= 2 && parts[0] === vars[0]) return parts.slice(1);
+			const parts = this._isSimplePath(expr) ? this._parseSimplePathSegments(expr) : null;
+			if (parts && parts.length >= 2 && parts[0] === vars[0]) return parts.slice(1);
 			return null;
 		})();
 		const exactStaticRowFastPath = Boolean(sourcePath && directTextExpr && (!keyAttr || directKeyExpr) && !vars[1] && !vars[2]);
@@ -4400,38 +4415,93 @@ class MiniX_Compiler {
 			return cur;
 		};
 		const readSourceList = (scope) => sourcePath ? readByPath(scope, sourcePath) : sourceGetter(scope, []);
+		const buildEntries = (list) => {
+			if (typeof list === 'number' && Number.isFinite(list) && list > 0) {
+				const len = Math.floor(list);
+				const entries = new Array(len);
+				for (let i = 0; i < len; i++) entries[i] = { value: i + 1, key: i, index: i, kind: 'array' };
+				return entries;
+			}
+			if (Array.isArray(list)) {
+				const entries = new Array(list.length);
+				for (let index = 0; index < list.length; index++) {
+					entries[index] = { value: list[index], key: index, index, kind: 'array' };
+				}
+				return entries;
+			}
+			if (list instanceof Map) {
+				const entries = [];
+				let index = 0;
+				list.forEach((value, entryKey) => {
+					entries.push({ value, key: entryKey, index: index++, kind: 'map' });
+				});
+				return entries;
+			}
+			if (list instanceof Set) {
+				const entries = [];
+				let index = 0;
+				list.forEach((value) => {
+					entries.push({ value, key: index, index, kind: 'set' });
+					index++;
+				});
+				return entries;
+			}
+			if (list && typeof list[Symbol.iterator] === 'function' && typeof list !== 'string') {
+				const entries = [];
+				let index = 0;
+				for (const value of list) {
+					entries.push({ value, key: index, index, kind: 'iterable' });
+					index++;
+				}
+				return entries;
+			}
+			if (list && typeof list === 'object') {
+				const entries = [];
+				let index = 0;
+				for (const entryKey in list) {
+					if (!Object.prototype.hasOwnProperty.call(list, entryKey)) continue;
+					entries.push({ value: list[entryKey], key: entryKey, index: index++, kind: 'object' });
+				}
+				return entries;
+			}
+			return [];
+		};
 		const writeNodeText = (elNode, text) => {
 			if (fastMeta.hasSingleTextNode && elNode.firstChild) elNode.firstChild.data = text;
 			else elNode.textContent = text;
 		};
-		const stampLoopScope = (item, index) => {
-			loopMeta.index = index;
-			loopMeta.iterationKind = 'array';
-			loopMeta.entryKey = index;
-			renderScope[vars[0]] = item;
-			renderScope.$index = index;
+		const stampLoopScope = (entry) => {
+			const loopKeyOrIndex = (entry.kind === 'object' || entry.kind === 'map') ? entry.key : entry.index;
+			loopMeta.index = entry.index;
+			loopMeta.iterationKind = entry.kind;
+			loopMeta.entryKey = entry.key;
+			renderScope[vars[0]] = entry.value;
+			renderScope.$index = entry.index;
 			renderScope.__minix_loop_meta = loopMeta;
-			if (vars[1]) renderScope[vars[1]] = index;
-			if (vars[2]) renderScope[vars[2]] = index;
+			if (vars[1]) renderScope[vars[1]] = loopKeyOrIndex;
+			if (vars[2]) renderScope[vars[2]] = entry.index;
 		};
 		const readItemText = exactStaticRowFastPath
-			? (item) => readByPath(item, directTextExpr)
-			: (item, index) => {
-				stampLoopScope(item, index);
-				return directTextExpr ? readByPath(item, directTextExpr) : fastMeta.getter(renderScope, '');
+			? (entry) => readByPath(entry.value, directTextExpr)
+			: (entry) => {
+				stampLoopScope(entry);
+				return directTextExpr ? readByPath(entry.value, directTextExpr) : fastMeta.getter(renderScope, '');
 			};
 		const readItemKey = !keyAttr
-			? ((item, index) => index)
+			? ((entry) => entry.key)
 			: exactStaticRowFastPath
-				? ((item, index) => {
-					const key = readByPath(item, directKeyExpr);
-					return key == null ? index : key;
+				? ((entry) => {
+					const key = readByPath(entry.value, directKeyExpr);
+					return key == null ? entry.index : key;
 				})
-				: ((item, index) => {
-					if (directKeyExpr) return readByPath(item, directKeyExpr);
-					stampLoopScope(item, index);
+				: ((entry) => {
+					if (directKeyExpr) {
+						const key = readByPath(entry.value, directKeyExpr);
+						return key == null ? entry.index : key;
+					}
+					stampLoopScope(entry);
 					Object.setPrototypeOf(keyScope, renderScope);
-					return keyGetter ? keyGetter(keyScope, index) : index;
+					return keyGetter ? keyGetter(keyScope, entry.index) : entry.index;
 				});
 
 		// Two alternating vnode buffers — avoids new Array(len) on every render cycle.
@@ -4444,21 +4514,28 @@ class MiniX_Compiler {
 			Object.setPrototypeOf(renderScope, runBaseScope);
 
 			const list = readSourceList(runBaseScope) || [];
-			const len = Array.isArray(list) ? list.length : 0;
+			const entries = buildEntries(list);
+			const len = entries.length;
 			const parentNode = marker.parentNode;
+			const seenKeys = new Set();
 
 			if (!oldVnodes.length && len > 0 && parentNode) {
 				const frag = document.createDocumentFragment();
-				const coldVnodes = new Array(len);
+				const coldVnodes = [];
 				for (let index = 0; index < len; index++) {
-					const item = list[index];
-					const key = readItemKey(item, index);
-					const rawText = readItemText(item, index);
+					const entry = entries[index];
+					const key = readItemKey(entry);
+					if (seenKeys.has(key)) {
+						this._warn(`Duplicate x-for key "${String(key)}" at index ${index}. Keys must be unique and stable.`);
+						continue;
+					}
+					seenKeys.add(key);
+					const rawText = readItemText(entry);
 					const text = rawText == null ? '' : String(rawText);
 					const elNode = staticNodeFactory();
 					writeNodeText(elNode, text);
 					const vnode = { key, text, _nextText: text, el: elNode, _seen: false };
-					coldVnodes[index] = vnode;
+					coldVnodes.push(vnode);
 					keyMap.set(key, vnode);
 					frag.appendChild(elNode);
 				}
@@ -4468,19 +4545,24 @@ class MiniX_Compiler {
 			}
 
 			const newVnodes = newVnodesBuffer;
-			newVnodes.length = len;
+			newVnodes.length = 0;
 			for (let index = 0; index < len; index++) {
-				const item = list[index];
-				const key = readItemKey(item, index);
-				const rawText = readItemText(item, index);
+				const entry = entries[index];
+				const key = readItemKey(entry);
+				if (seenKeys.has(key)) {
+					this._warn(`Duplicate x-for key "${String(key)}" at index ${index}. Keys must be unique and stable.`);
+					continue;
+				}
+				seenKeys.add(key);
+				const rawText = readItemText(entry);
 				const text = rawText == null ? '' : String(rawText);
 				const existing = keyMap.get(key);
 				if (existing) {
 					existing._seen = true;
 					existing._nextText = text;
-					newVnodes[index] = existing;
+					newVnodes.push(existing);
 				} else {
-					newVnodes[index] = { key, text, _nextText: text, el: null, _seen: true };
+					newVnodes.push({ key, text, _nextText: text, el: null, _seen: true });
 				}
 			}
 
@@ -4494,7 +4576,8 @@ class MiniX_Compiler {
 				}
 			}
 
-			for (let i = 0; i < len; i++) {
+			const nextLen = newVnodes.length;
+			for (let i = 0; i < nextLen; i++) {
 				const vn = newVnodes[i];
 				if (vn.el === null) {
 					const elNode = staticNodeFactory();
@@ -4521,9 +4604,9 @@ class MiniX_Compiler {
 					batch.length = 0;
 					batchRef = null;
 				};
-				for (let i = len - 1; i >= 0; i--) {
+				for (let i = nextLen - 1; i >= 0; i--) {
 					const vn = newVnodes[i];
-					const ref = i + 1 < len ? newVnodes[i + 1].el : endMarker;
+					const ref = i + 1 < nextLen ? newVnodes[i + 1].el : endMarker;
 					const liveRef = ref && ref.parentNode === parentNode ? ref : endMarker;
 					if (vn.el.nextSibling === liveRef) {
 						flushBatch();
@@ -4717,9 +4800,7 @@ class MiniX_Compiler {
 			}
 		};
 		const scopeProvider = () => renderScope;
-		for (const node of contentNodes) {
-			if (node && node.nodeType === Node.ELEMENT_NODE) node.__minix_scope_provider__ = scopeProvider;
-		}
+		for (const node of contentNodes) this._stampScopeProviderSubtree(node, scopeProvider);
 
 		const scopeKeys = Object.keys(loopScope);
 		
@@ -5041,9 +5122,7 @@ class MiniX_Compiler {
 			signal: null
 		};
 		const scopeProvider = () => localComponent._createRenderScope();
-		for (const node of contentNodes) {
-			if (node && node.nodeType === Node.ELEMENT_NODE) node.__minix_scope_provider__ = scopeProvider;
-		}
+		for (const node of contentNodes) this._stampScopeProviderSubtree(node, scopeProvider);
 		const bindings = templateMeta?.simpleBindings || this._collectLoopTextBindings(contentNodes);
 		const resolveNode = (path) => {
 			let node = contentNodes[path[0]];
@@ -5349,9 +5428,7 @@ class MiniX_Compiler {
 		};
 
 		const scopeProvider = () => localComponent._createRenderScope();
-		for (const node of contentNodes) {
-			if (node && node.nodeType === Node.ELEMENT_NODE) node.__minix_scope_provider__ = scopeProvider;
-		}
+		for (const node of contentNodes) this._stampScopeProviderSubtree(node, scopeProvider);
 
 		let cleanup = () => { };
 		// Cache the interpolation entry paths+compiled templates on templateMeta so they
@@ -5394,21 +5471,33 @@ class MiniX_Compiler {
 		cleanup = () => { interpolationCleanup?.(); };
 
 		let plan = templateMeta.plan;
-
 		if (!plan) {
+			// Build the replay plan from the pristine template tree before compile()
+			// mutates structural directives like nested x-for into marker comments.
+			plan = this._buildLoopBlockPlan([...template.content.childNodes], template);
+			templateMeta.plan = plan;
+		}
+
+		if (!templateMeta.planCompiledOnce) {
 			for (const node of contentNodes) {
 				if (node.nodeType !== Node.ELEMENT_NODE) continue;
 				const currentCleanup = this.compile(node, localComponent);
 				const previousCleanup = cleanup;
 				cleanup = () => { currentCleanup?.(); previousCleanup?.(); };
 			}
-			plan = this._buildLoopBlockPlan(contentNodes, template);
-			templateMeta.plan = plan;
-		} else {
+			templateMeta.planCompiledOnce = true;
+		} else if (!plan?.unsupported) {
 			MiniX_Compiler._scopeGen++;
 			for (const node of contentNodes) {
 				if (node.nodeType !== Node.ELEMENT_NODE) continue;
 				const currentCleanup = this._replayLoopBlockPlan(plan, node, localComponent);
+				const previousCleanup = cleanup;
+				cleanup = () => { currentCleanup?.(); previousCleanup?.(); };
+			}
+		} else {
+			for (const node of contentNodes) {
+				if (node.nodeType !== Node.ELEMENT_NODE) continue;
+				const currentCleanup = this.compile(node, localComponent);
 				const previousCleanup = cleanup;
 				cleanup = () => { currentCleanup?.(); previousCleanup?.(); };
 			}
@@ -5445,11 +5534,15 @@ class MiniX_Compiler {
 	
 	_buildLoopBlockPlan(contentNodes, _template) {
 		const plan = [];
+		plan.unsupported = false;
 		const visit = (node, path) => {
 			if (node.nodeType !== Node.ELEMENT_NODE) return;
 			const directives = this._collectDirectives(node);
 			const isScopedRoot = node.hasAttribute('x-data');
 			if (directives.length) {
+				if (directives.some((directive) => directive.structural)) {
+					plan.unsupported = true;
+				}
 				plan.push({ path: path.slice(), directives: directives.map(d => ({ name: d.name, expression: d.expression, run: d.run })) });
 			}
 			if (isScopedRoot) return;
@@ -5628,8 +5721,10 @@ class MiniX_Compiler {
 		
 		
 		const sourceIsSimplePath = this._isSimplePath(sourceExpr);
-		const sourceGetter = this._compileGetter(sourceExpr);
-		const keyGetter = keyAttr ? this._compileGetter(keyAttr) : null;
+		const sourceGetter = (scope, fallback = []) => this._evaluate(sourceExpr, scope, fallback);
+		const keyGetter = keyAttr
+			? ((scope, fallback = undefined) => this._evaluate(keyAttr, scope, fallback))
+			: null;
 		
 		const seenKeys = new Set();
 		let nextBlocks = [];

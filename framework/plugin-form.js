@@ -57,8 +57,8 @@
     function definePlugin(definition) {
         const MiniXPlugin = global?.MiniX_Plugin || (typeof MiniX_Plugin !== 'undefined' ? MiniX_Plugin : null);
         return MiniXPlugin && typeof MiniXPlugin.define === 'function'
-            ? MiniXPlugin.define(definition)
-            : definition;
+        ? MiniXPlugin.define(definition)
+        : definition;
     }
 
     function isFormElement(el) {
@@ -110,8 +110,8 @@
         } else {
             // [FIX-58/92] Cache the trimmed string. Fast-path when already a string.
             const trimmed = expression
-                ? (typeof expression === 'string' ? expression.trim() : String(expression).trim())
-                : '';
+            ? (typeof expression === 'string' ? expression.trim() : String(expression).trim())
+            : '';
             if (!trimmed) return _EMPTY_CONFIG;
             try {
                 const parsed = new Function(`return (${trimmed});`)();
@@ -150,6 +150,29 @@
             instanceCache[name] = { bound: fn.bind(instance), original: fn };
         }
         return instanceCache[name].bound;
+    }
+
+    function resolveAjaxHeaders(headersConfig, instance, el, eventMap) {
+        if (headersConfig == null) return null;
+        if (typeof headersConfig !== 'string') {
+            console.warn('[x-ajax] headers config value must be a method name string, got:', typeof headersConfig, headersConfig);
+            return null;
+        }
+
+        const resolver = resolveMethod(instance, headersConfig);
+        const rawHeaders = resolver ? resolver(el, eventMap) : null;
+
+        if (!rawHeaders || typeof rawHeaders !== 'object' || Array.isArray(rawHeaders)) {
+            console.warn('[x-ajax] headers method must return an object, got:', rawHeaders);
+            return null;
+        }
+
+        const safeHeaders = Object.create(null);
+        const keys = Object.keys(rawHeaders);
+        for (let i = 0; i < keys.length; i++) {
+            safeHeaders[keys[i]] = rawHeaders[keys[i]];
+        }
+        return safeHeaders;
     }
 
     // [FIX-47] Module-level helpers — capture nothing from directive scope.
@@ -220,9 +243,9 @@
 
             // Check common message keys first.
             const msg =
-                firstMessage(value.message, _seen) ||
-                firstMessage(value.error,   _seen) ||
-                firstMessage(value.text,    _seen);
+            firstMessage(value.message, _seen) ||
+            firstMessage(value.error,   _seen) ||
+            firstMessage(value.text,    _seen);
             if (msg) return msg;
 
             // Scan remaining keys; only fire fallback for genuine primitive sentinels.
@@ -230,8 +253,8 @@
             // [OPT-18] Fast-exit: if all own keys are the three already checked,
             //          the loop below would skip every entry and return null anyway.
             const knownCount = (value.message !== undefined ? 1 : 0)
-                             + (value.error   !== undefined ? 1 : 0)
-                             + (value.text    !== undefined ? 1 : 0);
+            + (value.error   !== undefined ? 1 : 0)
+            + (value.text    !== undefined ? 1 : 0);
             if (keys.length <= knownCount) return null;
             let hasValue = false;
             for (let i = 0; i < keys.length; i++) {
@@ -278,10 +301,10 @@
     // [FIX-105] Identity check for _EMPTY_RAW avoids N wasted hasOwnProperty calls.
     function normalizeErrors(rawErrors, fields) {
         if (!rawErrors || rawErrors === _EMPTY_RAW ||
-                typeof rawErrors !== 'object' || Array.isArray(rawErrors)) {
+            typeof rawErrors !== 'object' || Array.isArray(rawErrors)) {
             return createEmptyErrors(fields);
-        }
-        const normalized = createEmptyErrors(fields);
+            }
+            const normalized = createEmptyErrors(fields);
         for (let i = 0; i < fields.length; i++) {
             const field = fields[i];
             if (Object.prototype.hasOwnProperty.call(rawErrors, field)) {
@@ -393,21 +416,21 @@
                 return Reflect.get(obj, prop, receiver);
             },
             set()            { return true; },
-            deleteProperty() { return true; },
-            has(_obj, prop) {
-                return typeof prop === 'string' && fieldIndex.has(prop);
-            },
-            ownKeys() { return fields; },
-            getOwnPropertyDescriptor(_obj, prop) {
-                if (typeof prop === 'string') {
-                    const idx = fieldIndex.get(prop);
-                    if (idx !== undefined) {
-                        return { enumerable: true, configurable: true,
-                                 value: component.state.get(fieldKeys[idx], null) };
-                    }
-                }
-                return undefined;
-            },
+                         deleteProperty() { return true; },
+                         has(_obj, prop) {
+                             return typeof prop === 'string' && fieldIndex.has(prop);
+                         },
+                         ownKeys() { return fields; },
+                         getOwnPropertyDescriptor(_obj, prop) {
+                             if (typeof prop === 'string') {
+                                 const idx = fieldIndex.get(prop);
+                                 if (idx !== undefined) {
+                                     return { enumerable: true, configurable: true,
+                                         value: component.state.get(fieldKeys[idx], null) };
+                                 }
+                             }
+                             return undefined;
+                         },
         });
     }
 
@@ -428,9 +451,9 @@
             if (!instance) return null;
             return {
                 get $errors()       { return instance.$errors || _ERRORS_STUB; },
-                get $validate()     { return instance.$validate; },
-                get $validateForm() { return instance.$validateForm; },
-                get $clearErrors()  { return instance.$clearErrors; },
+                                         get $validate()     { return instance.$validate; },
+                                         get $validateForm() { return instance.$validateForm; },
+                                         get $clearErrors()  { return instance.$clearErrors; },
             };
         });
 
@@ -670,10 +693,10 @@
                 el.__minix_form_validate_api__ = {
                     validate: runValidation,
                     get isSubmitting()  { return isSubmitting; },
-                    setSubmitting(next) { isSubmitting = !!next; },
-                    get isValidating()  { return _validating; },
-                    clear:     clearErrors,
-                    getErrors,
+                               setSubmitting(next) { isSubmitting = !!next; },
+                               get isValidating()  { return _validating; },
+                               clear:     clearErrors,
+                               getErrors,
                 };
 
                 // [FIX-43] Teardown order matters:
@@ -686,39 +709,39 @@
                     if (el.__minix_form_validate_api__) delete el.__minix_form_validate_api__;
                 });
 
-                cleanups.push(() => {
-                    _removeInstanceProps(instance);
-                    if (rawInstance && rawInstance !== instance) _removeInstanceProps(rawInstance);
-                });
+                    cleanups.push(() => {
+                        _removeInstanceProps(instance);
+                        if (rawInstance && rawInstance !== instance) _removeInstanceProps(rawInstance);
+                    });
 
-                // [FIX-10] / [OPT-9] / [OPT-12] Delete per-field children (using
-                //          pre-computed fieldKeys) BEFORE the parent key.
-                cleanups.push(() => {
-                    try {
-                        component.state.batch(() => {
-                            for (let i = 0; i < fieldKeys.length; i++) {
-                                component.state.delete(fieldKeys[i]);
-                            }
-                            component.state.delete(errorStateKey);
+                        // [FIX-10] / [OPT-9] / [OPT-12] Delete per-field children (using
+                        //          pre-computed fieldKeys) BEFORE the parent key.
+                        cleanups.push(() => {
+                            try {
+                                component.state.batch(() => {
+                                    for (let i = 0; i < fieldKeys.length; i++) {
+                                        component.state.delete(fieldKeys[i]);
+                                    }
+                                    component.state.delete(errorStateKey);
+                                });
+                            } catch (_) {}
                         });
-                    } catch (_) {}
-                });
 
-                // [FIX-11/70] Inspect cleanup runs LAST — after all DOM event listeners
-                //             are removed — so inspect.destroy() cannot trigger handlers
-                //             on a form that is already mid-teardown.
-                cleanups.push(() => {
-                    try {
-                        if      (typeof inspect.destroy === 'function') inspect.destroy();
-                        else if (typeof inspect.cleanup === 'function') inspect.cleanup();
-                    } catch (_) {}
-                });
+                        // [FIX-11/70] Inspect cleanup runs LAST — after all DOM event listeners
+                        //             are removed — so inspect.destroy() cannot trigger handlers
+                        //             on a form that is already mid-teardown.
+                        cleanups.push(() => {
+                            try {
+                                if      (typeof inspect.destroy === 'function') inspect.destroy();
+                                else if (typeof inspect.cleanup === 'function') inspect.cleanup();
+                            } catch (_) {}
+                        });
 
-                return () => {
-                    for (let i = 0; i < cleanups.length; i++) {
-                        try { cleanups[i](); } catch (_) {}
-                    }
-                };
+                        return () => {
+                            for (let i = 0; i < cleanups.length; i++) {
+                                try { cleanups[i](); } catch (_) {}
+                            }
+                        };
             }, { priority: 1000 });
         }
     });
@@ -744,10 +767,10 @@
 
                 const handlers = {
                     onSuccess:    resolveMethod(instance, eventMap.onSuccess)    || NOOP_ASYNC,
-                    onFailure:    resolveMethod(instance, eventMap.onFailure)    || NOOP_ASYNC,
-                    onBeforeSend: resolveMethod(instance, eventMap.onBeforeSend) || NOOP_ASYNC,
-                    onComplete:   resolveMethod(instance, eventMap.onComplete)   || NOOP_ASYNC,
-                    onLoader:     resolveMethod(instance, eventMap.onLoader)     || NOOP_ASYNC,
+                               onFailure:    resolveMethod(instance, eventMap.onFailure)    || NOOP_ASYNC,
+                               onBeforeSend: resolveMethod(instance, eventMap.onBeforeSend) || NOOP_ASYNC,
+                               onComplete:   resolveMethod(instance, eventMap.onComplete)   || NOOP_ASYNC,
+                               onLoader:     resolveMethod(instance, eventMap.onLoader)     || NOOP_ASYNC,
                 };
                 let ajaxSubmitting = false;
 
@@ -777,9 +800,9 @@
                         // Always validate here too; capture-phase async validation
                         // cannot stop the bubble-phase ajax handler before it awaits.
                         const validator =
-                            (formApi && typeof formApi.validate === 'function' ? formApi.validate : null) ||
-                            (typeof instance.$validate     === 'function' ? instance.$validate     : null) ||
-                            (typeof instance.$validateForm === 'function' ? instance.$validateForm : null);
+                        (formApi && typeof formApi.validate === 'function' ? formApi.validate : null) ||
+                        (typeof instance.$validate     === 'function' ? instance.$validate     : null) ||
+                        (typeof instance.$validateForm === 'function' ? instance.$validateForm : null);
 
                         if (validator) {
                             // [FIX-41] Wrap in try/catch so a throwing validator is
@@ -809,9 +832,15 @@
                         // BEFORE building the GET/HEAD URL so those entries are included.
                         await handlers.onBeforeSend(formData, el, eventMap);
 
+                        const headers = { ..._XHR_HEADERS, Accept: 'application/json' };
+                        const customHeaders = resolveAjaxHeaders(eventMap.headers, instance, el, eventMap);
+                        if (customHeaders) {
+                            Object.assign(headers, customHeaders);
+                        }
+
                         const fetchOptions = {
                             method,
-                            headers: _XHR_HEADERS, // [FIX-81] frozen module-level constant
+                            headers,
                         };
 
                         if (method === 'GET' || method === 'HEAD') {
@@ -831,8 +860,8 @@
 
                         const contentType = responseObj.headers.get('content-type') || '';
                         parsedData = contentType.includes('application/json')
-                            ? await responseObj.json()
-                            : await responseObj.text();
+                        ? await responseObj.json()
+                        : await responseObj.text();
 
                         if (responseObj.ok) {
                             await handlers.onSuccess(parsedData, el, responseObj, eventMap);

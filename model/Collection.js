@@ -133,42 +133,47 @@ class Collection {
             return this._normalizeItem(arr[index]);
         }
 
-        // BUG (prev. round): _createChildSource() accessed this.$source.state
-        // without guarding for its absence.  We now validate eagerly.
-        if (!this.$source.state) {
-            throw new Error(
-                'Collection reactive source must expose a `state` property for child model binding.'
-            );
-        }
-
         const childPath = this.$source.path
             ? `${this.$source.path}.${index}`
             : String(index);
 
-        const state = this.$source.state;
+        const fallbackState = this.$source.state || null;
+        const childSource = typeof this.$source.factory === 'function'
+            ? this.$source.factory(childPath)
+            : (
+                fallbackState
+                    ? {
+                        state: fallbackState,
+                        path: childPath,
+                        get:    key          => fallbackState.get(key ? `${childPath}.${key}` : childPath),
+                        set:    (key, value) => fallbackState.set(key ? `${childPath}.${key}` : childPath, value),
+                        has:    key          => fallbackState.has(key ? `${childPath}.${key}` : childPath),
+                        delete: key          => fallbackState.delete(key ? `${childPath}.${key}` : childPath),
+                        watch(key, callback) {
+                            if (typeof fallbackState.watch !== 'function') {
+                                throw new Error('Underlying state does not support watch().');
+                            }
+                            return fallbackState.watch(key ? `${childPath}.${key}` : childPath, callback);
+                        },
+                        raw: () => fallbackState.get(childPath)
+                    }
+                    : null
+            );
+
+        if (!childSource) {
+            throw new Error(
+                'Collection reactive source must expose either a factory(path) adapter or a state object for child model binding.'
+            );
+        }
+
+        const sourceIdentity = childSource.state || this.$source;
         const cached = this.$modelCache.get(index);
-        if (cached && cached.state === state && cached.path === childPath) {
+        if (cached && cached.state === sourceIdentity && cached.path === childPath) {
             return cached.model;
         }
 
-        const model = new this.$model({}, {
-            source: {
-                state,
-                path:   childPath,
-                get:    key          => state.get(key ? `${childPath}.${key}` : childPath),
-                set:    (key, value) => state.set(key ? `${childPath}.${key}` : childPath, value),
-                has:    key          => state.has(key ? `${childPath}.${key}` : childPath),
-                delete: key          => state.delete(key ? `${childPath}.${key}` : childPath),
-                watch(key, callback) {
-                    if (typeof state.watch !== 'function') {
-                        throw new Error('Underlying state does not support watch().');
-                    }
-                    return state.watch(key ? `${childPath}.${key}` : childPath, callback);
-                },
-                raw: () => state.get(childPath)
-            }
-        });
-        this.$modelCache.set(index, { state, path: childPath, model });
+        const model = new this.$model({}, { source: childSource });
+        this.$modelCache.set(index, { state: sourceIdentity, path: childPath, model });
         return model;
     }
 

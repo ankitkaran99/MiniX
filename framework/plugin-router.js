@@ -39,6 +39,22 @@
 		return out;
 	}
 
+	function normalizeRouteData(data) {
+		return copyOwnObject(data);
+	}
+
+	function readHistoryStateData() {
+		const state = global.history && global.history.state;
+		if (!state || typeof state !== "object") return {};
+		return normalizeRouteData(state.__minixRouterData);
+	}
+
+	function buildHistoryState(to) {
+		return {
+			__minixRouterData: normalizeRouteData(to && to.data)
+		};
+	}
+
 	function stripTrailingSlash(path) {
 		if (!path || path.length <= 1) return "/";
 		return path.replace(/\/+$/, "") || "/";
@@ -135,6 +151,7 @@
 			qualifiedName: route.qualifiedName || route.name || null,
 			params: copyOwnObject(route.params),
 			query: copyOwnObject(route.query),
+			data: normalizeRouteData(route.data),
 			hash: route.hash || "",
 			meta: copyOwnObject(route.meta),
 			matched: Array.isArray(route.matched) ? route.matched.slice() : [],
@@ -252,7 +269,8 @@
 				return {
 					path: stripHistoryBase(path, base),
 					query: parseQuery(location.search),
-					hash: location.hash || ""
+					hash: location.hash || "",
+					data: readHistoryStateData()
 				};
 			},
 			href(to) {
@@ -266,7 +284,7 @@
 					return;
 				}
 				if (global.history && typeof global.history.pushState === "function") {
-					global.history.pushState({}, "", this.href(to));
+					global.history.pushState(buildHistoryState(to), "", this.href(to));
 				}
 			},
 			replace(to) {
@@ -274,14 +292,14 @@
 				if (location.protocol === "file:") {
 					const nextHash = normalizePath(to.path || "/") + stringifyQuery(to.query) + normalizeHash(to.hash);
 					if (global.history && typeof global.history.replaceState === "function") {
-						global.history.replaceState({}, "", (location.pathname || "/") + (location.search || "") + "#" + nextHash);
+						global.history.replaceState(buildHistoryState(to), "", (location.pathname || "/") + (location.search || "") + "#" + nextHash);
 					} else {
 						global.location.hash = nextHash;
 					}
 					return;
 				}
 				if (global.history && typeof global.history.replaceState === "function") {
-					global.history.replaceState({}, "", this.href(to));
+					global.history.replaceState(buildHistoryState(to), "", this.href(to));
 				}
 			},
 			listen(callback) {
@@ -308,7 +326,8 @@
 				return {
 					path: stripHistoryBase(path, base),
 					query: parseQuery(url.search),
-					hash: url.hash || ""
+					hash: url.hash || "",
+					data: readHistoryStateData()
 				};
 			},
 			href(to) {
@@ -320,7 +339,7 @@
 			},
 			replace(to) {
 				if (global.history && typeof global.history.replaceState === "function") {
-					global.history.replaceState({}, "", this.href(to));
+					global.history.replaceState(buildHistoryState(to), "", this.href(to));
 				} else if (global.location) {
 					global.location.hash = this.href(to).slice(1);
 				}
@@ -654,7 +673,7 @@
 					cleanup();
 					const resolvedDefinition = this._resolveRegisteredDefinition(name);
 					if (resolvedDefinition) {
-						resolve(resolvedDefinition);
+						resolve(this.isLayoutLoader ? resolvedDefinition : name);
 					} else {
 						resolve(name);
 					}
@@ -777,13 +796,13 @@
 		? new RouteState({
 			fullPath: "/", path: "/", name: null,
 			qualifiedName: null,
-			params: {}, query: {}, hash: "",
+			params: {}, query: {}, data: {}, hash: "",
 			meta: {}, matched: [], redirectedFrom: null
 		}).raw()
 		: {
 			fullPath: "/", path: "/", name: null,
 			qualifiedName: null,
-			params: {}, query: {}, hash: "",
+			params: {}, query: {}, data: {}, hash: "",
 			meta: {}, matched: [], redirectedFrom: null
 		};
 
@@ -1013,7 +1032,7 @@
 				return buildLocationFromUrlish(input, baseHref);
 			}
 			if (!input || typeof input !== "object") {
-				return { path: "/", query: {}, hash: "" };
+				return { path: "/", query: {}, data: {}, hash: "" };
 			}
 			if (input.name) {
 				const record = recordsByName.get(input.name);
@@ -1021,6 +1040,7 @@
 				return {
 					path: buildPathFromNamedRoute(record, input.params || {}),
 					query: copyOwnObject(input.query || {}),
+					data: normalizeRouteData(input.data),
 					hash: normalizeHash(input.hash || "")
 				};
 			}
@@ -1034,6 +1054,7 @@
 			return {
 				path: parsedPath.path,
 				query: { ...copyOwnObject(parsedPath.query), ...copyOwnObject(input.query || {}) },
+				data: normalizeRouteData(input.data),
 				hash: hasHash ? normalizeHash(input.hash || "") : parsedPath.hash
 			};
 		}
@@ -1041,6 +1062,7 @@
 		function resolve(input, redirectedFrom = null, debug = false, visited = null) {
 			const target = normalizeRawTarget(input);
 			const targetQuery = target.query || {};
+			const targetData = normalizeRouteData(target.data);
 			const targetHash = normalizeHash(target.hash);
 			const targetFullPath = target.path + stringifyQuery(targetQuery) + targetHash;
 			const seen = visited || new Set();
@@ -1056,6 +1078,7 @@
 				? leaf.redirect({
 					path: target.path,
 					query: targetQuery,
+					data: targetData,
 					hash: targetHash,
 					params: extractParams(leaf, target.path),
 					name: leaf.qualifiedName || leaf.name || null,
@@ -1078,6 +1101,7 @@
 				qualifiedName: leaf ? leaf.qualifiedName || leaf.name || null : null,
 				params,
 				query: targetQuery,
+				data: targetData,
 				hash: targetHash,
 				meta: mergeMeta(matched),
 				matched,
@@ -1089,6 +1113,33 @@
 
 		function isMissingParamError(error) {
 			return !!(error && typeof error.message === "string" && error.message.startsWith('[MiniXRouter] Missing param '));
+		}
+
+		function isCatchAllOnlyMatch(route) {
+			if (!route || !Array.isArray(route.matched) || route.matched.length !== 1) return false;
+			const leaf = route.matched[0];
+			if (!leaf) return false;
+			return leaf.path === "*" || leaf.fullPath === "*" || leaf.fullPath === "/*";
+		}
+
+		function validateGuardRedirectTarget(target, source) {
+			let resolved;
+			try {
+				resolved = resolve(target, null, debugEnabled);
+			} catch (error) {
+				throw new Error("[MiniXRouter] " + source + " returned an invalid redirect target: " + String(error?.message || error));
+			}
+
+			if (!resolved.matched.length || isCatchAllOnlyMatch(resolved)) {
+				const printable = typeof target === "string"
+					? target
+					: (() => {
+						try { return JSON.stringify(target); } catch (_) { return String(target); }
+					})();
+				throw new Error("[MiniXRouter] " + source + " returned a non-existent route: " + printable);
+			}
+
+			return resolved;
 		}
 
 		// ── Route synchronization ──────────────────────────────────────────────
@@ -1106,10 +1157,11 @@
 				return {
 					path: normalizePath(location.path || "/"),
 					query: copyOwnObject(location.query || {}),
+					data: normalizeRouteData(location.data),
 					hash: normalizeHash(location.hash || "")
 				};
 			}
-			return { path: "/", query: {}, hash: "" };
+			return { path: "/", query: {}, data: {}, hash: "" };
 		}
 
 		function buildRouterRelativeBaseHref() {
@@ -1143,6 +1195,7 @@
 			currentRoute.qualifiedName = next.qualifiedName || next.name || null;
 			currentRoute.params = copyOwnObject(next.params);
 			currentRoute.query = copyOwnObject(next.query);
+			currentRoute.data = normalizeRouteData(next.data);
 			currentRoute.hash = next.hash || "";
 			currentRoute.meta = copyOwnObject(next.meta);
 			currentRoute.matched = Array.isArray(next.matched) ? next.matched.slice() : [];
@@ -1248,6 +1301,7 @@
 			}
 			if (globalResult !== true) {
 				emitDebug("navigation:redirect", { source: "beforeEach", to, from, target: globalResult });
+				validateGuardRedirectTarget(globalResult, "beforeEach");
 				return navigate(globalResult, replace, _depth + 1, navId);
 			}
 			const routeResult = await runRouteBeforeEnter(to, from);
@@ -1261,6 +1315,7 @@
 			}
 			if (routeResult !== true) {
 				emitDebug("navigation:redirect", { source: "beforeEnter", to, from, target: routeResult });
+				validateGuardRedirectTarget(routeResult, "beforeEnter");
 				return navigate(routeResult, replace, _depth + 1, navId);
 			}
 			suppressHistoryEventOnce(() => {
@@ -1565,8 +1620,8 @@
 					}
 					const instanceAPI = Object.create(null);
 					for (const [alias, prop] of [
-						["$route", "route"], ["$params", "params"], ["$query", "query"],
-						["route", "route"], ["params", "params"], ["query", "query"]
+						["$route", "route"], ["$params", "params"], ["$query", "query"], ["$data", "data"],
+						["route", "route"], ["params", "params"], ["query", "query"], ["data", "data"]
 					]) {
 						const isRoute = prop === "route";
 						Object.defineProperty(instanceAPI, alias, {
@@ -1583,7 +1638,8 @@
 				app.addScope(() => ({
 					get route() { return currentRoute; },
 					get params() { return currentRoute.params; },
-					get query() { return currentRoute.query; }
+					get query() { return currentRoute.query; },
+					get data() { return currentRoute.data; }
 				}));
 
 				// ── x-link directive ───────────────────────────────────────────
@@ -1744,6 +1800,7 @@
 							activeChild: null, activeHost: null,
 							activeCacheKey: null, activeRecord: null,
 							renderToken: 0, scheduled: false,
+							pendingRenderKey: null,
 							lastRenderedKey: null, stopEffect: null,
 							destroyed: false, el, requestRefresh: null
 						};
@@ -1751,6 +1808,7 @@
 						ctrl.instanceId = Symbol("router-view");
 						ctrl.destroyed = false;
 						ctrl.el = el;
+						ctrl.pendingRenderKey = null;
 					}
 					const instanceId = ctrl.instanceId;
 
@@ -1778,13 +1836,18 @@
 
 					async function mountForCurrentRoute(fromRoute = null) {
 						if (el.__minix_router_view_ctrl__ !== ctrl || ctrl.instanceId !== instanceId || ctrl.destroyed) return;
-						const token = ++ctrl.renderToken;
 						const route = cloneRoute(router.currentRoute);
 						const record = getRouteRecordForView(route, depth, viewName);
 						const componentValue = getViewComponentFromRecord(record, viewName);
 						const renderKey = [viewName, depth, route.fullPath, record ? record.fullPath : "null"].join("::");
 						router._emitDebug("view:render", { viewName, depth, record: record ? record.fullPath : null, route });
+						if (ctrl.pendingRenderKey === renderKey) {
+							router._emitDebug("view:skip", { viewName, depth, route, record: record ? record.fullPath : null, reason: "pending" });
+							return;
+						}
+						const token = ++ctrl.renderToken;
 						if (!record || !componentValue) {
+							ctrl.pendingRenderKey = null;
 							ctrl.lastRenderedKey = renderKey;
 							await runHookList(beforeRouteLeaveHooks, hookPayload(fromRoute, route, ctrl.activeRecord), "beforeRouteLeave");
 							if (isStale(token)) return;
@@ -1798,14 +1861,21 @@
 							router._emitDebug("view:skip", { viewName, depth, route, record: record.fullPath });
 							return;
 						}
+						ctrl.pendingRenderKey = renderKey;
 						const keepAlive = shouldKeepAlive(record);
 						const cacheKey = buildCacheKey(route, record, viewName, depth);
 						await runHookList(beforeRouteLeaveHooks, hookPayload(fromRoute, route, ctrl.activeRecord), "beforeRouteLeave");
-						if (isStale(token)) return;
+						if (isStale(token)) {
+							if (ctrl.pendingRenderKey === renderKey) ctrl.pendingRenderKey = null;
+							return;
+						}
 						if (keepAlive && keepAliveStore.has(cacheKey)) {
 							const cached = keepAliveStore.get(cacheKey);
 							await runHookList(beforeRouteEnterHooks, hookPayload(fromRoute, route, record), "beforeRouteEnter");
-							if (isStale(token)) return;
+							if (isStale(token)) {
+								if (ctrl.pendingRenderKey === renderKey) ctrl.pendingRenderKey = null;
+								return;
+							}
 							if (ctrl.activeChild !== cached.component) {
 								destroyActiveChild();
 							}
@@ -1817,6 +1887,7 @@
 							ctrl.activeCacheKey = cacheKey;
 							ctrl.activeRecord = record;
 							ctrl.lastRenderedKey = renderKey;
+							ctrl.pendingRenderKey = null;
 							await runHookList(afterRouteEnterHooks, hookPayload(fromRoute, route, record), "afterRouteEnter");
 							router._emitDebug("keepalive:hit", { key: cacheKey, viewName, depth, route });
 							return;
@@ -1826,9 +1897,15 @@
 						ctrl.activeChild = ctrl.activeHost = ctrl.activeCacheKey = ctrl.activeRecord = null;
 						el.innerHTML = "";
 						await runHookList(beforeRouteEnterHooks, hookPayload(fromRoute, route, record), "beforeRouteEnter");
-						if (isStale(token)) return;
+						if (isStale(token)) {
+							if (ctrl.pendingRenderKey === renderKey) ctrl.pendingRenderKey = null;
+							return;
+						}
 						const resolvedName = await resolveViewComponentName(componentValue, record, viewName);
-						if (isStale(token) || !resolvedName) return;
+						if (isStale(token) || !resolvedName) {
+							if (ctrl.pendingRenderKey === renderKey) ctrl.pendingRenderKey = null;
+							return;
+						}
 						const props = getViewProps(record, route, viewName);
 						const host = global.document.createElement("div");
 						host.setAttribute("data-router-view-host", viewName);
@@ -1847,6 +1924,7 @@
 							});
 						} catch (error) {
 							if (host.parentNode === el) el.removeChild(host);
+							if (ctrl.pendingRenderKey === renderKey) ctrl.pendingRenderKey = null;
 							router._emitDebug("view:mount:error", {
 								viewName, depth, route,
 								componentName: resolvedName,
@@ -1859,10 +1937,12 @@
 								try { child.destroy(); } catch (_) {}
 							}
 							if (host.parentNode === el) el.removeChild(host);
+							if (ctrl.pendingRenderKey === renderKey) ctrl.pendingRenderKey = null;
 							return;
 						}
 						if (!child) {
 							if (host.parentNode === el) el.removeChild(host);
+							if (ctrl.pendingRenderKey === renderKey) ctrl.pendingRenderKey = null;
 							router._emitDebug("view:mount:failed", { viewName, depth, route, componentName: resolvedName });
 							return;
 						}
@@ -1871,6 +1951,7 @@
 						ctrl.activeRecord = record;
 						ctrl.activeCacheKey = keepAlive ? cacheKey : null;
 						ctrl.lastRenderedKey = renderKey;
+						ctrl.pendingRenderKey = null;
 						router._emitDebug("view:mount:success", { viewName, depth, route, componentName: resolvedName });
 						if (keepAlive) {
 							keepAliveStore.set(cacheKey, { component: child, host });
@@ -1914,6 +1995,7 @@
 							destroyActiveChild();
 							clearLiveHost();
 							ctrl.activeChild = ctrl.activeHost = ctrl.activeCacheKey = ctrl.activeRecord = null;
+							ctrl.pendingRenderKey = null;
 							ctrl.lastRenderedKey = null;
 							ctrl.scheduled = false;
 							ctrl.requestRefresh = null;

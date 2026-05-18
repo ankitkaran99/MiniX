@@ -154,7 +154,129 @@ class Model {
                 }
                 return state.watch(join(basePath, key), callback);
             },
-            raw: () => state.get(basePath || '')
+            raw: () => state.get(basePath || ''),
+            factory: path => this._createStateAdapter(state, path)
+        };
+    }
+
+    _createStoreAdapter(store, basePath = '') {
+        if (
+            !store ||
+            typeof store.$get     !== 'function' ||
+            typeof store.$set     !== 'function' ||
+            typeof store.watch    !== 'function' ||
+            typeof store.snapshot !== 'function'
+        ) {
+            throw new Error('Store adapter expects a MiniXStore-like object.');
+        }
+
+        const join = (path, key) => {
+            if (!path) return key || '';
+            if (!key) return path || '';
+            return `${path}.${key}`;
+        };
+
+        const split = (path) => (
+            typeof path === 'string' && path
+                ? path.split('.').filter(Boolean)
+                : []
+        );
+
+        const getAtPath = (value, path) => {
+            const keys = split(path);
+            let current = value;
+
+            if (!keys.length) return current;
+
+            for (const key of keys) {
+                if (current == null) return undefined;
+                if (current instanceof Map) {
+                    current = current.get(key);
+                    continue;
+                }
+                current = current[key];
+            }
+
+            return current;
+        };
+
+        const hasAtPath = (value, path) => {
+            const keys = split(path);
+            let current = value;
+
+            if (!keys.length) return current !== undefined;
+
+            for (const key of keys) {
+                if (current == null) return false;
+                if (current instanceof Map) {
+                    if (!current.has(key)) return false;
+                    current = current.get(key);
+                    continue;
+                }
+                if (!(key in Object(current))) return false;
+                current = current[key];
+            }
+
+            return true;
+        };
+
+        const deleteAtPath = (path) => {
+            const fullPath = join(basePath, path);
+            if (!fullPath) return false;
+            if (!hasAtPath(store.snapshot(), fullPath)) return false;
+
+            const keys = split(fullPath);
+            const last = keys.pop();
+
+            if (!keys.length) {
+                return delete store[last];
+            }
+
+            if (typeof store.$patch !== 'function') {
+                throw new Error('Store adapter delete() requires store.$patch() for nested paths.');
+            }
+
+            let deleted = false;
+            store.$patch(keys.join('.'), (parent) => {
+                if (parent == null) return parent;
+
+                if (parent instanceof Map) {
+                    deleted = parent.delete(last);
+                    return parent;
+                }
+
+                if (Array.isArray(parent) && /^\d+$/.test(String(last))) {
+                    const index = Number(last);
+                    if (index >= 0 && index < parent.length) {
+                        parent.splice(index, 1);
+                        deleted = true;
+                    }
+                    return parent;
+                }
+
+                if (Object.prototype.hasOwnProperty.call(Object(parent), last)) {
+                    delete parent[last];
+                    deleted = true;
+                }
+
+                return parent;
+            });
+
+            return deleted;
+        };
+
+        return {
+            state: store,
+            path: basePath,
+            get: key => store.$get(join(basePath, key)),
+            set: (key, value) => store.$set(join(basePath, key), value),
+            has: key => hasAtPath(store.snapshot(), join(basePath, key)),
+            delete: key => deleteAtPath(key),
+            watch(key, callback) {
+                return store.watch(join(basePath, key), callback);
+            },
+            raw: () => getAtPath(store.snapshot(), basePath),
+            factory: path => this._createStoreAdapter(store, path)
         };
     }
 
@@ -164,7 +286,11 @@ class Model {
         // ever the root adapter, preventing accidental collisions.
         const key = path || '';
         if (!this.$adapterCache.has(key)) {
-            this.$adapterCache.set(key, this._createStateAdapter(this.$source.state, key));
+            if (typeof this.$source.factory === 'function') {
+                this.$adapterCache.set(key, this.$source.factory(key));
+            } else {
+                this.$adapterCache.set(key, this._createStateAdapter(this.$source.state, key));
+            }
         }
         return this.$adapterCache.get(key);
     }
@@ -459,6 +585,16 @@ class Model {
         );
     }
 
+    static _isStoreLike(value) {
+        return !!(
+            value &&
+            typeof value.$get     === 'function' &&
+            typeof value.$set     === 'function' &&
+            typeof value.watch    === 'function' &&
+            typeof value.snapshot === 'function'
+        );
+    }
+
     static fromState(state, path = '') {
         if (!this._isStateLike(state)) {
             throw new Error(`${this.name}.fromState() expects a MiniX_State-like instance.`);
@@ -482,11 +618,17 @@ class Model {
     }
 
     static fromStore(store, path = '') {
+        if (this._isStoreLike(store)) {
+            const instance = new this({}, {
+                source: { state: store, path, get: () => {}, set: () => {}, has: () => false, delete: () => false, watch: () => {}, raw: () => ({}), factory: () => ({}) }
+            });
+            instance.$source = instance._createStoreAdapter(store, path);
+            return instance;
+        }
+
         // Priority: most-specific internal state object wins.
         const candidates = [
-            store?.$stateManager,
             store?.$store,
-            store?.state,
             store
         ];
 

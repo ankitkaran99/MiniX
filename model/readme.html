@@ -4,44 +4,22 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Model & Collection Deep Documentation</title>
-  <link rel="stylesheet" href="../readme-assets/router-doc-theme.css">
+  <link rel="stylesheet" href="../framework/readme/assets/theme.css">
 </head>
 <body data-doc-product="Model & Collection" data-doc-summary="Reactive data-layer documentation for Model and Collection, including relations, binding to state/store data, serialization, and collection helpers." data-doc-badges="Model layer|Collections|Relations|Reactive binding" data-doc-highlights="Object-shaped models and array-shaped collections|hasOne and hasMany relation wrappers|Binding models directly onto reactive state and stores" data-doc-metrics="Models::Object wrappers|Collections::Array helpers|Relations::hasOne / hasMany|Binding::Store and state" data-doc-sidebar="This page explains the data-layer primitives, relation behavior, serialization, state binding, and the collection query and mutation API.">
   <div data-doc-root class="doc-source">
-<div class="layout">
-  <aside class="sidebar">
-    <h5 class="mb-3"><i class="fas fa-book me-2"></i>Docs</h5>
-    <a href="#overview">Overview</a>
-    <a href="#requirements">Requirements</a>
-    <a href="#quick-start">Quick Start</a>
-    <a href="#model-concept">Model Concept</a>
-    <a href="#model-api">Model API</a>
-    <a href="#relations">Relations</a>
-    <a href="#reactive-binding">Reactive Binding</a>
-    <a href="#collection-concept">Collection Concept</a>
-    <a href="#collection-api">Collection API</a>
-    <a href="#serialization">Serialization</a>
-    <a href="#examples">Complete Examples</a>
-    <a href="#errors">Errors & Edge Cases</a>
-    <a href="#best-practices">Best Practices</a>
-    <a href="#reference">Full Reference</a>
-  </aside>
-
-  <main class="content">
-    <section class="hero" id="overview">
-      <h1 class="mb-3">Model & Collection Deep Documentation</h1>
-      <p class="lead mb-2">A lightweight reactive data-layer built around two classes: <strong>Model</strong> for object-shaped state and <strong>Collection</strong> for array-shaped groups of models.</p>
-      <p class="mb-0">These classes are designed for Mini-X style state/store systems, but they can also be used as standalone model wrappers when <code>MiniX_State</code> is globally available.</p>
+    <section class="section-card" id="overview">
+    <h2 id="overview">Overview</h2>
+    <p class="lead">A lightweight reactive data-layer built around two classes: <strong>Model</strong> for object-shaped state and <strong>Collection</strong> for array-shaped groups of models.</p>
+    <p>These classes are designed for Mini-X style state/store systems, but they can also be used as standalone model wrappers when <code>MiniX_State</code> is globally available.</p>
+    <div class="feature-grid">
+      <div class="feature-card"><strong>Model</strong><span>Represents one object with attributes, defaults, methods, relations, reactive getters/setters, serialization and store binding.</span></div>
+      <div class="feature-card"><strong>Collection</strong><span>Represents a list of models with array-like access, mutation helpers, searching, sorting, iteration and reactive array binding.</span></div>
+      <div class="feature-card"><strong>Relations</strong><span>Supports <code>hasOne()</code> and <code>hasMany()</code> relationships that automatically wrap nested objects and arrays.</span></div>
+    </div>
     </section>
 
-    <section class="mt-4">
-      <div class="row g-3">
-        <div class="col-md-4"><div class="card p-3 h-100"><h5><i class="fas fa-cube me-2"></i>Model</h5><p class="mb-0">Represents one object with attributes, defaults, methods, relations, reactive getters/setters, serialization and store binding.</p></div></div>
-        <div class="col-md-4"><div class="card p-3 h-100"><h5><i class="fas fa-layer-group me-2"></i>Collection</h5><p class="mb-0">Represents a list of models with array-like access, mutation helpers, searching, sorting, iteration and reactive array binding.</p></div></div>
-        <div class="col-md-4"><div class="card p-3 h-100"><h5><i class="fas fa-link me-2"></i>Relations</h5><p class="mb-0">Supports <code>hasOne()</code> and <code>hasMany()</code> relationships that automatically wrap nested objects and arrays.</p></div></div>
-      </div>
-    </section>
-
+    <section class="section-card" id="requirements">
     <h2 id="requirements">1. Requirements</h2>
     <p>The classes expect a MiniX-style reactive state object when used in reactive mode. A valid state object must expose:</p>
     <pre><code>state.get(path)
@@ -64,8 +42,33 @@ state.batch(callback)       // optional, used for efficient bulk writes</code></
     <p>For CommonJS/Node-style usage:</p>
     <pre><code>const Model = require('./Model.js');
 const Collection = require('./Collection.js');</code></pre>
+    </section>
 
-    <h2 id="quick-start">2. Quick Start</h2>
+    <section class="section-card" id="loading-exports">
+    <h2 id="loading-exports">2. Loading &amp; Exports</h2>
+    <p>Both files support browser globals and CommonJS exports.</p>
+    <table class="table table-bordered method-table">
+      <thead><tr><th>File</th><th>Browser global</th><th>CommonJS export</th></tr></thead>
+      <tbody>
+        <tr><td><code>Model.js</code></td><td><code>window.Model</code></td><td><code>module.exports = Model</code></td></tr>
+        <tr><td><code>Collection.js</code></td><td><code>window.Collection</code></td><td><code>module.exports = Collection</code></td></tr>
+      </tbody>
+    </table>
+
+    <p><code>Model.hasMany()</code> resolves the collection class in this order:</p>
+    <ol>
+      <li>global <code>Collection</code></li>
+      <li><code>globalThis.Collection</code></li>
+      <li><code>require('./Collection.js')</code></li>
+    </ol>
+
+    <div class="note">
+      <strong>Class-field relations are supported.</strong> A subclass can define <code>relations = () =&gt; ({ ... })</code> as an instance field. The model normalizes relations lazily so that pattern still works.
+    </div>
+    </section>
+
+    <section class="section-card" id="quick-start">
+    <h2 id="quick-start">3. Quick Start</h2>
     <pre><code>class Profile extends Model {
   defaults() {
     return { avatar: null, bio: '' };
@@ -119,8 +122,10 @@ user.name = 'Ankit Karan';
 user.roles.push({ id: 2, name: 'editor' });
 
 console.log(user.toJSON());</code></pre>
+    </section>
 
-    <h2 id="model-concept">3. Model Concept</h2>
+    <section class="section-card" id="model-concept">
+    <h2 id="model-concept">4. Model Concept</h2>
     <p><code>Model</code> wraps object data behind a <code>Proxy</code>. This allows you to use natural property syntax while storing the actual data safely inside a state source.</p>
 
     <h3>Normal property access</h3>
@@ -147,8 +152,37 @@ user.getId(); // 10</code></pre>
     <div class="warn">
       <strong>Name collision rule:</strong> class methods/properties win over data attributes. Avoid using data keys like <code>set</code>, <code>get</code>, <code>fill</code>, <code>toJSON</code>, <code>clone</code>, etc. because those names already exist on the class.
     </div>
+    </section>
 
-    <h2 id="model-api">4. Model API</h2>
+    <section class="section-card" id="proxy-behavior">
+    <h2 id="proxy-behavior">5. Proxy Behavior</h2>
+    <p><code>Model</code> instances are proxies, so property reads, writes, existence checks, deletion, and enumeration all go through model logic.</p>
+
+    <h3>Read/write routing</h3>
+    <pre><code>user.name = 'Ankit';     // routed to state
+user.getId();           // method call on the real instance
+user[Symbol.iterator];  // symbol access is forwarded normally</code></pre>
+
+    <h3>Enumeration rules</h3>
+    <p><code>Object.keys(model)</code>, <code>for...in</code>, and similar reflection APIs expose:</p>
+    <ul>
+      <li>real public instance properties</li>
+      <li>current raw data keys</li>
+      <li>declared relation keys</li>
+    </ul>
+    <p>Internal <code>$...</code> properties are hidden from enumeration.</p>
+
+    <h3>Delete semantics</h3>
+    <pre><code>delete user.name; // deletes the value from the backing source
+delete user.get;  // false, class members are protected</code></pre>
+
+    <div class="note">
+      Relation keys participate in enumeration even before a value is read. This means a key declared in <code>relations()</code> can appear in <code>Object.keys(model)</code> even when the raw value is <code>null</code> or missing.
+    </div>
+    </section>
+
+    <section class="section-card" id="model-api">
+    <h2 id="model-api">6. Model API</h2>
 
     <h3>Constructor</h3>
     <pre><code>new Model(data = {}, options = {})</code></pre>
@@ -159,6 +193,18 @@ user.getId(); // 10</code></pre>
         <tr><td>options.source</td><td>Optional reactive source adapter. If absent, the model creates its own source using <code>MiniX_State</code>.</td></tr>
       </tbody>
     </table>
+
+    <p>A source adapter should expose:</p>
+    <pre><code>{
+  state,           // original state object when available
+  path,            // base path string
+  get(key),
+  set(key, value),
+  has(key),
+  delete(key),
+  watch(key, callback), // optional unless watch() is used
+  raw()
+}</code></pre>
 
     <h3>Overrideable hooks</h3>
     <table class="table table-bordered method-table">
@@ -247,7 +293,13 @@ if (typeof unwatch === 'function') unwatch();</code></pre>
       </tbody>
     </table>
 
-    <h2 id="relations">5. Relations</h2>
+    <div class="note">
+      <code>fromState()</code> and <code>fromStore()</code> create live wrappers over existing state. They do not clone the data first.
+    </div>
+    </section>
+
+    <section class="section-card" id="relations">
+    <h2 id="relations">7. Relations</h2>
     <p>Relations let nested objects become real model instances and nested arrays become <code>Collection</code> instances.</p>
 
     <h3>hasOne</h3>
@@ -309,8 +361,10 @@ console.log(user.profile.bio); // Now exists</code></pre>
     };
   }
 }</code></pre>
+    </section>
 
-    <h2 id="reactive-binding">6. Reactive Binding</h2>
+    <section class="section-card" id="reactive-binding">
+    <h2 id="reactive-binding">8. Reactive Binding</h2>
     <p>A model can be bound to existing state or store data. In this mode, the model is only a wrapper around live state.</p>
 
     <h3>Bind to state</h3>
@@ -342,6 +396,8 @@ const user = User.bind(store, 'auth.user');</code></pre>
       <li><code>store</code> itself</li>
     </ol>
 
+    <p>A valid state candidate must expose <code>get()</code>, <code>set()</code>, <code>has()</code>, and <code>delete()</code>. If none of the candidates match, <code>fromStore()</code> throws.</p>
+
     <h3>Reactive child paths</h3>
     <p>Nested relation models are bound to nested paths. Example:</p>
     <pre><code>user.profile.bio = 'Hello';
@@ -350,7 +406,19 @@ const user = User.bind(store, 'auth.user');</code></pre>
 user.roles.at(0).name = 'admin';
 // writes to: auth.user.roles.0.name</code></pre>
 
-    <h2 id="collection-concept">7. Collection Concept</h2>
+    <h3>Detached vs live wrappers</h3>
+    <table class="table table-bordered method-table">
+      <thead><tr><th>Creation style</th><th>Behavior</th></tr></thead>
+      <tbody>
+        <tr><td><code>new User(data)</code></td><td>Creates its own reactive source backed by a fresh <code>MiniX_State</code>.</td></tr>
+        <tr><td><code>User.fromState(...)</code> / <code>User.fromStore(...)</code></td><td>Wraps existing live state in place.</td></tr>
+        <tr><td><code>clone()</code> / <code>cloneWith()</code></td><td>Creates detached copies with their own source.</td></tr>
+      </tbody>
+    </table>
+    </section>
+
+    <section class="section-card" id="collection-concept">
+    <h2 id="collection-concept">9. Collection Concept</h2>
     <p><code>Collection</code> wraps an array and guarantees that each readable item becomes an instance of the configured model class.</p>
 
     <h3>Create detached collection</h3>
@@ -373,7 +441,20 @@ roles[-1];       // null because negative index is forwarded to at(-1)</code></p
       <code>Collection.at(index)</code> does not implement JavaScript Array-style negative indexing. It returns <code>null</code> for negative indexes because the current implementation treats all negative indexes as out-of-range.
     </div>
 
-    <h2 id="collection-api">8. Collection API</h2>
+    <h3>Detached vs reactive collections</h3>
+    <p>A detached collection stores a local array in memory. A reactive collection stores only a source adapter and reads/writes directly against live state.</p>
+    <pre><code>const detached = Collection.from(Role, [{ id: 1 }]);
+const reactive = user.roles; // relation-backed collection</code></pre>
+
+    <p>Reactive collections cache child model wrappers by array index and state path, so repeated reads of the same live item return the same model instance until the array shape changes.</p>
+    </section>
+
+    <section class="section-card" id="collection-api">
+    <h2 id="collection-api">10. Collection API</h2>
+
+    <h3>Static helper</h3>
+    <pre><code>Collection.from(ModelClass, items = [])</code></pre>
+    <p>Creates a detached collection from a model class and plain array data.</p>
 
     <h3>Constructor</h3>
     <pre><code>new Collection(ModelClass, options = {})</code></pre>
@@ -384,6 +465,10 @@ roles[-1];       // null because negative index is forwarded to at(-1)</code></p
         <tr><td>source</td><td>Reactive source adapter for live array data.</td></tr>
       </tbody>
     </table>
+
+    <div class="note">
+      Reactive collection child binding requires <code>source.state</code>. Without it, methods such as <code>at()</code> throw because child models cannot be bound to indexed paths.
+    </div>
 
     <h3>Read methods</h3>
     <table class="table table-bordered method-table">
@@ -450,7 +535,17 @@ roles[-1];       // null because negative index is forwarded to at(-1)</code></p
       </tbody>
     </table>
 
-    <h2 id="serialization">9. Serialization</h2>
+    <h3>Return value contracts</h3>
+    <ul>
+      <li><code>push()</code>, <code>unshift()</code>, <code>replaceAt()</code>, <code>reset()</code>, <code>clear()</code>, and similar bulk mutators return <code>this</code>.</li>
+      <li><code>pop()</code>, <code>shift()</code>, and <code>removeAt()</code> return detached model clones or <code>null</code>.</li>
+      <li><code>removeWhere()</code>, <code>removeBy()</code>, and <code>removeById()</code> return arrays of detached model clones.</li>
+      <li><code>updateAt()</code>, <code>updateBy()</code>, and <code>updateById()</code> return the updated live model or <code>null</code>.</li>
+    </ul>
+    </section>
+
+    <section class="section-card" id="serialization">
+    <h2 id="serialization">11. Serialization</h2>
     <p>Both classes convert models and collections into plain JSON-safe data using <code>toJSON()</code>.</p>
 
     <h3>Model serialization</h3>
@@ -476,8 +571,10 @@ user.set('bad', a); // throws circular reference error during serialization</cod
       <li>Objects with <code>toJSON()</code> use their own <code>toJSON()</code>.</li>
       <li>Non-plain objects without <code>toJSON()</code> are stored as-is.</li>
     </ul>
+    </section>
 
-    <h2 id="examples">10. Complete Examples</h2>
+    <section class="section-card" id="examples">
+    <h2 id="examples">12. Complete Examples</h2>
 
     <h3>Example: Auth model</h3>
     <pre><code>class Role extends Model {}
@@ -596,8 +693,10 @@ user.roles.updateById(2, { name: 'manager' });
 user.roles.removeWhere(role =&gt; role.name === 'admin');
 
 console.log(user.toJSON());</code></pre>
+    </section>
 
-    <h2 id="errors">11. Errors & Edge Cases</h2>
+    <section class="section-card" id="errors">
+    <h2 id="errors">13. Errors &amp; Edge Cases</h2>
 
     <table class="table table-bordered method-table">
       <thead><tr><th>Case</th><th>Error / Behavior</th></tr></thead>
@@ -605,8 +704,11 @@ console.log(user.toJSON());</code></pre>
         <tr><td><code>new Collection(null)</code></td><td>Throws: collection expects a model class.</td></tr>
         <tr><td>Collection without <code>items</code> or <code>source</code></td><td>Throws: collection requires source or items array.</td></tr>
         <tr><td>Adding primitive to collection</td><td>Throws because collection items must be model instances or plain objects.</td></tr>
+        <tr><td>Standalone model without <code>MiniX_State</code></td><td>Throws when the model tries to create its own source.</td></tr>
         <tr><td><code>fill()</code> with non-object</td><td>Throws because fill expects a plain object.</td></tr>
         <tr><td><code>updateAt()</code> patch not plain object</td><td>Throws.</td></tr>
+        <tr><td><code>fromState()</code> with invalid state object</td><td>Throws because state-like methods are required.</td></tr>
+        <tr><td><code>fromStore()</code> with unsupported store shape</td><td>Throws because no state candidate could be resolved.</td></tr>
         <tr><td><code>watch()</code> without watch support</td><td>Throws.</td></tr>
         <tr><td><code>hasMany()</code> without Collection loaded</td><td>Throws when relation is accessed.</td></tr>
         <tr><td>Reactive collection source missing <code>state</code></td><td>Throws when reading child model.</td></tr>
@@ -628,8 +730,10 @@ removed.name = 'changed locally';
 
     <pre><code>roles.reset([{ id: 1, name: 'admin' }]);       // raw replace
 roles.resetModels([{ id: 2, name: 'editor' }]); // validates as model/plain object</code></pre>
+    </section>
 
-    <h2 id="best-practices">12. Best Practices</h2>
+    <section class="section-card" id="best-practices">
+    <h2 id="best-practices">14. Best Practices</h2>
     <div class="card p-3 mb-3">
       <h5>1. Always define defaults for relation keys</h5>
       <p class="mb-0">Use <code>null</code> for <code>hasOne</code> and <code>[]</code> for <code>hasMany</code>. This keeps state shape predictable.</p>
@@ -660,8 +764,10 @@ roles.resetModels([{ id: 2, name: 'editor' }]); // validates as model/plain obje
 }</code></pre>
 
     <div class="card p-3 mb-3"><h5>6. Prefer collection helpers over raw array mutation</h5><p class="mb-0">Use <code>push()</code>, <code>updateById()</code>, <code>removeWhere()</code>, etc. so cache invalidation and serialization happen correctly.</p></div>
+    </section>
 
-    <h2 id="reference">13. Full Reference Cheat Sheet</h2>
+    <section class="section-card" id="reference">
+    <h2 id="reference">15. Full Reference Cheat Sheet</h2>
 
     <h3>Model</h3>
     <pre><code>// Create
@@ -763,8 +869,10 @@ users.reverse()
 // Reactivity / iteration
 users.watch(callback)
 for (const user of users) {}</code></pre>
+    </section>
 
-    <h2>14. Recommended Improvements for Future Version</h2>
+    <section class="section-card" id="future-improvements">
+    <h2>16. Recommended Improvements for Future Version</h2>
     <p>The current implementation is solid, but these additions would make it even more developer-friendly:</p>
     <ul>
       <li><code>Collection.at(-1)</code> could behave like <code>Array.prototype.at(-1)</code> and return the last item.</li>
@@ -778,9 +886,8 @@ for (const user of users) {}</code></pre>
     <footer class="mt-5 text-muted small">
       Generated from the provided <code>Model.js</code> and <code>Collection.js</code> source files.
     </footer>
-  </main>
-</div>
+    </section>
   </div>
-  <script src="../readme-assets/router-doc-theme.js"></script>
+  <script src="../framework/readme/assets/theme.js"></script>
 </body>
 </html>
