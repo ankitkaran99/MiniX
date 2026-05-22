@@ -4,6 +4,7 @@
   "description": "IntelliSense, snippets, diagnostics, navigation, and generators for Mini-X projects.",
   "version": "0.1.0",
   "publisher": "mini-x",
+  "icon": "assets/icon.png",
   "license": "GPL-3.0-or-later",
   "repository": {
     "type": "git",
@@ -17,20 +18,6 @@
     "Programming Languages",
     "Snippets",
     "Linters"
-  ],
-  "activationEvents": [
-    "onLanguage:javascript",
-    "onLanguage:javascriptreact",
-    "onLanguage:typescript",
-    "onLanguage:typescriptreact",
-    "onLanguage:html",
-    "onLanguage:php",
-    "onCommand:minix.scanWorkspace",
-    "onCommand:minix.showProjectIndex",
-    "onCommand:minix.createComponent",
-    "onCommand:minix.createStore",
-    "onCommand:minix.createRouter",
-    "onCommand:minix.validateCurrentFile"
   ],
   "main": "./out/extension.js",
   "contributes": {

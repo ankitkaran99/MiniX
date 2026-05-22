@@ -49,8 +49,7 @@ function collectScriptDiagnostics(text: string, diagnostics: vscode.Diagnostic[]
   addMatches(text, /\bMiniX\.defineComponent\s*\(/g, diagnostics, MiniXDiagnosticCode.DefineComponent, 'MiniX components are class-based. Do not use MiniX.defineComponent.', vscode.DiagnosticSeverity.Warning);
   addMatches(text, /\bMiniX\.component\s*\(/g, diagnostics, MiniXDiagnosticCode.GlobalComponent, 'Mini-X components should be registered locally with registerComponents(), not MiniX.component().', vscode.DiagnosticSeverity.Warning);
 
-  const createAppPattern = /MiniX\.createApp\s*\([^)]*\)(?![\s\S]{0,160}\.mount\s*\()/g;
-  addMatches(text, createAppPattern, diagnostics, MiniXDiagnosticCode.MissingMount, "MiniX.createApp(...) should usually be chained to .mount('#app').", vscode.DiagnosticSeverity.Warning);
+  collectMissingMountDiagnostics(text, diagnostics);
 
   if (/MiniX\.\$bus\./.test(text) && !/(MiniX\.\$bus\s*=|\bbus\s*:|eventBus|\$bus\s*:)/.test(text)) {
     addMatches(text, /MiniX\.\$bus\.(?:emit|on|off)\b/g, diagnostics, MiniXDiagnosticCode.UndefinedBus, 'MiniX.$bus usage detected. Ensure the event bus plugin or runtime support is initialized before use.', vscode.DiagnosticSeverity.Information);
@@ -127,6 +126,138 @@ function addMatches(text: string, pattern: RegExp, diagnostics: vscode.Diagnosti
   while ((match = pattern.exec(text))) {
     diagnostics.push(makeDiagnostic(text, match.index, match.index + match[0].length, code, message, severity));
   }
+}
+
+function collectMissingMountDiagnostics(text: string, diagnostics: vscode.Diagnostic[]): void {
+  const pattern = /\bMiniX\.createApp\s*\(/g;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(text))) {
+    const openParen = match.index + match[0].lastIndexOf('(');
+    const createAppEnd = findMatchingParen(text, openParen);
+    if (createAppEnd < 0) {
+      continue;
+    }
+
+    const chain = readCallChain(text, createAppEnd + 1);
+    if (!chain.hasMount) {
+      diagnostics.push(makeDiagnostic(
+        text,
+        match.index,
+        chain.end,
+        MiniXDiagnosticCode.MissingMount,
+        "MiniX.createApp(...) should usually be chained to .mount('#app').",
+        vscode.DiagnosticSeverity.Warning
+      ));
+    }
+    pattern.lastIndex = createAppEnd + 1;
+  }
+}
+
+function readCallChain(text: string, start: number): { end: number; hasMount: boolean } {
+  let index = start;
+  let end = start;
+  let hasMount = false;
+
+  while (index < text.length) {
+    index = skipWhitespace(text, index);
+    if (text[index] !== '.') {
+      break;
+    }
+
+    const memberStart = index + 1;
+    const memberMatch = /^[A-Za-z_$][\w$]*/.exec(text.slice(memberStart));
+    if (!memberMatch) {
+      break;
+    }
+
+    const memberName = memberMatch[0];
+    index = skipWhitespace(text, memberStart + memberName.length);
+    if (text[index] !== '(') {
+      end = index;
+      continue;
+    }
+
+    const closeParen = findMatchingParen(text, index);
+    if (closeParen < 0) {
+      end = text.length;
+      break;
+    }
+
+    if (memberName === 'mount') {
+      hasMount = true;
+    }
+    index = closeParen + 1;
+    end = index;
+  }
+
+  return { end, hasMount };
+}
+
+function skipWhitespace(text: string, start: number): number {
+  let index = start;
+  while (index < text.length && /\s/.test(text[index])) {
+    index++;
+  }
+  return index;
+}
+
+function findMatchingParen(text: string, openParen: number): number {
+  let depth = 0;
+  let quote: string | undefined;
+  let inLineComment = false;
+  let inBlockComment = false;
+
+  for (let index = openParen; index < text.length; index++) {
+    const char = text[index];
+    const next = text[index + 1];
+
+    if (inLineComment) {
+      if (char === '\n' || char === '\r') {
+        inLineComment = false;
+      }
+      continue;
+    }
+    if (inBlockComment) {
+      if (char === '*' && next === '/') {
+        inBlockComment = false;
+        index++;
+      }
+      continue;
+    }
+    if (quote) {
+      if (char === '\\') {
+        index++;
+      } else if (char === quote) {
+        quote = undefined;
+      }
+      continue;
+    }
+
+    if (char === '/' && next === '/') {
+      inLineComment = true;
+      index++;
+      continue;
+    }
+    if (char === '/' && next === '*') {
+      inBlockComment = true;
+      index++;
+      continue;
+    }
+    if (char === '"' || char === '\'' || char === '`') {
+      quote = char;
+      continue;
+    }
+    if (char === '(') {
+      depth++;
+    } else if (char === ')') {
+      depth--;
+      if (depth === 0) {
+        return index;
+      }
+    }
+  }
+
+  return -1;
 }
 
 function makeDiagnostic(text: string, start: number, end: number, code: MiniXDiagnosticCode, message: string, severity: vscode.DiagnosticSeverity): vscode.Diagnostic {
