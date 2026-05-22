@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>MiniX i18n Plugin Â· i18next integration</title>
-  <link rel="stylesheet" href="assets/theme.css">
+  <link rel="stylesheet" href="../assets/theme.css">
 </head>
 <body data-doc-product="Mini-X i18n" data-doc-summary="i18next integration for Mini-X with x-i18n, $t(), namespace loading, and language switching patterns." data-doc-badges="i18next|x-i18n|Locale loading|Language switch" data-doc-highlights="Directive and template translation APIs|Ready-aware component integration|JSON locale loading through fetch backend" data-doc-metrics="Locales::JSON resources|Directive::x-i18n|Templates::$t() helper|Switching::changeLanguage" data-doc-sidebar="Use this page to load locales, install the plugin, translate DOM or template expressions, and handle language switching cleanly.">
   <div data-doc-root class="doc-source">
@@ -49,8 +49,8 @@
       <section id="install">
         <h2>Install</h2>
         <p>Load MiniX first, then the i18n plugin. In browser demos, import i18next and i18next-fetch-backend from a module CDN or your own bundle.</p>
-        <pre><code class="language-html">&lt;script src="../mini-x.js"&gt;&lt;/script&gt;
-&lt;script src="../plugin-i18n.js"&gt;&lt;/script&gt;
+        <pre><code class="language-html">&lt;script src="../../src/MiniX.js"&gt;&lt;/script&gt;
+&lt;script src="../../src/mini-x-plugins/plugin-i18n.js"&gt;&lt;/script&gt;
 
 &lt;script type="module"&gt;
   import i18next from "https://cdn.skypack.dev/i18next";
@@ -63,12 +63,13 @@
         <h2>Locale Files</h2>
         <p>The recommended backend path is:</p>
         <pre><code class="language-javascript">backend: {
-  loadPath: "/demos/locales/{{lng}}/{{ns}}.json"
+  loadPath: "../locales/{{lng}}/{{ns}}.json"
 }</code></pre>
         <p>For a demo-locales layout:</p>
-        <pre><code>framework/
+        <pre><code>website/
   demos/
-    demo-i18n.html
+    mini-x-plugins/
+      demo-i18n.html
     locales/
       en/
         translation.json
@@ -233,11 +234,11 @@
         </ul>
         <h3>Browser blocks locale loading</h3>
         <p><code>i18next-fetch-backend</code> uses <code>fetch()</code>. Browsers block fetches from <code>file://</code>. Serve the project over HTTP.</p>
-        <pre><code>cd framework
+        <pre><code>cd website
 python -m http.server 8000
 
 # open:
-http://localhost:8000/demos/demo-i18n.html</code></pre>
+http://localhost:8000/demos/mini-x-plugins/demo-i18n.html</code></pre>
         <h3>Favicon 404</h3>
         <p>A missing <code>/favicon.ico</code> request is harmless. Add a favicon file if you want to silence the browser request.</p>
         <h3>i18next warning: namespace was not yet loaded</h3>
@@ -245,7 +246,7 @@ http://localhost:8000/demos/demo-i18n.html</code></pre>
       </section>
 
       <footer>
-        MiniX i18n Plugin Â· i18next integration Â· See <code>demos/demo-i18n.html</code> for a working example.
+        MiniX i18n Plugin Â· i18next integration Â· See <code>demos/mini-x-plugins/demo-i18n.html</code> for a working example.
       </footer>
     </main>
   </div>
@@ -260,6 +261,6 @@ http://localhost:8000/demos/demo-i18n.html</code></pre>
     });
   </script>
   </div>
-  <script src="assets/theme.js"></script>
+  <script src="../assets/theme.js"></script>
 </body>
 </html>

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Model & Collection Deep Documentation</title>
-  <link rel="stylesheet" href="../framework/readme/assets/theme.css">
+  <link rel="stylesheet" href="assets/theme.css">
 </head>
 <body data-doc-product="Model & Collection" data-doc-summary="Reactive data-layer documentation for Model and Collection, including relations, binding to state/store data, serialization, and collection helpers." data-doc-badges="Model layer|Collections|Relations|Reactive binding" data-doc-highlights="Object-shaped models and array-shaped collections|hasOne and hasMany relation wrappers|Binding models directly onto reactive state and stores" data-doc-metrics="Models::Object wrappers|Collections::Array helpers|Relations::hasOne / hasMany|Binding::Store and state" data-doc-sidebar="This page explains the data-layer primitives, relation behavior, serialization, state binding, and the collection query and mutation API.">
   <div data-doc-root class="doc-source">
@@ -35,9 +35,9 @@ state.batch(callback)       // optional, used for efficient bulk writes</code></
 
     <h3>File loading order</h3>
     <p>For browser usage, load <code>Collection.js</code> before models that use <code>hasMany()</code>, or expose it as <code>window.Collection</code>.</p>
-    <pre><code>&lt;script src="MiniX_State.js"&gt;&lt;/script&gt;
-&lt;script src="Collection.js"&gt;&lt;/script&gt;
-&lt;script src="Model.js"&gt;&lt;/script&gt;</code></pre>
+    <pre><code>&lt;script src="../src/MiniX.js"&gt;&lt;/script&gt;
+&lt;script src="../src/Collection.js"&gt;&lt;/script&gt;
+&lt;script src="../src/Model.js"&gt;&lt;/script&gt;</code></pre>
 
     <p>For CommonJS/Node-style usage:</p>
     <pre><code>const Model = require('./Model.js');
@@ -888,6 +888,6 @@ for (const user of users) {}</code></pre>
     </footer>
     </section>
   </div>
-  <script src="../framework/readme/assets/theme.js"></script>
+  <script src="assets/theme.js"></script>
 </body>
 </html>

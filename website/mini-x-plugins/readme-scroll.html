@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Mini-X Scroll - documentation</title>
-  <link rel="stylesheet" href="assets/theme.css">
+  <link rel="stylesheet" href="../assets/theme.css">
 </head>
 <body data-doc-product="Mini-X Scroll" data-doc-summary="Infinite scroll and reverse scroll for Mini-X with edge-triggered loading and scroll position preservation." data-doc-badges="Infinite scroll|Reverse scroll|Scroll preservation|Async hooks" data-doc-highlights="Bottom feeds and top chat-style lists|Threshold-triggered loading without sentinel nodes|Stable scroll position while new items arrive" data-doc-metrics="Directions::Top and bottom|Loading::Async aware|Edges::Threshold triggers|Scroll::Preserved offsets" data-doc-sidebar="Everything here focuses on using x-scroll safely in feed and chat interfaces, especially around async loading and scroll stability.">
   <div data-doc-root class="doc-source">
@@ -35,8 +35,8 @@ edge-triggered loading, and support for both normal and reverse (chat-style) lis
 <h2>📦 Installation</h2>
 
 <pre>
-&lt;script src="mini-x.js"&gt;&lt;/script&gt;
-&lt;script src="plugin-scroll.js"&gt;&lt;/script&gt;
+&lt;script src="../../src/MiniX.js"&gt;&lt;/script&gt;
+&lt;script src="../../src/mini-x-plugins/plugin-scroll.js"&gt;&lt;/script&gt;
 
 &lt;script&gt;
 MiniX.createApp(App)
@@ -240,6 +240,6 @@ loadMore(el, ctx) {
 <li>Stable, predictable behavior</li>
 </ul>
   </div>
-  <script src="assets/theme.js"></script>
+  <script src="../assets/theme.js"></script>
 </body>
 </html>

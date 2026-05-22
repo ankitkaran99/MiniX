@@ -233,8 +233,8 @@
 <body>
   <div id="app"></div>
 
-  <script src="../mini-x.js"></script>
-  <script src="../plugin-i18n.js"></script>
+  <script src="../../../src/MiniX.js"></script>
+  <script src="../../../src/mini-x-plugins/plugin-i18n.js"></script>
   <script type="module">
     import i18next from "https://cdn.skypack.dev/i18next";
     import FetchBackend from "https://cdn.skypack.dev/i18next-fetch-backend";
@@ -375,7 +375,7 @@ this.$i18n.language
         ns: ["translation"],
         defaultNS: "translation",
         backend: {
-          loadPath: "/demos/locales/{{lng}}/{{ns}}.json"
+          loadPath: "../locales/{{lng}}/{{ns}}.json"
         },
         debug: true
       }))

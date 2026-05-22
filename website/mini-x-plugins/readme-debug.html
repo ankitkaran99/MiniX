@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>MiniX Debug Plugin â€” README</title>
-  <link rel="stylesheet" href="assets/theme.css">
+  <link rel="stylesheet" href="../assets/theme.css">
 </head>
 <body data-doc-product="Mini-X Debug" data-doc-summary="Developer tracing for Mini-X apps, components, directives, stores, and router activity, with an in-page panel and console bridge." data-doc-badges="Debugging|Lifecycle tracing|Store snapshots|Router hooks" data-doc-highlights="Trace component lifecycle and watchers|Inspect store and router snapshots|Use the MxDB bridge from browser DevTools" data-doc-metrics="Events::500 ring buffer|Bridge::window.MxDB|Panel::In-page inspector|Flags::Runtime toggles" data-doc-sidebar="This guide covers the debug plugin surface area: installation, event stream types, runtime flags, console bridge, and store/router instrumentation.">
   <div data-doc-root class="doc-source">
@@ -67,10 +67,10 @@
       <section class="card">
         <h2>Installation</h2>
         <p>Load MiniX first, then the debug plugin. If you also use the store or router plugins, load them before your app mounts.</p>
-<pre><code>&lt;script src="../mini-x.js"&gt;&lt;/script&gt;
-&lt;script src="../plugin-store.js"&gt;&lt;/script&gt;
-&lt;script src="../plugin-router.js"&gt;&lt;/script&gt;
-&lt;script src="../plugin-debug.js"&gt;&lt;/script&gt;</code></pre>
+<pre><code>&lt;script src="../../src/MiniX.js"&gt;&lt;/script&gt;
+&lt;script src="../../src/mini-x-plugins/plugin-store.js"&gt;&lt;/script&gt;
+&lt;script src="../../src/mini-x-plugins/plugin-router.js"&gt;&lt;/script&gt;
+&lt;script src="../../src/mini-x-plugins/plugin-debug.js"&gt;&lt;/script&gt;</code></pre>
 
         <h3>Basic app usage</h3>
 <pre><code>MiniX.createApp(App)
@@ -291,6 +291,6 @@ MiniX_Debug.getEvents(n)     // returns a copy of the recorded events</code></pr
     </div>
   </div>
   </div>
-  <script src="assets/theme.js"></script>
+  <script src="../assets/theme.js"></script>
 </body>
 </html>

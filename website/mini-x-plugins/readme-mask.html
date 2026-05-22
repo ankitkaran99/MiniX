@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>MiniX Mask Plugin · Complete documentation</title>
-  <link rel="stylesheet" href="assets/theme.css">
+  <link rel="stylesheet" href="../assets/theme.css">
 </head>
 <body data-doc-product="Mini-X Mask" data-doc-summary="Reactive input masking for Mini-X with literal masks, free-form token masks, custom tokens, and caret-aware editing." data-doc-badges="Input masks|Literal patterns|Free masks|Custom tokens" data-doc-highlights="x-mask for fixed formatted inputs|x-mask-free for token-constrained input|Engine-backed caret and paste behavior" data-doc-metrics="Masks::Literal and free|Tokens::Customizable|Caret::Preserved edits|Input::Reactive formatting" data-doc-sidebar="This guide explains the two masking directives, dynamic mask definitions, custom token registration, and engine integration details.">
   <div data-doc-root class="doc-source">
@@ -42,9 +42,9 @@
     <div class="section">
       <div class="section-title">📦 Installation</div>
       <p>Include the required scripts in your HTML (order matters):</p>
-      <pre><code>&lt;script src="./mini-x.js"&gt;&lt;/script&gt;
-&lt;script src="./input-mask-engine.js"&gt;&lt;/script&gt;
-&lt;script src="./plugin-mask.js"&gt;&lt;/script&gt;</code></pre>
+      <pre><code>&lt;script src="../../src/MiniX.js"&gt;&lt;/script&gt;
+&lt;script src="../../src/InputMaskEngine.js"&gt;&lt;/script&gt;
+&lt;script src="../../src/mini-x-plugins/plugin-mask.js"&gt;&lt;/script&gt;</code></pre>
       <p>Then register the plugin with your MiniX app:</p>
       <pre><code>MiniX.createApp(App)
   .use(MiniX_Mask_Plugin())       // basic usage
@@ -270,6 +270,6 @@ createApp(App)
   </div>
 </div>
   </div>
-  <script src="assets/theme.js"></script>
+  <script src="../assets/theme.js"></script>
 </body>
 </html>

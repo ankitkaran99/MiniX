@@ -263,10 +263,10 @@
     if (typeof globalObj.InputMaskEngine === 'function') return globalObj.InputMaskEngine;
     if (typeof module !== 'undefined' && module.exports) {
       try {
-        return require('./input-mask-engine');
+        return require('../InputMaskEngine');
       } catch (_) {}
       try {
-        return require('../input-mask-engine/input-mask-engine');
+        return require('../InputMaskEngine.js');
       } catch (_) {}
     }
     return null;

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>InputMaskEngine + MaskEngineDOM Deep Documentation</title>
-  <link rel="stylesheet" href="../framework/readme/assets/theme.css">
+  <link rel="stylesheet" href="assets/theme.css">
 </head>
 <body data-doc-product="Input Mask Engine" data-doc-summary="Deep documentation for the InputMaskEngine core and its vanilla DOM adapter, including tokens, caret handling, paste rules, and integration patterns." data-doc-badges="Engine core|Vanilla adapter|Caret aware|Custom tokens" data-doc-highlights="DOM-free masking engine with compile/apply APIs|Browser adapter for data-mask and data-mask-free|Fixed masks, free masks, and custom token flows" data-doc-metrics="Engine::Pure logic|Adapter::DOM binding|Tokens::Custom rules|Caret::Precise edits" data-doc-sidebar="This document covers the masking engine itself, the DOM adapter behavior, token semantics, edge cases, and testing guidance.">
   <div data-doc-root class="doc-source">
@@ -34,8 +34,8 @@
 
 <section class="card" id="quick-start"><h2>2. Quick start</h2>
 <h3>Browser usage</h3>
-<pre><code>&lt;script src="./input-mask-engine.js"&gt;&lt;/script&gt;
-&lt;script src="./vanilla-adapter.js"&gt;&lt;/script&gt;
+<pre><code>&lt;script src="../src/InputMaskEngine.js"&gt;&lt;/script&gt;
+&lt;script src="../src/InputMaskEngineAdapter.js"&gt;&lt;/script&gt;
 
 &lt;input data-mask="(999) 999 - 9999" placeholder="Phone"&gt;
 &lt;input data-mask="AA-9999" placeholder="Code"&gt;
@@ -244,6 +244,6 @@ assert.equal(r.value, '(987) 654 - 3210');</code></pre>
 </main>
 </div>
   </div>
-  <script src="../framework/readme/assets/theme.js"></script>
+  <script src="assets/theme.js"></script>
 </body>
 </html>

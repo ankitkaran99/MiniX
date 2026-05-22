@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>MiniX DataTable Plugin - README</title>
-  <link rel="stylesheet" href="assets/theme.css">
+  <link rel="stylesheet" href="../assets/theme.css">
 </head>
 <body data-doc-product="Mini-X DataTable" data-doc-summary="Bridge DataTables with Mini-X cell components while letting DataTables keep control of the table DOM." data-doc-badges="DataTables|Cell mounts|Lifecycle bridge|x-ignore" data-doc-highlights="Mount Mini-X components inside table cells|Clean redraw and destroy handling|Safe integration with x-ignore table regions" data-doc-metrics="Bridge::Lifecycle sync|Cells::Component renderers|Redraw::Cleanup aware|Tables::DOM ownership" data-doc-sidebar="Everything here focuses on mounting Mini-X components into DataTables cells, refreshing them across redraws, and avoiding DOM ownership conflicts.">
   <div data-doc-root class="doc-source">
@@ -56,8 +56,8 @@
       </ul>
       <pre>&lt;script src="https://code.jquery.com/jquery-3.7.1.min.js"&gt;&lt;/script&gt;
 &lt;script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"&gt;&lt;/script&gt;
-&lt;script src="./mini-x.js"&gt;&lt;/script&gt;
-&lt;script src="./plugin-datatable.js"&gt;&lt;/script&gt;</pre>
+&lt;script src="../../src/MiniX.js"&gt;&lt;/script&gt;
+&lt;script src="../../src/mini-x-plugins/plugin-datatable.js"&gt;&lt;/script&gt;</pre>
     </section>
 
     <section class="card">
@@ -463,6 +463,6 @@ app.$dataTable.attach(dt);
     </div>
   </div>
   </div>
-  <script src="assets/theme.js"></script>
+  <script src="../assets/theme.js"></script>
 </body>
 </html>

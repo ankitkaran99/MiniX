@@ -687,10 +687,10 @@
     </div>
   </div>
 
-  <script src="../mini-x.js"></script>
-  <script src="../plugin-store.js"></script>
-  <script src="../plugin-router.js"></script>
-  <script src="../plugin-debug.js"></script>
+  <script src="../../../src/MiniX.js"></script>
+  <script src="../../../src/mini-x-plugins/plugin-store.js"></script>
+  <script src="../../../src/mini-x-plugins/plugin-router.js"></script>
+  <script src="../../../src/mini-x-plugins/plugin-debug.js"></script>
   <script>
     const debugStore = MiniXStore.define('debug', {
       state: () => ({
@@ -828,7 +828,7 @@
           savedUserId: null,
           user: { name: 'Ada Lovelace' },
           todos: [
-            { id: 1, text: 'Load ../mini-x.js', done: true },
+            { id: 1, text: 'Load ../../../src/MiniX.js', done: true },
             { id: 2, text: 'Install MiniX_Debug.plugin()', done: true },
             { id: 3, text: 'Trigger real plugin events', done: false }
           ],

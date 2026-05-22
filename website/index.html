@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>MiniX Documentation Index</title>
+  <link rel="stylesheet" href="assets/theme.css">
+</head>
+<body data-doc-product="Mini-X Docs" data-doc-summary="Documentation index for the Mini-X runtime, official plugins, and standalone helper modules." data-doc-badges="Docs index|Runtime|Plugins|Utilities" data-doc-highlights="Core framework and runtime docs|Official plugin documentation|Standalone helpers for validation, models, and masks" data-doc-metrics="11::HTML guides|8::Official plugins|4::Runtime modules|1::Reading path" data-doc-sidebar="Start here for the full Mini-X documentation map, plugin overview, repository model, and recommended reading order.">
+  <div data-doc-root class="doc-source">
+<h1 id="minix">MiniX</h1>
+<p>MiniX is a small reactive frontend platform built around one runtime instead of a pile of disconnected utilities. The repository contains:</p>
+<ul>
+<li><code>src/MiniX.js</code>: the core framework runtime, including deep reactivity, effects, compiler, component system, layouts, plugin hooks, and request client.</li>
+<li><code>src/mini-x-plugins/plugin-*.js</code>: official plugins for global stores, routing, forms, masking, i18n, scrolling, DataTables integration, and debug tooling.</li>
+<li><code>src/Inspect.js</code>: a standalone validation engine used by the form plugin but usable independently.</li>
+<li><code>src/Model.js</code> and <code>src/Collection.js</code>: helpers for reactive domain objects and list handling.</li>
+<li><code>src/InputMaskEngine.js</code> and <code>src/InputMaskEngineAdapter.js</code>: the pure masking engine used by the MiniX mask plugin and the vanilla adapter.</li>
+</ul>
+<h2 id="what-minix-actually-is">What MiniX actually is</h2>
+<p>MiniX is not just a templating helper. The runtime combines:</p>
+<ul>
+<li><code>MiniX_State</code>: deep proxy-based reactive state with watchers, batching, raw escapes, and optional dev history.</li>
+<li><code>MiniX_Effect</code> and <code>MiniX_Signal</code>: dependency tracking and batched invalidation.</li>
+<li><code>MiniX_Compiler</code>: directive parsing, expression evaluation, structural DOM orchestration, and cleanup management.</li>
+<li><code>MiniX_Component</code>: class-based components, props, lifecycle hooks, nested components, layouts, slots, sections, and partials.</li>
+<li><code>MiniX_Request</code>: a built-in request helper for lightweight network workflows.</li>
+</ul>
+<p>The plugins in <code>src/mini-x-plugins/</code> are intentionally built on top of this same runtime surface. They do not create parallel state or rendering systems.</p>
+<h2 id="documentation-map">Documentation map</h2>
+<ul>
+<li>Core framework: <a href="readme.html">readme.html</a></li>
+<li>Store plugin: <a href="mini-x-plugins/readme-store.html">mini-x-plugins/readme-store.html</a></li>
+<li>Router plugin: <a href="mini-x-plugins/readme-router.html">mini-x-plugins/readme-router.html</a></li>
+<li>Form plugins: <a href="mini-x-plugins/readme-form.html">mini-x-plugins/readme-form.html</a></li>
+<li>Mask plugin: <a href="mini-x-plugins/readme-mask.html">mini-x-plugins/readme-mask.html</a></li>
+<li>i18n plugin: <a href="mini-x-plugins/readme-i18n.html">mini-x-plugins/readme-i18n.html</a></li>
+<li>Scroll plugin: <a href="mini-x-plugins/readme-scroll.html">mini-x-plugins/readme-scroll.html</a></li>
+<li>DataTable plugin: <a href="mini-x-plugins/readme-datatable.html">mini-x-plugins/readme-datatable.html</a></li>
+<li>Debug plugin: <a href="mini-x-plugins/readme-debug.html">mini-x-plugins/readme-debug.html</a></li>
+<li>Inspect.js: <a href="readme-inspect.html">readme-inspect.html</a></li>
+<li>Model and Collection: <a href="readme-model.html">readme-model.html</a></li>
+<li>InputMaskEngine: <a href="readme-ime.html">readme-ime.html</a></li>
+</ul>
+<h2 id="plugin-summary">Plugin summary</h2>
+<table>
+<thead>
+<tr>
+<th>Plugin</th>
+<th>Responsibility</th>
+<th>Key integration surface</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Store</td>
+<td>Global reactive stores with actions and getters</td>
+<td><code>MiniXStore.define()</code>, <code>MiniXStore.plugin()</code>, <code>$store()</code></td>
+</tr>
+<tr>
+<td>Router</td>
+<td>URL-driven component rendering and navigation</td>
+<td><code>createRouter()</code>, <code>x-link</code>, <code>x-route</code>, <code>x-router-view</code></td>
+</tr>
+<tr>
+<td>Form</td>
+<td>Validation and AJAX submission</td>
+<td><code>x-validate</code>, <code>x-ajax</code>, Inspect.js</td>
+</tr>
+<tr>
+<td>Mask</td>
+<td>Reactive input masking</td>
+<td><code>x-mask</code>, <code>x-mask-free</code>, InputMaskEngine</td>
+</tr>
+<tr>
+<td>i18n</td>
+<td>i18next integration and translation directives</td>
+<td><code>MiniX_i18n()</code>, <code>x-i18n</code></td>
+</tr>
+<tr>
+<td>Scroll</td>
+<td>Boundary-triggered async loading</td>
+<td><code>x-scroll</code></td>
+</tr>
+<tr>
+<td>DataTable</td>
+<td>DataTables cell-to-component bridge</td>
+<td><code>app.$dtCell()</code>, <code>app.$dataTable.attach()</code></td>
+</tr>
+<tr>
+<td>Debug</td>
+<td>Runtime introspection and event logging</td>
+<td><code>MiniX_Debug.plugin()</code>, <code>window.MxDB</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="repository-usage-model">Repository usage model</h2>
+<p>The framework is browser-first and demo-friendly. Most modules expose globals in browser environments and CommonJS exports where useful. That means the repository works well for direct script-tag demos, local HTML prototypes, and small app shells without forcing a bundler.</p>
+<p>The tradeoff is that documentation has to be explicit about ownership boundaries:</p>
+<ul>
+<li>MiniX owns reactive component rendering.</li>
+<li>Plugins extend MiniX by registering directives or app APIs.</li>
+<li>Third-party libraries should be isolated through integration plugins or <code>x-ignore</code>.</li>
+<li>Standalone utilities like Inspect and InputMaskEngine stay usable outside MiniX.</li>
+</ul>
+<h2 id="reading-order">Reading order</h2>
+<p>If you are new to the repository, the useful order is:</p>
+<ol>
+<li>Read the core framework docs to understand the runtime model.</li>
+<li>Read the store and router docs if you need app-level state or multi-page navigation.</li>
+<li>Read the form, mask, and i18n docs for user-input flows.</li>
+<li>Read Inspect, Model/Collection, and InputMaskEngine if you need the underlying standalone modules directly.</li>
+</ol>
+<h2 id="quick-usage-snapshot">Quick usage snapshot</h2>
+<pre><code class="lang-html"><span class="xml"><span class="hljs-tag">&lt;<span class="hljs-name">div</span> <span class="hljs-attr">id</span>=<span class="hljs-string">"app"</span>&gt;</span><span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span>
+<span class="hljs-tag">&lt;<span class="hljs-name">script</span> <span class="hljs-attr">src</span>=<span class="hljs-string">"./src/MiniX.js"</span>&gt;</span><span class="undefined"></span><span class="hljs-tag">&lt;/<span class="hljs-name">script</span>&gt;</span>
+<span class="hljs-tag">&lt;<span class="hljs-name">script</span> <span class="hljs-attr">src</span>=<span class="hljs-string">"./src/mini-x-plugins/plugin-store.js"</span>&gt;</span><span class="undefined"></span><span class="hljs-tag">&lt;/<span class="hljs-name">script</span>&gt;</span>
+<span class="hljs-tag">&lt;<span class="hljs-name">script</span>&gt;</span><span class="javascript">
+  <span class="hljs-keyword">const</span> counterStore = MiniXStore.define(<span class="hljs-string">'counter'</span>, {
+    <span class="hljs-attr">state</span>: <span class="hljs-function"><span class="hljs-params">()</span> =&gt;</span> ({ <span class="hljs-attr">count</span>: <span class="hljs-number">0</span> }),
+    <span class="hljs-attr">actions</span>: {
+      increment() { <span class="hljs-keyword">this</span>.count += <span class="hljs-number">1</span>; }
+    }
+  });
+
+  <span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">App</span> </span>{
+    stores() {
+      <span class="hljs-keyword">return</span> { <span class="hljs-attr">counter</span>: counterStore };
+    }
+
+    view() {
+      <span class="hljs-keyword">return</span> <span class="hljs-string">`
+        &lt;section&gt;
+          &lt;h1&gt;</span></span></span><span class="hljs-template-variable">{{ $store('counter').count }}</span><span class="xml"><span class="handlebars"><span class="xml"><span class="hljs-tag">&lt;/<span class="hljs-name">h1</span>&gt;</span>
+          <span class="hljs-tag">&lt;<span class="hljs-name">button</span> @<span class="hljs-attr">click</span>=<span class="hljs-string">"$store('counter').increment()"</span>&gt;</span>Increment<span class="hljs-tag">&lt;/<span class="hljs-name">button</span>&gt;</span>
+        <span class="hljs-tag">&lt;/<span class="hljs-name">section</span>&gt;</span>
+      `;
+    }
+  }
+
+  MiniX.createApp(App)
+    .use(MiniXStore.plugin())
+    .mount('#app');
+</span></span><span class="hljs-tag">&lt;/<span class="hljs-name">script</span>&gt;</span></span>
+</code></pre>
+<p>That example is intentionally small. The deeper HTML docs now cover the richer flows: nested components, routing, validation, AJAX forms, masking, i18n, DataTables integration, and debug tooling.</p>
+  </div>
+  <script src="assets/theme.js"></script>
+</body>
+</html>

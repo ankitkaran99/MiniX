@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Mini-X Router - documentation</title>
-  <link rel="stylesheet" href="assets/theme.css">
+  <link rel="stylesheet" href="../assets/theme.css">
 </head>
 <body data-doc-product="Mini-X Router" data-doc-summary="Lightweight, feature-rich routing for Mini-X reactive apps with nested layouts, named views, lazy loading, keep-alive, and navigation guards." data-doc-badges="SPA navigation|Nested layouts|Lazy loading|Reactive route state" data-doc-highlights="Deep route trees with named views and keep-alive|Bundler-free lazy loading with retries and cache control|Global and route-level guards for redirects and protected flows" data-doc-metrics="~8kb::gzipped footprint|HTML5 + Hash::history support|Named views::multi-outlet layouts|Reactive route::state in templates" data-doc-sidebar="Everything here covers wiring the router, navigating by path or name, and scaling into lazy layouts, reactive route state, and guarded transitions.">
   <div class="page-shell">
@@ -103,8 +103,8 @@
           <div class="section-label">Bootstrap</div>
           <h2>Installation</h2>
           <p>Include <code>mini-x.js</code> and <code>plugin-router.js</code> in your page, then create and install a router instance into your app.</p>
-          <pre><code>&lt;script src="./mini-x.js"&gt;&lt;/script&gt;
-&lt;script src="./plugin-router.js"&gt;&lt;/script&gt;</code></pre>
+          <pre><code>&lt;script src="../../src/MiniX.js"&gt;&lt;/script&gt;
+&lt;script src="../../src/mini-x-plugins/plugin-router.js"&gt;&lt;/script&gt;</code></pre>
           <p>The router integrates at app startup. There is no extra adapter layer between core Mini-X and the plugin.</p>
         </section>
 
@@ -451,6 +451,6 @@ MiniX_Component.register('Customer', Customer);</code></pre>
       </main>
     </div>
   </div>
-  <script src="assets/theme.js"></script>
+  <script src="../assets/theme.js"></script>
 </body>
 </html>

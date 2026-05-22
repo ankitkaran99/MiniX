@@ -2,11 +2,11 @@
 
 MiniX is a small reactive frontend platform built around one runtime instead of a pile of disconnected utilities. The repository contains:
 
-- `framework/mini-x.js`: the core framework runtime, including deep reactivity, effects, compiler, component system, layouts, plugin hooks, and request client.
-- `framework/plugin-*.js`: official plugins for global stores, routing, forms, masking, i18n, scrolling, DataTables integration, and debug tooling.
-- `inspect/`: a standalone validation engine used by the form plugin but usable independently.
-- `model/`: `Model` and `Collection` helpers for reactive domain objects and list handling.
-- `input-mask-engine/`: the pure masking engine used by the MiniX mask plugin and the vanilla adapter.
+- `src/MiniX.js`: the core framework runtime, including deep reactivity, effects, compiler, component system, layouts, plugin hooks, and request client.
+- `src/mini-x-plugins/plugin-*.js`: official plugins for global stores, routing, forms, masking, i18n, scrolling, DataTables integration, and debug tooling.
+- `src/Inspect.js`: a standalone validation engine used by the form plugin but usable independently.
+- `src/Model.js` and `src/Collection.js`: helpers for reactive domain objects and list handling.
+- `src/InputMaskEngine.js` and `src/InputMaskEngineAdapter.js`: the pure masking engine used by the MiniX mask plugin and the vanilla adapter.
 
 ## What MiniX actually is
 
@@ -18,22 +18,22 @@ MiniX is not just a templating helper. The runtime combines:
 - `MiniX_Component`: class-based components, props, lifecycle hooks, nested components, layouts, slots, sections, and partials.
 - `MiniX_Request`: a built-in request helper for lightweight network workflows.
 
-The plugins in `framework/` are intentionally built on top of this same runtime surface. They do not create parallel state or rendering systems.
+The plugins in `src/mini-x-plugins/` are intentionally built on top of this same runtime surface. They do not create parallel state or rendering systems.
 
 ## Documentation map
 
-- Core framework: [framework/readme/readme.html](framework/readme/readme.html)
-- Store plugin: [framework/readme/readme-store.html](framework/readme/readme-store.html)
-- Router plugin: [framework/readme/readme-router.html](framework/readme/readme-router.html)
-- Form plugins: [framework/readme/readme-form.html](framework/readme/readme-form.html)
-- Mask plugin: [framework/readme/readme-mask.html](framework/readme/readme-mask.html)
-- i18n plugin: [framework/readme/readme-i18n.html](framework/readme/readme-i18n.html)
-- Scroll plugin: [framework/readme/readme-scroll.html](framework/readme/readme-scroll.html)
-- DataTable plugin: [framework/readme/readme-datatable.html](framework/readme/readme-datatable.html)
-- Debug plugin: [framework/readme/readme-debug.html](framework/readme/readme-debug.html)
-- Inspect.js: [inspect/readme.html](inspect/readme.html)
-- Model and Collection: [model/readme.html](model/readme.html)
-- InputMaskEngine: [input-mask-engine/input-mask-engine-docs.html](input-mask-engine/input-mask-engine-docs.html)
+- Core framework: [website/readme.html](website/readme.html)
+- Store plugin: [website/mini-x-plugins/readme-store.html](website/mini-x-plugins/readme-store.html)
+- Router plugin: [website/mini-x-plugins/readme-router.html](website/mini-x-plugins/readme-router.html)
+- Form plugins: [website/mini-x-plugins/readme-form.html](website/mini-x-plugins/readme-form.html)
+- Mask plugin: [website/mini-x-plugins/readme-mask.html](website/mini-x-plugins/readme-mask.html)
+- i18n plugin: [website/mini-x-plugins/readme-i18n.html](website/mini-x-plugins/readme-i18n.html)
+- Scroll plugin: [website/mini-x-plugins/readme-scroll.html](website/mini-x-plugins/readme-scroll.html)
+- DataTable plugin: [website/mini-x-plugins/readme-datatable.html](website/mini-x-plugins/readme-datatable.html)
+- Debug plugin: [website/mini-x-plugins/readme-debug.html](website/mini-x-plugins/readme-debug.html)
+- Inspect.js: [website/readme-inspect.html](website/readme-inspect.html)
+- Model and Collection: [website/readme-model.html](website/readme-model.html)
+- InputMaskEngine: [website/readme-ime.html](website/readme-ime.html)
 
 ## Plugin summary
 
@@ -72,8 +72,8 @@ If you are new to the repository, the useful order is:
 
 ```html
 <div id="app"></div>
-<script src="./framework/mini-x.js"></script>
-<script src="./framework/plugin-store.js"></script>
+<script src="./src/MiniX.js"></script>
+<script src="./src/mini-x-plugins/plugin-store.js"></script>
 <script>
   const counterStore = MiniXStore.define('counter', {
     state: () => ({ count: 0 }),
