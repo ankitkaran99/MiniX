@@ -118,24 +118,49 @@ MiniX.createApp(CounterApp).mount('#app');
 </section><section id="instance-api"><h2>6. Component instance API</h2>
 <p>MiniX injects useful <code>$</code> APIs into every component.</p>
 <div class="table-wrap"><table><thead><tr><th>API</th><th>Description</th></tr></thead><tbody>
-<tr><td><code>$component</code></td><td>Internal component wrapper.</td></tr><tr><td><code>$refs</code></td><td>Refs collected by <code>x-ref</code>.</td></tr><tr><td><code>$parent</code>, <code>$root</code>, <code>$children</code></td><td>Component hierarchy helpers.</td></tr><tr><td><code>props</code>, <code>$props</code></td><td>Readonly props proxy.</td></tr><tr><td><code>$el</code></td><td>Root element.</td></tr><tr><td><code>$bus</code></td><td>Shared event bus.</td></tr><tr><td><code>$provider</code>, <code>$provide</code>, <code>$inject</code></td><td>Dependency injection helpers.</td></tr><tr><td><code>$nextTick(callback)</code></td><td>Run callback in a microtask.</td></tr><tr><td><code>$listen</code>, <code>$timeout</code>, <code>$interval</code></td><td>Auto-cleaned listeners and timers.</td></tr><tr><td><code>$computed(name, getter)</code></td><td>Create computed value dynamically.</td></tr><tr><td><code>$watch(pathOrGetter, callback)</code></td><td>Watch path or getter function.</td></tr><tr><td><code>$effect(fn, options)</code></td><td>Create reactive effect. Returns disposer.</td></tr><tr><td><code>$emit(name, payload, meta)</code></td><td>Emit bus event with component metadata.</td></tr><tr><td><code>$mountChild(name, element, props)</code></td><td>Manually mount child.</td></tr><tr><td><code>$destroy()</code></td><td>Destroy component.</td></tr><tr><td><code>$refresh(meta)</code></td><td>Force rerender.</td></tr><tr><td><code>$setProps(props, options)</code></td><td>Update props.</td></tr><tr><td><code>$layout(newLayout)</code></td><td>Swap layout at runtime.</td></tr><tr><td><code>$view(newView)</code></td><td>Swap view at runtime.</td></tr><tr><td><code>$fetch(url, options)</code></td><td>Request helper.</td></tr><tr><td><code>$state</code></td><td>Compact state API: <code>get</code>, <code>set</code>, <code>batch</code>, <code>push</code>, <code>pop</code>, <code>map</code>, <code>filter</code>.</td></tr><tr><td><code>$get</code>, <code>$set</code>, <code>$patch</code>, <code>$merge</code>, <code>$toggle</code></td><td>Convenience state helpers.</td></tr><tr><td><code>$batch(fn)</code></td><td>Batch state writes.</td></tr><tr><td><code>$snapshot()</code></td><td>Clone current state.</td></tr><tr><td><code>$history()</code>, <code>$clearHistory()</code></td><td>Dev-mode state log helpers.</td></tr></tbody></table></div>
+<tr><td><code>$component</code></td><td>Internal component wrapper.</td></tr><tr><td><code>$refs</code></td><td>Refs collected by <code>x-ref</code>.</td></tr><tr><td><code>$parent</code>, <code>$root</code>, <code>$children</code></td><td>Component hierarchy helpers.</td></tr><tr><td><code>props</code>, <code>$props</code></td><td>Readonly props proxy.</td></tr><tr><td><code>$el</code></td><td>Root element.</td></tr><tr><td><code>$bus</code></td><td>Shared event bus.</td></tr><tr><td><code>$provider</code>, <code>$provide</code>, <code>$inject</code></td><td>Dependency injection helpers.</td></tr><tr><td><code>$nextTick(callback)</code></td><td>Run callback in a microtask.</td></tr><tr><td><code>$listen</code>, <code>$timeout</code>, <code>$interval</code></td><td>Auto-cleaned listeners and timers.</td></tr><tr><td><code>$computed(name, getter)</code></td><td>Create computed value dynamically.</td></tr><tr><td><code>$watch(pathOrGetter, callback)</code></td><td>Watch path or getter function.</td></tr><tr><td><code>$effect(fn, options)</code></td><td>Create reactive effect. Returns disposer.</td></tr><tr><td><code>$emit(name, payload, meta)</code></td><td>Emit bus event with component metadata.</td></tr><tr><td><code>$mountChild(name, element, props)</code></td><td>Manually mount child.</td></tr><tr><td><code>$destroy()</code></td><td>Destroy component.</td></tr><tr><td><code>$refresh(meta)</code></td><td>Force rerender.</td></tr><tr><td><code>$setProps(props, options)</code></td><td>Update props.</td></tr><tr><td><code>$layout(newLayout)</code></td><td>Swap layout at runtime.</td></tr><tr><td><code>$view(newView)</code></td><td>Swap view at runtime.</td></tr><tr><td><code>$fetch(url, options)</code></td><td>Request helper.</td></tr><tr><td><code>$state</code></td><td>Compact state API: <code>get</code>, <code>set</code>, <code>batch</code>, <code>increment</code>, <code>push</code>, <code>pop</code>, <code>map</code>, <code>filter</code>.</td></tr><tr><td><code>$get</code>, <code>$set</code>, <code>$patch</code>, <code>$merge</code>, <code>$toggle</code></td><td>Convenience state helpers.</td></tr><tr><td><code>$batch(fn)</code></td><td>Batch state writes.</td></tr><tr><td><code>$snapshot()</code></td><td>Clone current state.</td></tr><tr><td><code>$history()</code>, <code>$clearHistory()</code></td><td>Dev-mode state log helpers.</td></tr></tbody></table></div>
 </section><section id="state-api"><h2>7. Reactive state API</h2>
-<p><code>MiniX_State</code> can be used inside or outside components. It supports deep path reads/writes, array helpers, batching, snapshots, watchers, and dev history.</p>
-<pre><code>const state = new MiniX_State({ user: { name: 'Ankit' }, count: 0 });
+<p>Inside a MiniX component, return plain data from <code>data()</code> and use the injected state helpers. Top-level state keys are exposed as normal instance properties, while <code>$state</code>, <code>$get</code>, <code>$set</code>, <code>$patch</code>, <code>$merge</code>, <code>$toggle</code>, <code>$batch</code>, and <code>$watch</code> give components the usual MiniX state workflow without manually creating <code>MiniX_State</code>.</p>
+<pre><code>class ProfileEditor {
+  data() {
+    return {
+      user: { name: 'Ankit', email: '' },
+      saving: false,
+      changes: 0
+    };
+  }
 
-state.watch('user.name', (newVal, oldVal, path, meta) =&gt; {
-  console.log(oldVal, '=&gt;', newVal);
-});
+  mounted() {
+    this.$watch('user.name', (newVal, oldVal) =&gt; {
+      console.log(oldVal, '=&gt;', newVal);
+    });
+  }
 
-state.set('user.name', 'Karan');
-state.increment('count');
-state.batch(() =&gt; {
-  state.set('a', 1);
-  state.set('b', 2);
-});</code></pre>
+  updateName(name) {
+    this.$set('user.name', name);
+    this.$state.increment('changes');
+  }
+
+  saveDraft() {
+    this.$batch(() =&gt; {
+      this.$merge('user', { updatedAt: new Date().toISOString() });
+      this.saving = false;
+    });
+  }
+
+  view() {
+    return `
+      &lt;section&gt;
+        &lt;input x-model="user.name"&gt;
+        &lt;p&gt;Changes: &lt;span x-text="changes"&gt;&lt;/span&gt;&lt;/p&gt;
+        &lt;button @click="saveDraft()" x-disabled="saving"&gt;Save draft&lt;/button&gt;
+      &lt;/section&gt;
+    `;
+  }
+}</code></pre>
 <h3>Path syntax</h3><ul><li><code>user.name</code> for object keys.</li><li><code>items[0].title</code> for arrays.</li><li><code>settings["theme.mode"]</code> for quoted keys containing dots.</li></ul>
-<div class="table-wrap"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody><tr><td><code>raw()</code></td><td>Return reactive proxy.</td></tr><tr><td><code>snapshot()</code></td><td>Return cloned state.</td></tr><tr><td><code>get(path, fallback)</code></td><td>Read path.</td></tr><tr><td><code>has(path)</code></td><td>Check path existence.</td></tr><tr><td><code>set(path, value)</code></td><td>Set path and notify.</td></tr><tr><td><code>delete(path)</code></td><td>Delete key/index.</td></tr><tr><td><code>batch(fn)</code></td><td>Group writes.</td></tr><tr><td><code>toggle(path)</code></td><td>Toggle boolean value.</td></tr><tr><td><code>increment(path, amount)</code></td><td>Increase number.</td></tr><tr><td><code>decrement(path, amount)</code></td><td>Decrease number.</td></tr><tr><td><code>push(path, ...items)</code></td><td>Push into array.</td></tr><tr><td><code>pop(path)</code></td><td>Pop array item.</td></tr><tr><td><code>map(path, cb)</code></td><td>Replace array with mapped array.</td></tr><tr><td><code>filter(path, cb)</code></td><td>Replace array with filtered array.</td></tr><tr><td><code>merge(path, payload)</code></td><td>Shallow merge object.</td></tr><tr><td><code>patch(path, updater)</code></td><td>Patch with function or value.</td></tr><tr><td><code>reset(nextState)</code></td><td>Replace whole state.</td></tr><tr><td><code>watch(path, callback)</code></td><td>Watch state changes.</td></tr><tr><td><code>enableDev(label, options)</code></td><td>Enable dev logging and optional stack traces.</td></tr><tr><td><code>getHistory()</code></td><td>Read dev history.</td></tr><tr><td><code>clearHistory()</code></td><td>Clear dev history.</td></tr><tr><td><code>MiniX_State.markRaw(value)</code></td><td>Skip proxy wrapping for object.</td></tr></tbody></table></div>
-<div class="note warn"><strong>Tip:</strong> use <code>markRaw()</code> for DOM nodes, editor instances, chart objects, services, or third-party class instances that should not become reactive.</div>
+<div class="table-wrap"><table><thead><tr><th>Component API</th><th>Use</th></tr></thead><tbody><tr><td><code>this.key</code></td><td>Read or assign top-level state returned by <code>data()</code>.</td></tr><tr><td><code>this.$get(path, fallback)</code></td><td>Read a nested state path.</td></tr><tr><td><code>this.$set(path, value)</code></td><td>Set a path and refresh template scope when a new root key appears.</td></tr><tr><td><code>this.$patch(path, updater)</code></td><td>Replace a path with a value or updater result.</td></tr><tr><td><code>this.$merge(path, payload)</code></td><td>Shallow merge an object path.</td></tr><tr><td><code>this.$toggle(path)</code></td><td>Toggle a boolean state path.</td></tr><tr><td><code>this.$batch(fn)</code></td><td>Group several state writes into one reactive flush.</td></tr><tr><td><code>this.$snapshot()</code></td><td>Clone the component state.</td></tr><tr><td><code>this.$watch(pathOrGetter, callback)</code></td><td>Watch a path or computed getter.</td></tr><tr><td><code>this.$state.get(path)</code></td><td>Compact path reader used by advanced helpers.</td></tr><tr><td><code>this.$state.set(path, value)</code></td><td>Compact path writer used by advanced helpers.</td></tr><tr><td><code>this.$state.batch(fn)</code></td><td>Compact batching helper.</td></tr><tr><td><code>this.$state.increment(path, amount)</code></td><td>Increase a numeric path by <code>amount</code>, defaulting to <code>1</code>.</td></tr><tr><td><code>this.$state.push(path, item)</code></td><td>Push into an array path or create an array.</td></tr><tr><td><code>this.$state.pop(path)</code></td><td>Pop from an array path.</td></tr><tr><td><code>this.$state.map(path, cb)</code></td><td>Replace an array path with its mapped result.</td></tr><tr><td><code>this.$state.filter(path, cb)</code></td><td>Replace an array path with its filtered result.</td></tr><tr><td><code>this.$history()</code></td><td>Read dev history when the app was created with <code>.dev(true)</code>.</td></tr><tr><td><code>this.$clearHistory()</code></td><td>Clear dev history when dev mode is enabled.</td></tr></tbody></table></div>
+<div class="note warn"><strong>Tip:</strong> keep state as plain serializable data. Store DOM nodes, editor instances, chart objects, services, or third-party class instances on normal component fields instead of returning them from <code>data()</code>.</div>
 </section><section id="directives"><h2>8. Built-in directives</h2>
 <p>The compiler registers directives with priorities. Structural directives run first because they can create, remove, or move nodes.</p>
 <div class="table-wrap"><table><thead><tr><th>Directive</th><th>Priority</th><th>Use</th><th>Example</th></tr></thead><tbody>
@@ -281,37 +306,97 @@ MiniX.createApp(App).use(ToastPlugin).mount('#app');</code></pre>
 });</code></pre>
 <div class="note warn">Custom directives can touch internals, but stable plugins should depend on the smallest possible public surface.</div>
 </section><section id="request"><h2>14. HTTP request helper: MiniX_Request</h2>
-<p><code>MiniX_Request</code> is a chainable HTTP client. It supports request methods, query/body/header helpers, timeout, retry, response parsing, cache, interceptors, progress, abort, and extension.</p>
-<pre><code>const api = new MiniX_Request('/api', {
-  headers: { Accept: 'application/json' },
-  credentials: 'same-origin'
-});
+<p>Attach the request client during app setup with <code>.request()</code>. Components then call <code>this.$fetch()</code>, which returns the same chainable request builder with query/body/header helpers, timeout, retry, response parsing, cache, interceptors, progress, abort, and extension support.</p>
+<pre><code>class UsersPage {
+  data() {
+    return { users: [], search: 'ankit', page: 1, loading: false };
+  }
 
-api.setAuth(token);
+  async mounted() {
+    await this.loadUsers();
+  }
 
-const users = await api
-  .get('/users')
-  .query({ page: 1, search: 'ankit' })
-  .timeout(10000)
-  .retry(2, 300)
-  .cache(30000)
-  .json();</code></pre>
+  async loadUsers() {
+    this.loading = true;
+    try {
+      this.users = await this.$fetch('/users')
+        .query({ page: this.page, search: this.search })
+        .timeout(10000)
+        .retry(2, 300)
+        .cache(30000)
+        .json();
+    } finally {
+      this.loading = false;
+    }
+  }
+
+  view() {
+    return `
+      &lt;section&gt;
+        &lt;input x-model="search" @input.debounce="loadUsers()"&gt;
+        &lt;button @click="loadUsers()" x-disabled="loading"&gt;Refresh&lt;/button&gt;
+        &lt;template x-for="user in users" :key="user.id"&gt;
+          &lt;div x-text="user.name"&gt;&lt;/div&gt;
+        &lt;/template&gt;
+      &lt;/section&gt;
+    `;
+  }
+}
+
+MiniX.createApp(UsersPage)
+  .request('/api', {
+    headers: { Accept: 'application/json' },
+    credentials: 'same-origin'
+  })
+  .mount('#app');</code></pre>
 <div class="table-wrap"><table><thead><tr><th>Group</th><th>Methods</th></tr></thead><tbody><tr><td>HTTP verbs</td><td><code>get</code>, <code>post</code>, <code>put</code>, <code>patch</code>, <code>delete</code>, <code>head</code>, <code>options</code></td></tr><tr><td>Builder</td><td><code>header</code>, <code>query</code>, <code>body</code>, <code>as</code>, <code>timeout</code>, <code>signal</code>, <code>retry</code>, <code>cache</code></td></tr><tr><td>Parsers</td><td><code>json</code>, <code>text</code>, <code>blob</code>, <code>arrayBuffer</code>, <code>response</code></td></tr><tr><td>Progress</td><td><code>onUploadProgress</code>, <code>onDownloadProgress</code></td></tr><tr><td>Interceptors</td><td><code>addRequestInterceptor</code>, <code>addResponseInterceptor</code>, <code>addErrorInterceptor</code>, <code>clearInterceptors</code></td></tr><tr><td>Events/cache/abort</td><td><code>on</code>, <code>off</code>, <code>invalidate</code>, <code>clearCache</code>, <code>getCacheEntries</code>, <code>abort</code>, <code>abortAll</code></td></tr><tr><td>Defaults</td><td><code>extend</code>, <code>setHeader</code>, <code>removeHeader</code>, <code>setBaseURL</code>, <code>setAuth</code></td></tr><tr><td>Static helpers</td><td><code>all</code>, <code>allSettled</code>, <code>race</code>, <code>default</code>, static verb helpers</td></tr></tbody></table></div>
-<pre><code>api.addRequestInterceptor((desc) =&gt; {
-  desc.headers.set('X-Requested-With', 'MiniX');
-  return desc;
-});
+<pre><code>class RequestTools {
+  mounted() {
+    const api = this.$provider.inject('__minix_request__');
 
-api.addResponseInterceptor(async (response, desc) =&gt; response);
-api.addErrorInterceptor(async (error, desc) =&gt; { throw error; });
-api.invalidate('/users', { page: 1 });
-api.clearCache();
-api.abortAll();</code></pre>
+    api.addRequestInterceptor((desc) =&gt; {
+      desc.headers.set('X-Requested-With', 'MiniX');
+      return desc;
+    });
+
+    api.addResponseInterceptor(async (response, desc) =&gt; response);
+    api.addErrorInterceptor(async (error, desc) =&gt; { throw error; });
+  }
+
+  clearUserRequests() {
+    const api = this.$provider.inject('__minix_request__');
+    api.invalidate('/users', { page: 1 });
+    api.clearCache();
+    api.abortAll();
+  }
+}
+
+MiniX.createApp(RequestTools)
+  .request('/api')
+  .mount('#app');</code></pre>
 </section><section id="sanitizer"><h2>15. Renderer and sanitizer</h2>
-<p><code>MiniX_Renderer</code> handles interpolation and pipes. <code>MiniX_Sanitizer</code> sanitizes HTML, using <code>window.DOMPurify</code> when available and a fallback sanitizer otherwise.</p>
-<pre><code>const sanitizer = new MiniX_Sanitizer();
-const renderer = new MiniX_Renderer({ sanitizer });
-const html = renderer.render('&lt;h1&gt;{{ title | upper }}&lt;/h1&gt;', { title: 'hello' });</code></pre>
+<p>Components normally use the renderer through interpolation, directives, and app modifiers. Sanitization is applied when a component renders HTML with <code>x-html</code>, using <code>window.DOMPurify</code> when available and a fallback sanitizer otherwise.</p>
+<pre><code>class ArticlePreview {
+  data() {
+    return {
+      title: 'hello',
+      trustedHtml: '&lt;strong&gt;Ready&lt;/strong&gt;'
+    };
+  }
+
+  view() {
+    return `
+      &lt;article&gt;
+        &lt;h1&gt;{{ title | upper }}&lt;/h1&gt;
+        &lt;div x-html="trustedHtml"&gt;&lt;/div&gt;
+      &lt;/article&gt;
+    `;
+  }
+}
+
+MiniX.createApp(ArticlePreview)
+  .modifier('upper', ({ value }) =&gt; String(value || '').toUpperCase())
+  .mount('#app');</code></pre>
 <ul><li>Prefer <code>x-text</code> for user content.</li><li>Use <code>x-html</code> only for trusted/sanitized HTML.</li><li>Add DOMPurify in production when rendering rich HTML.</li></ul>
 </section><section id="examples"><h2>16. Complete practical examples</h2>
 <h3>CRUD/list page</h3><pre><code>class UsersPage {
@@ -380,10 +465,24 @@ MiniX.createApp(UsersPage).request('/api').mount('#app');</code></pre>
 <p>In dev mode, state captures history. Component instances receive <code>$history()</code> and <code>$clearHistory()</code>.</p>
 <pre><code>console.table(component.$history());
 component.$clearHistory();</code></pre>
-<h3>Standalone state debug</h3><pre><code>const state = new MiniX_State({ count: 0 }, { dev: true, label: 'Counter' });
-state.enableDev('Counter', { captureTraces: true });
-state.increment('count');
-console.log(state.getHistory());</code></pre>
+<h3>Component state debug</h3><pre><code>class CounterDebug {
+  data() { return { count: 0 }; }
+
+  mounted() {
+    this.$state.increment('count');
+    console.log(this.$history());
+  }
+
+  increment() {
+    this.$state.increment('count');
+  }
+
+  view() {
+    return `&lt;button @click="increment()"&gt;{{ count }}&lt;/button&gt;`;
+  }
+}
+
+MiniX.createApp(CounterDebug).dev(true).mount('#app');</code></pre>
 <ul><li>If an expression is not updating, confirm the referenced key exists or use <code>$set</code>.</li><li>If a child component is not found, check <code>app.component()</code> or local <code>registerComponents()</code>.</li><li>If HTML is stripped, check sanitizer behavior.</li><li>If external code needs events, use <code>MiniX.$bus</code> or pass a custom <code>eventBus</code> into <code>MiniX.createApp()</code>.</li><li>If events do not run, inspect modifiers and ensure the element is not inside <code>x-ignore</code>.</li></ul>
 </section><section id="gotchas"><h2>19. Gotchas</h2>
 <div class="note warn"><strong>Direct prop mutation is blocked.</strong> Emit events or call parent callbacks instead.</div><br>

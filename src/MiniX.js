@@ -6828,6 +6828,10 @@ class MiniX_Component {
 			get: (path) => this.state.get(path),
 			set: setAndRefreshShape,
 			batch: (fn) => this.state.batch(fn),
+			increment: (path, amount = 1) => {
+				const current = Number(this.state.get(path, 0));
+				return setAndRefreshShape(path, current + amount);
+			},
 
 			push: (path, val) => {
 				const arr = this.state.get(path);
