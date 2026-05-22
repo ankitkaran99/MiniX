@@ -22,18 +22,18 @@ The plugins in `src/mini-x-plugins/` are intentionally built on top of this same
 
 ## Documentation map
 
-- Core framework: [website/readme.html](website/readme.html)
-- Store plugin: [website/mini-x-plugins/readme-store.html](website/mini-x-plugins/readme-store.html)
-- Router plugin: [website/mini-x-plugins/readme-router.html](website/mini-x-plugins/readme-router.html)
-- Form plugins: [website/mini-x-plugins/readme-form.html](website/mini-x-plugins/readme-form.html)
-- Mask plugin: [website/mini-x-plugins/readme-mask.html](website/mini-x-plugins/readme-mask.html)
-- i18n plugin: [website/mini-x-plugins/readme-i18n.html](website/mini-x-plugins/readme-i18n.html)
-- Scroll plugin: [website/mini-x-plugins/readme-scroll.html](website/mini-x-plugins/readme-scroll.html)
-- DataTable plugin: [website/mini-x-plugins/readme-datatable.html](website/mini-x-plugins/readme-datatable.html)
-- Debug plugin: [website/mini-x-plugins/readme-debug.html](website/mini-x-plugins/readme-debug.html)
-- Inspect.js: [website/readme-inspect.html](website/readme-inspect.html)
-- Model and Collection: [website/readme-model.html](website/readme-model.html)
-- InputMaskEngine: [website/readme-ime.html](website/readme-ime.html)
+- Core framework: [docs/readme.html](docs/readme.html)
+- Store plugin: [docs/mini-x-plugins/readme-store.html](docs/mini-x-plugins/readme-store.html)
+- Router plugin: [docs/mini-x-plugins/readme-router.html](docs/mini-x-plugins/readme-router.html)
+- Form plugins: [docs/mini-x-plugins/readme-form.html](docs/mini-x-plugins/readme-form.html)
+- Mask plugin: [docs/mini-x-plugins/readme-mask.html](docs/mini-x-plugins/readme-mask.html)
+- i18n plugin: [docs/mini-x-plugins/readme-i18n.html](docs/mini-x-plugins/readme-i18n.html)
+- Scroll plugin: [docs/mini-x-plugins/readme-scroll.html](docs/mini-x-plugins/readme-scroll.html)
+- DataTable plugin: [docs/mini-x-plugins/readme-datatable.html](docs/mini-x-plugins/readme-datatable.html)
+- Debug plugin: [docs/mini-x-plugins/readme-debug.html](docs/mini-x-plugins/readme-debug.html)
+- Inspect.js: [docs/readme-inspect.html](docs/readme-inspect.html)
+- Model and Collection: [docs/readme-model.html](docs/readme-model.html)
+- InputMaskEngine: [docs/readme-ime.html](docs/readme-ime.html)
 
 ## Plugin summary
 
