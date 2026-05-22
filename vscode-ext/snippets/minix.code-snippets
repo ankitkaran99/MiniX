@@ -1,0 +1,236 @@
+{
+  "Mini-X app bootstrap": {
+    "prefix": "minix-app",
+    "body": [
+      "class App {",
+      "\tdata() {",
+      "\t\treturn {",
+      "\t\t\tmessage: '${1:Hello Mini-X}'",
+      "\t\t};",
+      "\t}",
+      "",
+      "\tview() {",
+      "\t\treturn `",
+      "\t\t\t<main>",
+      "\t\t\t\t<h1 x-text=\"message\"></h1>",
+      "\t\t\t</main>",
+      "\t\t`;",
+      "\t}",
+      "}",
+      "",
+      "MiniX.createApp(App).mount('${2:#app}');"
+    ],
+    "description": "Bootstrap a Mini-X app with a class component."
+  },
+  "Mini-X class component": {
+    "prefix": "minix-component",
+    "body": [
+      "export default class ${1:ExampleComponent} {",
+      "\tdata() {",
+      "\t\treturn {",
+      "\t\t\t${2:title}: '${3:Example}'",
+      "\t\t};",
+      "\t}",
+      "",
+      "\tview() {",
+      "\t\treturn `",
+      "\t\t\t<section>",
+      "\t\t\t\t<h2 x-text=\"${2:title}\"></h2>",
+      "\t\t\t</section>",
+      "\t\t`;",
+      "\t}",
+      "}"
+    ],
+    "description": "Create a Mini-X class component."
+  },
+  "Mini-X component with props": {
+    "prefix": "minix-props",
+    "body": [
+      "export default class ${1:CardComponent} {",
+      "\tstatic props = {",
+      "\t\ttitle: String,",
+      "\t\tcount: Number",
+      "\t};",
+      "",
+      "\tview() {",
+      "\t\treturn `",
+      "\t\t\t<article>",
+      "\t\t\t\t<h2 x-text=\"$props.title\"></h2>",
+      "\t\t\t\t<p x-text=\"$props.count\"></p>",
+      "\t\t\t</article>",
+      "\t\t`;",
+      "\t}",
+      "}"
+    ],
+    "description": "Mini-X class component with static props."
+  },
+  "Mini-X component with child components": {
+    "prefix": "minix-children",
+    "body": [
+      "import ${1:ChildCard} from './${1:ChildCard}.js';",
+      "",
+      "export default class ${2:ParentComponent} {",
+      "\tregisterComponents() {",
+      "\t\treturn { ${1:ChildCard} };",
+      "\t}",
+      "",
+      "\tview() {",
+      "\t\treturn `",
+      "\t\t\t<section>",
+      "\t\t\t\t<div x-component=\"${1:ChildCard}\" x-props=\"{ title: '${3:Child}' }\"></div>",
+      "\t\t\t</section>",
+      "\t\t`;",
+      "\t}",
+      "}"
+    ],
+    "description": "Mini-X parent component with local child registration."
+  },
+  "Mini-X data computed watch": {
+    "prefix": "minix-stateful",
+    "body": [
+      "export default class ${1:StatefulComponent} {",
+      "\tdata() {",
+      "\t\treturn { count: 0 };",
+      "\t}",
+      "",
+      "\tget doubled() {",
+      "\t\treturn this.count * 2;",
+      "\t}",
+      "",
+      "\twatch = {",
+      "\t\tcount(value, oldValue) {",
+      "\t\t\tconsole.log('count changed', value, oldValue);",
+      "\t\t}",
+      "\t};",
+      "",
+      "\tview() {",
+      "\t\treturn `",
+      "\t\t\t<button @click=\"count++\" x-text=\"doubled\"></button>",
+      "\t\t`;",
+      "\t}",
+      "}"
+    ],
+    "description": "Mini-X component with data, computed getter, and watch."
+  },
+  "Mini-X event bus component": {
+    "prefix": "minix-bus",
+    "body": [
+      "export default class ${1:BusComponent} {",
+      "\tmounted() {",
+      "\t\tthis.handleMessage = (payload) => {",
+      "\t\t\tconsole.log(payload);",
+      "\t\t};",
+      "\t\tMiniX.$bus.on('${2:event-name}', this.handleMessage);",
+      "\t}",
+      "",
+      "\tbeforeUnmount() {",
+      "\t\tMiniX.$bus.off('${2:event-name}', this.handleMessage);",
+      "\t}",
+      "",
+      "\temitMessage() {",
+      "\t\tMiniX.$bus.emit('${2:event-name}', { message: '${3:Hello}' });",
+      "\t}",
+      "}"
+    ],
+    "description": "Mini-X event bus usage."
+  },
+  "Mini-X store definition": {
+    "prefix": "minix-store",
+    "body": [
+      "export const ${1:counterStore} = MiniXStore.define('${2:counter}', {",
+      "\tstate: () => ({",
+      "\t\tcount: 0",
+      "\t}),",
+      "",
+      "\tgetters: {",
+      "\t\tdoubled() {",
+      "\t\t\treturn this.count * 2;",
+      "\t\t}",
+      "\t},",
+      "",
+      "\tactions: {",
+      "\t\tincrement() {",
+      "\t\t\tthis.count += 1;",
+      "\t\t}",
+      "\t}",
+      "});"
+    ],
+    "description": "Define a Mini-X store."
+  },
+  "Mini-X router definition": {
+    "prefix": "minix-router",
+    "body": [
+      "export const router = createRouter({",
+      "\thistory: ${1|createWebHistory,createWebHashHistory|}(),",
+      "\troutes: [",
+      "\t\t{",
+      "\t\t\tpath: '${2:/}',",
+      "\t\t\tname: '${3:home}',",
+      "\t\t\tcomponent: ${4:HomePage},",
+      "\t\t\tmeta: {}",
+      "\t\t}",
+      "\t]",
+      "});"
+    ],
+    "description": "Create a Mini-X router."
+  },
+  "Mini-X route view component": {
+    "prefix": "minix-route-view",
+    "body": [
+      "export default class ${1:RoutePage} {",
+      "\tview() {",
+      "\t\treturn `",
+      "\t\t\t<section>",
+      "\t\t\t\t<nav>",
+      "\t\t\t\t\t<a x-route=\"${2:home}\">${3:Home}</a>",
+      "\t\t\t\t</nav>",
+      "\t\t\t\t<div x-router-view></div>",
+      "\t\t\t</section>",
+      "\t\t`;",
+      "\t}",
+      "}"
+    ],
+    "description": "Mini-X route shell with router view."
+  },
+  "Mini-X Blade bindings": {
+    "prefix": "minix-blade",
+    "body": [
+      "<div x-data=\"{ ${1:open}: false }\">",
+      "\t<button type=\"button\" @click=\"${1:open} = !${1:open}\">${2:Toggle}</button>",
+      "\t<div x-show=\"${1:open}\">",
+      "\t\t{{ ${3:$slot} }}",
+      "\t</div>",
+      "</div>"
+    ],
+    "description": "Blade template with Mini-X bindings."
+  },
+  "Mini-X x-for list": {
+    "prefix": "minix-xfor",
+    "body": [
+      "<template x-for=\"(${1:item}, ${2:index}) in ${3:items}\" x-key=\"${1:item}.id\">",
+      "\t<div x-text=\"${1:item}.${4:name}\"></div>",
+      "</template>"
+    ],
+    "description": "Mini-X x-for list with stable key."
+  },
+  "Mini-X x-if x-show condition": {
+    "prefix": "minix-condition",
+    "body": [
+      "<template x-if=\"${1:isReady}\">",
+      "\t<div x-show=\"${2:isVisible}\">${3:Content}</div>",
+      "</template>"
+    ],
+    "description": "Mini-X conditional rendering."
+  },
+  "Mini-X x-model input": {
+    "prefix": "minix-model",
+    "body": [
+      "<label>",
+      "\t<span>${1:Label}</span>",
+      "\t<input type=\"${2:text}\" x-model=\"${3:value}\">",
+      "</label>"
+    ],
+    "description": "Mini-X form input binding."
+  }
+}
+

@@ -1,0 +1,110 @@
+{
+  "name": "minix-vscode-tools",
+  "displayName": "Mini-X Developer Tools",
+  "description": "IntelliSense, snippets, diagnostics, navigation, and generators for Mini-X projects.",
+  "version": "0.1.0",
+  "publisher": "mini-x",
+  "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ankitkaran99/MiniX.git",
+    "directory": "vscode-ext"
+  },
+  "engines": {
+    "vscode": "^1.88.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Snippets",
+    "Linters"
+  ],
+  "activationEvents": [
+    "onLanguage:javascript",
+    "onLanguage:javascriptreact",
+    "onLanguage:typescript",
+    "onLanguage:typescriptreact",
+    "onLanguage:html",
+    "onLanguage:php",
+    "onCommand:minix.scanWorkspace",
+    "onCommand:minix.showProjectIndex",
+    "onCommand:minix.createComponent",
+    "onCommand:minix.createStore",
+    "onCommand:minix.createRouter",
+    "onCommand:minix.validateCurrentFile"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "minix.scanWorkspace",
+        "title": "Mini-X: Scan Workspace"
+      },
+      {
+        "command": "minix.showProjectIndex",
+        "title": "Mini-X: Show Project Index"
+      },
+      {
+        "command": "minix.createComponent",
+        "title": "Mini-X: Create Component"
+      },
+      {
+        "command": "minix.createStore",
+        "title": "Mini-X: Create Store"
+      },
+      {
+        "command": "minix.createRouter",
+        "title": "Mini-X: Create Router"
+      },
+      {
+        "command": "minix.validateCurrentFile",
+        "title": "Mini-X: Validate Current File"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "javascript",
+        "path": "./snippets/minix.code-snippets"
+      },
+      {
+        "language": "typescript",
+        "path": "./snippets/minix.code-snippets"
+      },
+      {
+        "language": "html",
+        "path": "./snippets/minix.code-snippets"
+      },
+      {
+        "language": "php",
+        "path": "./snippets/minix.code-snippets"
+      }
+    ],
+    "configuration": {
+      "title": "Mini-X",
+      "properties": {
+        "minix.scanOnActivation": {
+          "type": "boolean",
+          "default": true,
+          "description": "Scan the workspace for Mini-X project symbols when the extension activates."
+        },
+        "minix.maxFiles": {
+          "type": "number",
+          "default": 5000,
+          "description": "Maximum number of workspace files to index."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "dependencies": {
+    "typescript": "^5.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "@types/vscode": "^1.88.0",
+    "@vscode/vsce": "^2.15.0"
+  }
+}

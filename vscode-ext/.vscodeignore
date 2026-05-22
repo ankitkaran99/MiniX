@@ -1,0 +1,12 @@
+src/**
+*.vsix
+tsconfig.json
+node_modules/@types/**
+node_modules/@vscode/**
+node_modules/vsce/**
+node_modules/.bin/**
+**/*.map
+**/*.ts
+.vscode/**
+.git/**
+npm-debug.log
