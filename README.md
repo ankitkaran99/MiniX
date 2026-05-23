@@ -59,6 +59,24 @@ The tradeoff is that documentation has to be explicit about ownership boundaries
 - Third-party libraries should be isolated through integration plugins or `x-ignore`.
 - Standalone utilities like Inspect and InputMaskEngine stay usable outside MiniX.
 
+## Minifying source files
+
+The repository includes standalone minify scripts for PowerShell and Bash. Both scripts recursively minify JavaScript files from `src/` into `dist/`, preserving the same directory structure and using Terser compression plus mangling.
+
+PowerShell:
+
+```powershell
+.\minify.ps1
+```
+
+Bash:
+
+```bash
+bash minify.sh
+```
+
+For example, `src/a/b/app.js` is written to `dist/a/b/app.js`.
+
 ## Reading order
 
 If you are new to the repository, the useful order is:
