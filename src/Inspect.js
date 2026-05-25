@@ -66,7 +66,6 @@ class Inspect {
                 min_eq_elem: 'Must have at least {0} elements.',
                 max_eq_elem: 'Must have at most {0} elements.',
                 in_arr: 'Selected value is not valid.',
-                n_in_arr: 'Selected value is not allowed.',
                 equal: 'Value must be equal to {0}.',
                 n_equal: 'Value must not be equal to {0}.',
                 equal_to: 'Values do not match.',
@@ -373,21 +372,82 @@ class Inspect {
 
     static _normalizeRequiredIfParams(params) {
         if (Array.isArray(params)) {
-            return [params[0], params.slice(1).join(',')];
+            return {
+                field: params[0],
+                operator: 'equal',
+                value: params.slice(1).join(',')
+            };
         }
 
         if (params && typeof params === 'object') {
-            return [params.field ?? params.name ?? '', params.value ?? ''];
+            if (Object.prototype.hasOwnProperty.call(params, 'in')) {
+                return {
+                    field: params.field ?? params.name ?? '',
+                    operator: 'in',
+                    value: params.in
+                };
+            }
+
+            if (Object.prototype.hasOwnProperty.call(params, 'not_in')) {
+                return {
+                    field: params.field ?? params.name ?? '',
+                    operator: 'not_in',
+                    value: params.not_in
+                };
+            }
+
+            if (Object.prototype.hasOwnProperty.call(params, 'not_equal')) {
+                return {
+                    field: params.field ?? params.name ?? '',
+                    operator: 'not_equal',
+                    value: params.not_equal
+                };
+            }
+
+            return {
+                field: params.field ?? params.name ?? '',
+                operator: 'equal',
+                value: Object.prototype.hasOwnProperty.call(params, 'equal')
+                    ? params.equal
+                    : params.value ?? ''
+            };
         }
 
         const raw = String(params ?? '');
         const separatorIndex = raw.indexOf(',');
-        if (separatorIndex === -1) return [raw.trim(), ''];
+        if (separatorIndex === -1) {
+            return {
+                field: raw.trim(),
+                operator: 'equal',
+                value: ''
+            };
+        }
 
-        return [
-            raw.slice(0, separatorIndex).trim(),
-            raw.slice(separatorIndex + 1)
-        ];
+        return {
+            field: raw.slice(0, separatorIndex).trim(),
+            operator: 'equal',
+            value: raw.slice(separatorIndex + 1)
+        };
+    }
+
+    static _matchesRequiredIfCondition(actual, condition) {
+        const expected = condition.value;
+        const matchesList = (list) => {
+            if (!Array.isArray(list)) return false;
+            return list.some((item) => String(actual) === String(item));
+        };
+
+        switch (condition.operator) {
+            case 'in':
+                return matchesList(expected);
+            case 'not_in':
+                return !matchesList(expected);
+            case 'not_equal':
+                return String(actual) !== String(expected);
+            case 'equal':
+            default:
+                return String(actual) === String(expected);
+        }
     }
 
     static _matchesFileRule(file, token) {
@@ -454,7 +514,6 @@ class Inspect {
         min_eq_elem: (v, m) => Array.isArray(v) ? v.length >= m : true,
         max_eq_elem: (v, m) => Array.isArray(v) ? v.length <= m : true,
         in_arr: (v, a) => v === '' || (Array.isArray(a) && a.includes(v)),
-        n_in_arr: (v, a) => v === '' || (Array.isArray(a) && !a.includes(v)),
         equal: (v, e) => v === '' || v == e,
         n_equal: (v, e) => v === '' || v != e,
         equal_to: function(v, o, f, allData) {
@@ -581,18 +640,18 @@ class Inspect {
         hex_color: (v) => v === '' || /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.test(String(v)),
         slug: (v) => v === '' || /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(String(v)),
         required_if: function(v, params, field, allData) {
-            const [otherName, otherVal] = Inspect._normalizeRequiredIfParams(params);
-            const stateValue = Inspect._getByPath(allData, otherName);
+            const condition = Inspect._normalizeRequiredIfParams(params);
+            const stateValue = Inspect._getByPath(allData, condition.field);
             if (stateValue !== undefined) {
-                return String(stateValue) === String(otherVal)
-                    ? v !== '' && v !== null && v !== undefined
+                return Inspect._matchesRequiredIfCondition(stateValue, condition)
+                    ? this.checkRequired(v)
                     : true;
             }
-            const otherField = this.formElement?.querySelector?.(`[name="${otherName}"]`);
+            const otherField = this.formElement?.querySelector?.(`[name="${condition.field}"]`);
 
             // If the condition matches, the current field must not be empty
-            if (otherField && String(otherField.value) === String(otherVal)) {
-                return v !== '' && v !== null && v !== undefined;
+            if (otherField && Inspect._matchesRequiredIfCondition(otherField.value, condition)) {
+                return this.checkRequired(v);
             }
             return true;
         },

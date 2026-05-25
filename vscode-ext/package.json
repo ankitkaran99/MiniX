@@ -3,7 +3,7 @@
   "displayName": "Mini-X Developer Tools",
   "description": "IntelliSense, snippets, diagnostics, navigation, and generators for Mini-X projects.",
   "version": "0.1.0",
-  "publisher": "mini-x",
+  "publisher": "ankitkaran99",
   "icon": "assets/icon.png",
   "license": "GPL-3.0-or-later",
   "repository": {

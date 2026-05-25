@@ -402,7 +402,6 @@ if (result.valid) {
               <tr><td>equal_to</td><td>Value must match another field or object path.</td></tr>
               <tr><td>different</td><td>Value must differ from another field or object path.</td></tr>
               <tr><td>in_arr</td><td>Value must exist in allowed array.</td></tr>
-              <tr><td>n_in_arr</td><td>Value must not exist in forbidden array.</td></tr>
               <tr><td>not_in</td><td>Value must not exist in blacklist array.</td></tr>
             </tbody>
           </table>
@@ -492,6 +491,34 @@ if (result.valid) {
   field: 'notes',
   rules: {
     required_if: { field: 'status', value: 'needs,review' }
+  }
+}
+
+{
+  field: 'tracking_number',
+  rules: {
+    required_if: { field: 'shipping_method', equal: 'courier' }
+  }
+}
+
+{
+  field: 'manager_comment',
+  rules: {
+    required_if: { field: 'status', in: ['rejected', 'needs_changes'] }
+  }
+}
+
+{
+  field: 'alternate_contact',
+  rules: {
+    required_if: { field: 'contact_method', not_in: ['email', 'sms'] }
+  }
+}
+
+{
+  field: 'cancellation_reason',
+  rules: {
+    required_if: { field: 'status', not_equal: 'active' }
   }
 }</code></pre>
           <div class="warn"><strong>Current limitation:</strong> <code>validateData()</code> reads values directly by <code>payload.data[fieldName]</code>. So nested field names like <code>billing.city</code> are not automatically resolved for the main field value. Nested paths are supported inside some comparison validators, but not as the primary field key unless your data object also has a literal key named <code>billing.city</code>.</div>
@@ -612,7 +639,7 @@ const validator = inspect.init(document.querySelector('#registerForm'), [
           <div class="note"><strong>4. File validation:</strong> client checks can inspect extension and MIME-style tokens, but upload validation must still happen on the server.</div>
           <div class="note"><strong>5. Single checkbox:</strong> default output is still <code>value</code> or empty string for compatibility; switch to <code>singleCheckboxMode: 'boolean'</code> if your state wants booleans.</div>
           <div class="note"><strong>6. Checkbox/radio UI:</strong> grouped error rendering supports several wrapper patterns, with <code>data-inspect-group</code> as an explicit fallback hook.</div>
-          <div class="note"><strong>7. <code>required_if</code> params:</strong> strings still use the first comma as the separator, but arrays and objects are safer when the compared value itself contains commas.</div>
+          <div class="note"><strong>7. <code>required_if</code> params:</strong> strings still use the first comma as the separator, arrays keep the remaining values as one comma-preserving comparison value, and objects support <code>value</code>/<code>equal</code>, <code>in</code>, <code>not_in</code>, and <code>not_equal</code>.</div>
         </section>
 
         <section id="reference" class="section-card">
@@ -624,7 +651,7 @@ const validator = inspect.init(document.querySelector('#registerForm'), [
               <tr><td>Number</td><td><code>numeric</code>, <code>integer</code>, <code>digits</code>, <code>min</code>, <code>max</code>, <code>min_eq</code>, <code>max_eq</code>, <code>lower</code>, <code>higher</code>, <code>multiple_of</code></td></tr>
               <tr><td>Length</td><td><code>minlen</code>, <code>maxlen</code>, <code>exact_len</code></td></tr>
               <tr><td>Array</td><td><code>min_elem</code>, <code>max_elem</code>, <code>exact_elem</code>, <code>min_eq_elem</code>, <code>max_eq_elem</code></td></tr>
-              <tr><td>Choice</td><td><code>in_arr</code>, <code>n_in_arr</code>, <code>not_in</code></td></tr>
+              <tr><td>Choice</td><td><code>in_arr</code>, <code>not_in</code></td></tr>
               <tr><td>Compare</td><td><code>equal</code>, <code>n_equal</code>, <code>equal_to</code>, <code>different</code></td></tr>
               <tr><td>Text</td><td><code>alpha</code>, <code>alpha_num</code>, <code>alpha_dash</code>, <code>alpha_spaces</code>, <code>alpha_num_space</code>, <code>user_name</code>, <code>lowercase</code>, <code>uppercase</code>, <code>char</code>, <code>regex</code>, <code>not_regex</code>, <code>starts_with</code>, <code>ends_with</code></td></tr>
               <tr><td>Format</td><td><code>email</code>, <code>url</code>, <code>domain</code>, <code>phone</code>, <code>uuid</code>, <code>mac_address</code>, <code>json</code>, <code>credit_card</code>, <code>base64</code>, <code>hex_color</code>, <code>slug</code>, <code>pincode</code>, <code>pan_card</code>, <code>aadhaar</code></td></tr>
