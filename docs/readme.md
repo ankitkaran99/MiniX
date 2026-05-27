@@ -6,6 +6,7 @@ highlights: ["Reactive state and effects","Component and directive lifecycle","L
 metrics: ["Core::Framework guide","Components::Class-based UI","Directives::Template compiler","Plugins::Extension points"]
 sidebar: Everything needed to wire Mini-X itself, from app boot to directives, state, layouts, plugins, and practical patterns.
 ---
+{% raw %}
 
 # MiniX JS Framework - Deep Documentation
 
@@ -905,3 +906,4 @@ MiniX.Sanitizer
 ```
 
 Generated for `mini-x.js`. Keep coding; may your bugs be reproducible and your cache invalidation slightly less cursed.
+{% endraw %}

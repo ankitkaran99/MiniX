@@ -6,6 +6,7 @@ highlights: ["Deep route trees with named views and keep-alive","Bundler-free la
 metrics: ["~8kb::gzipped footprint","HTML5 + Hash::history support","Named views::multi-outlet layouts","Reactive route::state in templates"]
 sidebar: Everything here covers wiring the router, navigating by path or name, and scaling into lazy layouts, reactive route state, and guarded transitions.
 ---
+{% raw %}
 
 # Mini-X Router - documentation
 
@@ -447,3 +448,4 @@ In your layout: `<div x-router-view></div>`, `<div x-router-view="sidebar"></div
 > **Performance tip:** use `meta.keepAlive` for heavy dashboards and clear targeted cache entries with `router.clearKeepAlive()` when the backing data invalidates.
 
 Built for Mini-X. Full control over SPA routing. Inspired by modern routers, but trimmed for a smaller reactive core.
+{% endraw %}

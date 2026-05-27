@@ -6,6 +6,7 @@ highlights: ["Mount Mini-X components inside table cells","Clean redraw and dest
 metrics: ["Bridge::Lifecycle sync","Cells::Component renderers","Redraw::Cleanup aware","Tables::DOM ownership"]
 sidebar: Everything here focuses on mounting Mini-X components into DataTables cells, refreshing them across redraws, and avoiding DOM ownership conflicts.
 ---
+{% raw %}
 
 # MiniX DataTable Plugin - README
 
@@ -399,3 +400,4 @@ Do not pass reserved prop names like `el`. Use `mountEl` instead.
 The plugin should skip initialization unless `rowData` and `props.row` are both truthy.
 
 MiniX DataTable Plugin README
+{% endraw %}

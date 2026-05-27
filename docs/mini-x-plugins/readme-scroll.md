@@ -6,6 +6,7 @@ highlights: ["Bottom feeds and top chat-style lists","Threshold-triggered loadin
 metrics: ["Directions::Top and bottom","Loading::Async aware","Edges::Threshold triggers","Scroll::Preserved offsets"]
 sidebar: Everything here focuses on using x-scroll safely in feed and chat interfaces, especially around async loading and scroll stability.
 ---
+{% raw %}
 
 # Mini-X Scroll - documentation
 
@@ -205,3 +206,4 @@ loadMore(el, ctx) {
 *   Works like Vue infinite scroll
 *   Supports chat-style reverse loading
 *   Stable, predictable behavior
+{% endraw %}

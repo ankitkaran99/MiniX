@@ -6,6 +6,7 @@ highlights: ["Centralized state with direct mutation ergonomics","Component and 
 metrics: ["Stores::Global registry","Getters::Computed state","Actions::Mutate safely","Watchers::Reactive side effects"]
 sidebar: How to define stores, read them in components and templates, compose actions across stores, and work with the full store API.
 ---
+{% raw %}
 
 # MiniX Store Plugin · Global state for MiniX apps
 
@@ -299,3 +300,4 @@ MiniX Store Plugin v1.1.0 — Built with ❤️ on MiniX reactive core. MIT Lice
 🔌 Seamless global stores · Reactive by nature · Full MiniX integration
 
 // ensure code blocks highlight after load document.querySelectorAll('pre code').forEach((block) => { if (window.Prism) Prism.highlightElement(block); });
+{% endraw %}

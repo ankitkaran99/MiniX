@@ -4,7 +4,7 @@ summary: Developer tracing for Mini-X apps, components, directives, stores, and 
 badges: ["Debugging","Lifecycle tracing","Store snapshots","Router hooks"]
 highlights: ["Trace component lifecycle and watchers","Inspect store and router snapshots","Use the MxDB bridge from browser DevTools"]
 metrics: ["Events::500 ring buffer","Bridge::window.MxDB","Panel::In-page inspector","Flags::Runtime toggles"]
-sidebar: This guide covers the debug plugin surface area: installation, event stream types, runtime flags, console bridge, and store/router instrumentation.
+sidebar: "This guide covers the debug plugin surface area: installation, event stream types, runtime flags, console bridge, and store/router instrumentation."
 ---
 
 # MiniX Debug Plugin â€” README

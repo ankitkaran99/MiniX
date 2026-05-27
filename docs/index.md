@@ -6,6 +6,7 @@ highlights: ["Core framework and runtime docs","Official plugin documentation","
 metrics: ["11::HTML guides","8::Official plugins","4::Runtime modules","1::Reading path"]
 sidebar: Start here for the full Mini-X documentation map, plugin overview, repository model, and recommended reading order.
 ---
+{% raw %}
 
 # MiniX Documentation Index
 
@@ -131,3 +132,4 @@ If you are new to the repository, the useful order is:
 ```
 
 That example is intentionally small. The deeper HTML docs now cover the richer flows: nested components, routing, validation, AJAX forms, masking, i18n, DataTables integration, and debug tooling.
+{% endraw %}

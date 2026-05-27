@@ -6,6 +6,7 @@ highlights: ["Directive and template translation APIs","Ready-aware component in
 metrics: ["Locales::JSON resources","Directive::x-i18n","Templates::$t() helper","Switching::changeLanguage"]
 sidebar: Use this page to load locales, install the plugin, translate DOM or template expressions, and handle language switching cleanly.
 ---
+{% raw %}
 
 # MiniX i18n Plugin Â· i18next integration
 
@@ -307,3 +308,4 @@ The plugin guards `$t()` until i18next is initialized. If you call the raw i18ne
 MiniX i18n Plugin Â· i18next integration Â· See `demos/mini-x-plugins/demo-i18n.html` for a working example.
 
 document.querySelectorAll('pre code').forEach((block) => { if (window.Prism) Prism.highlightElement(block); });
+{% endraw %}
