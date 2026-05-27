@@ -224,14 +224,45 @@ class Inspect {
         const isFileField = field?.type === 'file';
         const fileValue = isFileField ? field.files : value;
 
+        // 1. Check standard required rule
         if (rule.rules.required && !this.checkRequired(fileValue)) {
             return this.getMessage(rule, 'required');
         }
 
+        // 2. Check accepted rule
+        if (rule.rules.accepted) {
+            const validator = Inspect.validators.accepted;
+            if (!validator.call(this, fileValue)) {
+                return this.getMessage(rule, 'accepted');
+            }
+        }
+
+        // 3. Check conditional required_if rule
+        if (rule.rules.required_if) {
+            const condition = Inspect._normalizeRequiredIfParams(rule.rules.required_if);
+            const stateValue = Inspect._getByPath(allData, condition.field);
+            let isConditionMet = false;
+
+            if (stateValue !== undefined) {
+                isConditionMet = Inspect._matchesRequiredIfCondition(stateValue, condition);
+            } else {
+                const otherField = this.formElement?.querySelector?.(`[name="${condition.field}"]`);
+                if (otherField) {
+                    isConditionMet = Inspect._matchesRequiredIfCondition(otherField.value, condition);
+                }
+            }
+
+            if (isConditionMet && !this.checkRequired(fileValue)) {
+                return this.getMessage(rule, 'required_if');
+            }
+        }
+
+        // 4. If field is empty (and not required / condition not met), skip other validation rules
         if (Inspect._isEmptyValue(fileValue)) return true;
 
+        // 5. Validate other rules
         for (const [ruleName, ruleValue] of Object.entries(rule.rules)) {
-            if (ruleName === 'required') continue;
+            if (ruleName === 'required' || ruleName === 'required_if' || ruleName === 'accepted') continue;
 
             const validator = Inspect.validators[ruleName];
             if (!validator) {
@@ -572,7 +603,7 @@ class Inspect {
         char: (v, allowed) => {
             if (v === '') return true;
             const allowedChars = Array.isArray(allowed) ? allowed.join('') : String(allowed ?? '');
-            const escaped = allowedChars.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const escaped = allowedChars.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&');
             return new RegExp(`^[${escaped}]+$`).test(String(v));
         },
         date: (v) => v === '' || !Number.isNaN(Inspect._parseDateValue(v)),
@@ -639,22 +670,6 @@ class Inspect {
         },
         hex_color: (v) => v === '' || /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.test(String(v)),
         slug: (v) => v === '' || /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(String(v)),
-        required_if: function(v, params, field, allData) {
-            const condition = Inspect._normalizeRequiredIfParams(params);
-            const stateValue = Inspect._getByPath(allData, condition.field);
-            if (stateValue !== undefined) {
-                return Inspect._matchesRequiredIfCondition(stateValue, condition)
-                    ? this.checkRequired(v)
-                    : true;
-            }
-            const otherField = this.formElement?.querySelector?.(`[name="${condition.field}"]`);
-
-            // If the condition matches, the current field must not be empty
-            if (otherField && Inspect._matchesRequiredIfCondition(otherField.value, condition)) {
-                return this.checkRequired(v);
-            }
-            return true;
-        },
         not_in: (v, blacklist) => v === '' || (Array.isArray(blacklist) && !blacklist.includes(v)),
         pincode: (v) => v === '' || /^[1-9][0-9]{5}$/.test(String(v)),
         pan_card: (v) => v === '' || /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(String(v).toUpperCase()),

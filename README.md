@@ -22,18 +22,18 @@ The plugins in `src/mini-x-plugins/` are intentionally built on top of this same
 
 ## Documentation map
 
-- Core framework: [docs/readme.html](docs/readme.html)
-- Store plugin: [docs/mini-x-plugins/readme-store.html](docs/mini-x-plugins/readme-store.html)
-- Router plugin: [docs/mini-x-plugins/readme-router.html](docs/mini-x-plugins/readme-router.html)
-- Form plugins: [docs/mini-x-plugins/readme-form.html](docs/mini-x-plugins/readme-form.html)
-- Mask plugin: [docs/mini-x-plugins/readme-mask.html](docs/mini-x-plugins/readme-mask.html)
-- i18n plugin: [docs/mini-x-plugins/readme-i18n.html](docs/mini-x-plugins/readme-i18n.html)
-- Scroll plugin: [docs/mini-x-plugins/readme-scroll.html](docs/mini-x-plugins/readme-scroll.html)
-- DataTable plugin: [docs/mini-x-plugins/readme-datatable.html](docs/mini-x-plugins/readme-datatable.html)
-- Debug plugin: [docs/mini-x-plugins/readme-debug.html](docs/mini-x-plugins/readme-debug.html)
-- Inspect.js: [docs/readme-inspect.html](docs/readme-inspect.html)
-- Model and Collection: [docs/readme-model.html](docs/readme-model.html)
-- InputMaskEngine: [docs/readme-ime.html](docs/readme-ime.html)
+- Core framework: [docs/readme.md](docs/readme.md)
+- Store plugin: [docs/mini-x-plugins/readme-store.md](docs/mini-x-plugins/readme-store.md)
+- Router plugin: [docs/mini-x-plugins/readme-router.md](docs/mini-x-plugins/readme-router.md)
+- Form plugins: [docs/mini-x-plugins/readme-form.md](docs/mini-x-plugins/readme-form.md)
+- Mask plugin: [docs/mini-x-plugins/readme-mask.md](docs/mini-x-plugins/readme-mask.md)
+- i18n plugin: [docs/mini-x-plugins/readme-i18n.md](docs/mini-x-plugins/readme-i18n.md)
+- Scroll plugin: [docs/mini-x-plugins/readme-scroll.md](docs/mini-x-plugins/readme-scroll.md)
+- DataTable plugin: [docs/mini-x-plugins/readme-datatable.md](docs/mini-x-plugins/readme-datatable.md)
+- Debug plugin: [docs/mini-x-plugins/readme-debug.md](docs/mini-x-plugins/readme-debug.md)
+- Inspect.js: [docs/readme-inspect.md](docs/readme-inspect.md)
+- Model and Collection: [docs/readme-model.md](docs/readme-model.md)
+- InputMaskEngine: [docs/readme-ime.md](docs/readme-ime.md)
 
 ## Plugin summary
 
