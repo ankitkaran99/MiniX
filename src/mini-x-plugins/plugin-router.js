@@ -1619,10 +1619,11 @@
 						component.$onDestroy(() => mountedComponents.delete(component));
 					}
 					const instanceAPI = Object.create(null);
+					const targetInstance = component?.instance;
 					for (const [alias, prop] of [
 						["$route", "route"], ["$params", "params"], ["$query", "query"], ["$data", "data"],
-						["route", "route"], ["params", "params"], ["query", "query"], ["data", "data"]
 					]) {
+						if (targetInstance && alias in targetInstance) continue;
 						const isRoute = prop === "route";
 						Object.defineProperty(instanceAPI, alias, {
 							enumerable: true,
