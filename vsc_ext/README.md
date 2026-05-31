@@ -37,7 +37,7 @@ npm run compile
 
 Run in development mode:
 
-1. Open the `vscode-ext` folder in VS Code.
+1. Open the `vsc_ext` folder in VS Code.
 2. Press `F5`.
 3. In the Extension Development Host, open a Mini-X project.
 

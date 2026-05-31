@@ -387,12 +387,25 @@ Support assets can also be removed with `loader.unloadStyle('customerTheme')` an
 
 ### Component instance APIs
 
-Every component mounted by the router gets `this.$router`, `this.$route`, `this.$params`, and `this.$query`. Reactive getters `route`, `params`, and `query` are also available directly in templates.
+Every component mounted by the router receives the following properties on its instance `this`:
+- `this.$router`: The router instance.
+- `this.$route`: The current reactive route object.
+- `this.$params`: The current route parameters.
+- `this.$query`: The current route query parameters.
+- `this.$data`: The current route data (custom history state).
 
-```
+> [!NOTE]
+> **Collision Prevention:** To avoid name collisions with a component's own properties or methods (such as a component's own `data` function or property), the non-prefixed properties (`this.route`, `this.params`, `this.query`, and `this.data`) are **not** defined directly on the component instance. You should always access them via their `$`-prefixed versions.
+> 
+> **Custom Override Protection:** If a component instance already defines one of these properties (such as defining its own `this.$data`), the router will respect that custom definition and skip injecting its own.
+
+In templates, reactive getters are exposed directly as scoped variables without the `$` prefix:
+
+```html
 <template>
   <div>Current user ID: {{ params.id }} </div>
   <div>Full path: {{ route.fullPath }} </div>
+  <div>Custom route data: {{ data.someKey }} </div>
   <button @click="$router.push('/')">Home</button>
 </template>
 ```

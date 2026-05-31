@@ -250,10 +250,12 @@ Removes all displayed validation errors from the initialized form.
 2.  It builds a payload using `parseFormData()` or the passed plain object.
 3.  Each configured field rule is checked in order.
 4.  `required` is checked first.
-5.  If value is empty and not required, other validators are skipped.
-6.  Validators run one by one. The first failed validator returns its message.
-7.  Form mode shows errors using `errorHandler`.
-8.  State mode only returns errors and does not touch the DOM.
+5.  `accepted` is checked next.
+6.  `required_if` is checked next.
+7.  If the field value is empty (and not required / the conditional `required_if` condition is not met), other validators are skipped.
+8.  Validators run one by one. The first failed validator returns its message.
+9.  Form mode shows errors using `errorHandler`.
+10. State mode only returns errors and does not touch the DOM.
 
 ```
 const result = await validator.validate();
@@ -337,6 +339,12 @@ const inspect = new Inspect({
 ## 10\. Built-in Validators
 
 Validators are stored in `Inspect.validators`. Each validator returns `true` for success and `false` for failure. Async validators are also supported because `validateField()` awaits every validator.
+
+### Required and conditional validators
+
+Because these rules govern whether other validation checks should run or whether a field must have a value, they are evaluated at the beginning of the validation flow (prior to checking if the field value is empty):
+
+<table class="table table-bordered table-sm api-table"><tbody><tr><td>required</td><td>Field must not be empty (null, undefined, empty string, or empty array). Checked first.</td></tr><tr><td>accepted</td><td>Field value must be accepted (must be one of <code>'yes'</code>, <code>'on'</code>, <code>'1'</code>, <code>1</code>, <code>true</code>, or <code>'true'</code>). Checked second.</td></tr><tr><td>required_if</td><td>Field is required conditionally based on another field's value. Checked third.</td></tr></tbody></table>
 
 ### Numeric validators
 

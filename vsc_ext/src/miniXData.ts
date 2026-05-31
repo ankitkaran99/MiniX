@@ -106,7 +106,13 @@ export const routerApis: MiniXDocItem[] = [
   { name: 'guards', detail: 'guards: { beforeEach(to, from) {} }', documentation: 'Route guard hooks.' },
   { name: 'meta', detail: 'meta: { requiresAuth: true }', documentation: 'Arbitrary metadata attached to a route.' },
   { name: 'params', detail: 'route.params', documentation: 'Dynamic route parameters.' },
-  { name: 'query', detail: 'route.query', documentation: 'Parsed route query parameters.' }
+  { name: 'query', detail: 'route.query', documentation: 'Parsed route query parameters.' },
+  { name: 'data', detail: 'route.data', documentation: 'Custom history state / route data.' },
+  { name: 'this.$router', detail: 'this.$router', documentation: 'The Mini-X router instance.' },
+  { name: 'this.$route', detail: 'this.$route', documentation: 'The current reactive route object.' },
+  { name: 'this.$params', detail: 'this.$params', documentation: 'The current route parameters.' },
+  { name: 'this.$query', detail: 'this.$query', documentation: 'The current route query parameters.' },
+  { name: 'this.$data', detail: 'this.$data', documentation: 'The current route data (custom history state).' }
 ];
 
 export const lifecycleHooks = componentMembers.filter((item) =>
