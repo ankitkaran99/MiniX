@@ -1558,14 +1558,13 @@ class DemoApp {
     check('timer', 'Timer ($interval)', '$interval + x-disabled', (r) => r.querySelector('[x-disabled]'));
     // cond
     check('if', 'x-if chain', 'x-if + x-else-if + x-else', (r) => {
-      // After compilation the original x-if/x-else-if/x-else elements are removed
-      // from the DOM and replaced with comment anchors + a single live branch clone.
-      // Check that: (1) the x-if group anchor comment exists, and (2) exactly one
-      // badge branch is currently rendered inside the conditional container.
       const container = r.querySelector('#app-cond .test-content.col');
       if (!container) return false;
+      // Your code uses 'x-if-group-start' and 'x-if-group-end'
       const hasAnchor = [...container.childNodes].some(
-        n => n.nodeType === Node.COMMENT_NODE && n.textContent.trim() === 'x-if-group'
+        n => n.nodeType === Node.COMMENT_NODE &&
+            (n.textContent.trim() === 'x-if-group-start' ||
+              n.textContent.trim() === 'x-if-group-end')
       );
       const renderedBranch = container.querySelector('.badge.green, .badge.blue, .badge.orange, .badge.red');
       return hasAnchor && !!renderedBranch;
