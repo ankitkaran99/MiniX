@@ -3584,9 +3584,10 @@ class MiniX_Compiler {
 		if (targetAttr === 'class') return this._compileClassDirective(el, expression, component);
 		if (targetAttr === 'style') return this._compileStyleDirective(el, expression, component);
 
+		const getter = this._compileGetter(expression);
 		let lastBoundValue = Symbol('unset');
 		return this._effect(component, () => {
-			const value = this._evaluate(expression, this.createScope(component, {}, el));
+			const value = getter(this.createScope(component, {}, el), undefined);
 			if (Object.is(value, lastBoundValue)) return;
 			lastBoundValue = value;
 			MiniX_Compiler._patchAttrValue(el, targetAttr, value);
@@ -3619,34 +3620,41 @@ class MiniX_Compiler {
 			if (MiniX_Compiler._KEY_MAP[mod]) keyFilters.push(mod);
 		}
 		const hasKeyFilter = keyFilters.length > 0;
+		// Pre-build a flat Set of accepted key strings at compile time so the hot
+		// event path is a single O(1) Set.has() lookup instead of double-.some().
+		let acceptedKeys = null;
+		if (hasKeyFilter) {
+			acceptedKeys = new Set();
+			for (const mod of keyFilters) {
+				for (const k of MiniX_Compiler._KEY_MAP[mod]) acceptedKeys.add(k);
+			}
+		}
 
+
+		// Reuse a single fireScope per directive instance to avoid allocating
+		// Object.create(liveScope) + 4 property assignments on every event fire.
+		let _fireScope = null;
+		let _fireScopeBase = null;
 
 		const listener = (event) => {
 			if (mods.has('self') && event.target !== el) return;
-			
-			
 			if (hasKeyFilter) {
-				const pressedKey = event.key;
-				const matched = keyFilters.some((m) =>
-					MiniX_Compiler._KEY_MAP[m]?.some((k) => k === pressedKey)
-				);
-				if (!matched) return;
+				if (!acceptedKeys.has(event.key)) return;
 			}
 			if (mods.has('prevent')) event.preventDefault();
 			if (mods.has('stop')) event.stopPropagation();
-			
-			
+
 			const liveScope = this.createScope(component, {}, el);
-			const fireScope = Object.create(liveScope);
-			fireScope.$event = event;
-			fireScope.event  = event;
-			fireScope.$el    = el;
-			fireScope.el     = el;
-			const result = this._evaluate(expression, fireScope);
-			
-			
-			if (typeof result === 'function') result.call(fireScope, event);
-			// Note: 'once' for non-delegated path is handled below at addEventListener level
+			if (_fireScope === null || _fireScopeBase !== liveScope) {
+				_fireScope = Object.create(liveScope);
+				_fireScope.$el = el;
+				_fireScope.el  = el;
+				_fireScopeBase = liveScope;
+			}
+			_fireScope.$event = event;
+			_fireScope.event  = event;
+			const result = this._evaluate(expression, _fireScope);
+			if (typeof result === 'function') result.call(_fireScope, event);
 		};
 		const delegateRoot = this._shouldDelegateEvent(eventName, mods) ? this._getDelegatedEventRoot(component) : null;
 		if (delegateRoot) {
@@ -3936,12 +3944,12 @@ class MiniX_Compiler {
 
 			const cleanups = [];
 			if (structural.name !== 'x-for') {
-				directives.forEach((directive) => {
+				for (const directive of directives) {
 					if (!directive.structural) cleanups.push(directive.run(component, node));
-				});
+				}
 			}
 			cleanups.push(structural.run(component, node));
-			return () => cleanups.forEach((cleanup) => cleanup?.());
+			return () => { for (const cleanup of cleanups) cleanup?.(); };
 		};
 
 		const stopEffect = this._effect(component, () => {
@@ -3982,7 +3990,7 @@ class MiniX_Compiler {
 			mounted = {
 				index: nextIndex,
 				nodes,
-				cleanup: () => cleanups.forEach((cleanup) => cleanup?.())
+				cleanup: () => { for (const cleanup of cleanups) cleanup?.(); }
 			};
 		});
 
@@ -3999,20 +4007,26 @@ class MiniX_Compiler {
 	}
 
 	_compileClassDirective(el, expression, component) {
-		let lastComputedClass = undefined;
+		const getter = this._compileGetter(expression);
+		let lastClassJson = undefined;
 		return this._effect(component, () => {
 			const scope = this.createScope(component, {}, el);
-			const value = this._evaluate(expression, scope, {});
-			// Avoid re-serialising and DOM-writing when nothing changed.
-			if (value === lastComputedClass) return;
-			lastComputedClass = value;
+			const value = getter(scope, {});
+			let json; try { json = JSON.stringify(value); } catch (_) { json = String(value); }
+			if (json === lastClassJson) return;
+			lastClassJson = json;
 			MiniX_Compiler._patchClassValue(el, value);
 		});
 	}
 
 	_compileAttrDirective(el, expression, component) {
+		const getter = this._compileGetter(expression);
+		let lastAttrJson = undefined;
 		return this._effect(component, () => {
-			const attrs = this._evaluate(expression, this.createScope(component, {}, el), {});
+			const attrs = getter(this.createScope(component, {}, el), {});
+			let json; try { json = JSON.stringify(attrs); } catch (_) { json = String(attrs); }
+			if (json === lastAttrJson) return;
+			lastAttrJson = json;
 			MiniX_Compiler._patchAttrMap(el, attrs);
 		});
 	}
@@ -4056,9 +4070,10 @@ class MiniX_Compiler {
 	}
 
 	_compileFocusDirective(el, expression, component) {
+		const getter = this._compileGetter(expression);
 		let wasFocused = false;
 		return this._effect(component, () => {
-			const shouldFocus = Boolean(this._evaluate(expression, this.createScope(component, {}, el), false));
+			const shouldFocus = Boolean(getter(this.createScope(component, {}, el), false));
 			if (shouldFocus && !wasFocused) {
 				Promise.resolve().then(() => el.focus?.());
 				wasFocused = true;
@@ -4069,9 +4084,10 @@ class MiniX_Compiler {
 	}
 
 	_compileDisabledDirective(el, expression, component) {
+		const getter = this._compileGetter(expression);
 		let lastDisabled = undefined;
 		return this._effect(component, () => {
-			const disabled = Boolean(this._evaluate(expression, this.createScope(component, {}, el), false));
+			const disabled = Boolean(getter(this.createScope(component, {}, el), false));
 			if (disabled === lastDisabled) return;
 			lastDisabled = disabled;
 			if (disabled) {
@@ -4085,16 +4101,22 @@ class MiniX_Compiler {
 	}
 
 	_compileStyleDirective(el, expression, component) {
+		const getter = this._compileGetter(expression);
+		let lastStyleJson = undefined;
 		return this._effect(component, () => {
-			const styles = this._evaluate(expression, this.createScope(component, {}, el), {});
+			const styles = getter(this.createScope(component, {}, el), {});
+			let json; try { json = JSON.stringify(styles); } catch (_) { json = String(styles); }
+			if (json === lastStyleJson) return;
+			lastStyleJson = json;
 			MiniX_Compiler._patchStyleValue(el, styles);
 		});
 	}
 
 	_compileValueDirective(el, expression, component) {
+		const getter = this._compileGetter(expression);
 		let lastValue = Symbol('unset');
 		return this._effect(component, () => {
-			const value = this._evaluate(expression, this.createScope(component, {}, el), '');
+			const value = getter(this.createScope(component, {}, el), '');
 			const next = value == null ? '' : String(value);
 			if (next === lastValue) return;
 			lastValue = next;
