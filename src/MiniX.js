@@ -862,7 +862,7 @@ class MiniX_State {
 			}
 			const hasGlobal = this._globalWatchers.size > 0;
 			const parentLinks = this._parentLinks.get(target);
-			if (!parentLinks || !parentLinks.length) {
+			if (!parentLinks || !parentLinks.size) {
 				if (hasGlobal) this._notifyGlobalWatchers(newVal, oldVal, prop, meta);
 				return;
 			}
@@ -878,7 +878,7 @@ class MiniX_State {
 		this._notifyTarget(target, prop, newVal, oldVal, meta);
 		const hasGlobal = this._globalWatchers.size > 0;
 		const parentLinks = this._parentLinks.get(target);
-		if (!parentLinks || !parentLinks.length) {
+		if (!parentLinks || !parentLinks.size) {
 			if (hasGlobal) this._notifyGlobalWatchers(newVal, oldVal, prop, meta);
 			return;
 		}
@@ -1841,7 +1841,7 @@ class MiniX_Renderer {
 				pipes = new Array(pipeParts.length - 1);
 				for (let i = 1; i < pipeParts.length; i++) pipes[i - 1] = pipeParts[i].trim().toLowerCase();
 			}
-			parts.push({ expr, pipes, getter: !pipes && _minix_SIMPLE_PATH_RE.test(expr) ? this._compileSimpleGetter(expr) : null });
+			parts.push({ expr, pipes, getter: pipes ? null : (_minix_SIMPLE_PATH_RE.test(expr) ? this._compileSimpleGetter(expr) : null) });
 			lastIndex = match.index + match[0].length;
 		}
 		if (lastIndex < key.length) parts.push(key.slice(lastIndex));
@@ -1859,6 +1859,14 @@ class MiniX_Renderer {
 			if (typeof p === 'object' && p.getter && (!p.pipes || !p.pipes.length)) {
 				const v = p.getter(scope, '');
 				return v == null ? '' : String(v);
+			}
+		}
+		// Fast-path for the most common 2-part shape: ['static prefix', { getter }]
+		if (compiled.length === 2) {
+			const a = compiled[0], b = compiled[1];
+			if (typeof a === 'string' && typeof b === 'object' && b.getter && (!b.pipes || !b.pipes.length)) {
+				const v = b.getter(scope, '');
+				return a + (v == null ? '' : String(v));
 			}
 		}
 		const out = [];
@@ -1960,9 +1968,9 @@ class MiniX_Renderer {
 		let html = options && options.preserveMustaches
 			? safeTemplate
 			: this.interpolate(safeTemplate, scope);
-		placeholderMap.forEach((original, token) => {
+		for (const [token, original] of placeholderMap) {
 			html = html.replaceAll(token, original);
-		});
+		}
 		const sanitizer = options.sanitizer || this.options.sanitizer;
 		if (sanitizer?.sanitize) html = sanitizer.sanitize(html, options.sanitizeConfig || {});
 		return html;
@@ -2136,6 +2144,8 @@ class MiniX_Sanitizer {
 				this._sanitizeTagsRef = allowedTags;
 				this._sanitizeAttrRef = allowedAttributes;
 				this._sanitizeAddTags = Array.from(new Set(allowedTags.filter((tag) => typeof tag === 'string' && tag && !tag.includes('*'))));
+				// Pre-build the merged ADD_TAGS array (no config.ADD_TAGS yet — merged at call time only when needed).
+				this._sanitizeMergedAddTags = this._sanitizeAddTags.slice();
 				const addAttr = new Set();
 				for (const attrs of Object.values(allowedAttributes)) {
 					for (const attr of (Array.isArray(attrs) ? attrs : [])) {
@@ -2149,7 +2159,9 @@ class MiniX_Sanitizer {
 			const addAttr = this._sanitizeAddAttr;
 			const merged = {
 				...config,
-				ADD_TAGS: [...new Set([...(Array.isArray(config.ADD_TAGS) ? config.ADD_TAGS : []), ...addTags])],
+				ADD_TAGS: Array.isArray(config.ADD_TAGS) && config.ADD_TAGS.length
+					? [...new Set([...config.ADD_TAGS, ...addTags])]
+					: this._sanitizeMergedAddTags,
 				ADD_ATTR: (attributeName, tagName) => {
 					if (typeof config.ADD_ATTR === 'function' && config.ADD_ATTR(attributeName, tagName)) return true;
 					if (Array.isArray(config.ADD_ATTR) && config.ADD_ATTR.includes(attributeName)) return true;
@@ -2235,7 +2247,8 @@ class MiniX_Sanitizer {
 			const children = node.childNodes;
 			for (let i = children.length - 1; i >= 0; i--) clean(children[i]);
 		};
-		[...template.content.childNodes].forEach(clean);
+		const rootChildren = template.content.childNodes;
+		for (let i = rootChildren.length - 1; i >= 0; i--) clean(rootChildren[i]);
 		return template.innerHTML;
 	}
 }
@@ -2653,11 +2666,8 @@ class MiniX_Signal {
 			return;
 		}
 
-		const queue = MiniX_State._notifyQueue;
-		queue.clear();
-		for (const cb of globalWatchers) queue.add(cb);
-		if (watchers) for (const cb of watchers) queue.add(cb);
-		for (const cb of queue) {
+		// Avoid rebuilding _notifyQueue Set — iterate global and key watchers directly.
+		const dispatch = (cb) => {
 			const effect = cb.__minix_effect__;
 			if (effect) { if (!effect._scheduled) effect.schedule(); }
 			else {
@@ -2665,7 +2675,9 @@ class MiniX_Signal {
 				MiniX_State._pendingCallbackQueue.set(`${cb.__minix_cbid__}:${pathKey}`, [cb, newVal, oldVal, pathKey, meta]);
 				queued = true;
 			}
-		}
+		};
+		for (const cb of globalWatchers) dispatch(cb);
+		if (watchers) for (const cb of watchers) dispatch(cb);
 		if (queued) MiniX_State._scheduleCallbackFlush();
 	}
 }
@@ -2862,9 +2874,10 @@ class MiniX_Effect {
 
 	_cleanupDeps() {
 		if (!this.deps) return;
-		const targetStates = new Set();
+		let targetStates = null;
 		for (const dep of this.deps) {
 			if (dep.depType === 'target') {
+				if (!targetStates) targetStates = new Set();
 				targetStates.add(dep.state);
 				dep.state._removeTargetWatcher?.(dep.target, dep.prop, dep.runner);
 				dep.state._effectTargetRunnerMap?.get(this)?.get(dep.target)?.delete(dep.prop);
@@ -2874,7 +2887,9 @@ class MiniX_Effect {
 			}
 		}
 		this.deps.clear();
-		for (const state of targetStates) state._trackedEffects?.delete(this);
+		if (targetStates) {
+			for (const state of targetStates) state._trackedEffects?.delete(this);
+		}
 	}
 
 	stop() {
@@ -3009,15 +3024,15 @@ class MiniX_Compiler {
 	_shallowEqual(a, b) { return _minix_shallowEqual(a, b); }
 
 	_meaningfulSibling(node, direction) {
-		let cursor = direction === 'next' ? node?.nextSibling : node?.previousSibling;
-		
+		const isNext = direction === 'next';
+		let cursor = isNext ? node?.nextSibling : node?.previousSibling;
 		while (cursor) {
 			if (cursor.nodeType === Node.TEXT_NODE && !cursor.textContent.trim()) {
-				cursor = direction === 'next' ? cursor.nextSibling : cursor.previousSibling;
+				cursor = isNext ? cursor.nextSibling : cursor.previousSibling;
 				continue;
 			}
 			if (cursor.nodeType === Node.COMMENT_NODE) {
-				cursor = direction === 'next' ? cursor.nextSibling : cursor.previousSibling;
+				cursor = isNext ? cursor.nextSibling : cursor.previousSibling;
 				continue;
 			}
 			return cursor;
@@ -3077,15 +3092,16 @@ class MiniX_Compiler {
 	_applyModifiers(value, modifiers = [], context = {}) {
 		let current = value;
 		const compiler = this;
-		const contextKeys = context && typeof context === 'object' ? Object.keys(context) : null;
 		for (let i = 0; i < modifiers.length; i++) {
 			const modName = modifiers[i];
 			const handler = this.modifiers.get(this._normalizeDirectiveName(modName));
 			if (!handler) continue;
 			try {
 				const arg = { value: current, modifier: modName, compiler };
-				if (contextKeys && contextKeys.length) {
-					for (let ci = 0; ci < contextKeys.length; ci++) arg[contextKeys[ci]] = context[contextKeys[ci]];
+				if (context && typeof context === 'object') {
+					for (const k in context) {
+						if (Object.prototype.hasOwnProperty.call(context, k)) arg[k] = context[k];
+					}
 				}
 				current = handler(arg);
 			} catch (error) {
@@ -4884,7 +4900,9 @@ class MiniX_Compiler {
 
 	_createBlueprintLoopBlock(template, component, extra, key, hostEl = null, blueprint = null) {
 		const childFragment = template.content.cloneNode(true);
-		const contentNodes = [...childFragment.childNodes];
+		const contentNodes = [];
+		let _bn = childFragment.firstChild;
+		while (_bn) { contentNodes.push(_bn); _bn = _bn.nextSibling; }
 		const start = document.createComment(`x-for-start:${String(key)}`);
 		const end = document.createComment(`x-for-end:${String(key)}`);
 		const nodes = [start].concat(contentNodes, [end]);
@@ -5068,8 +5086,8 @@ class MiniX_Compiler {
 							if (classJson !== binding._lastClassJson) {
 								binding._lastClassJson = classJson;
 								const next = normalizeClass(value);
-								binding.previous.forEach((cls) => { if (!next.has(cls)) el.classList.remove(cls); });
-								next.forEach((cls) => { if (!binding.previous.has(cls)) el.classList.add(cls); });
+								for (const cls of binding.previous) { if (!next.has(cls)) el.classList.remove(cls); }
+								for (const cls of next) { if (!binding.previous.has(cls)) el.classList.add(cls); }
 								binding.previous = next;
 							}
 							break;
@@ -5089,7 +5107,7 @@ class MiniX_Compiler {
 										else el.style.setProperty(cssProp, String(styleValue));
 									}
 								}
-								binding.previous.forEach((prop) => { if (!next.has(prop)) el.style.removeProperty(prop); });
+								for (const prop of binding.previous) { if (!next.has(prop)) el.style.removeProperty(prop); }
 								binding.previous = next;
 							}
 						}
@@ -5107,7 +5125,7 @@ class MiniX_Compiler {
 								else el.style.setProperty(cssProp, String(styleValue));
 							}
 						}
-						binding.previous.forEach((prop) => { if (!next.has(prop)) el.style.removeProperty(prop); });
+						for (const prop of binding.previous) { if (!next.has(prop)) el.style.removeProperty(prop); }
 						binding.previous = next;
 						break;
 					}
@@ -5121,7 +5139,7 @@ class MiniX_Compiler {
 							else if (attrValue === true) el.setAttribute(attr, '');
 							else el.setAttribute(attr, String(attrValue));
 						}
-						binding.previous.forEach((attr) => { if (!(attr in attrs)) el.removeAttribute(attr); });
+						for (const attr of binding.previous) { if (!(attr in attrs)) el.removeAttribute(attr); }
 						binding.previous = new Set(Object.keys(attrs));
 						break;
 					}
@@ -5209,7 +5227,9 @@ class MiniX_Compiler {
 
 	_createSimpleLoopBlock(template, component, extra, key, hostEl = null, templateMeta = null) {
 		const childFragment = template.content.cloneNode(true);
-		const contentNodes = [...childFragment.childNodes];
+		const contentNodes = [];
+		let _smn = childFragment.firstChild;
+		while (_smn) { contentNodes.push(_smn); _smn = _smn.nextSibling; }
 		const start = document.createComment(`x-for-start:${String(key)}`);
 		const end = document.createComment(`x-for-end:${String(key)}`);
 		const nodes = [start].concat(contentNodes, [end]);
@@ -5503,7 +5523,9 @@ class MiniX_Compiler {
 	_createLegacyLoopBlock(template, component, extra, key, hostEl = null, templateMeta = null) {
 		templateMeta = templateMeta || this._getLoopTemplateMeta(template);
 		const childFragment = template.content.cloneNode(true);
-		const contentNodes = [...childFragment.childNodes];
+		const contentNodes = [];
+		let _ln = childFragment.firstChild;
+		while (_ln) { contentNodes.push(_ln); _ln = _ln.nextSibling; }
 		const start = document.createComment(`x-for-start:${String(key)}`);
 		const end = document.createComment(`x-for-end:${String(key)}`);
 		const nodes = [start].concat(contentNodes, [end]);
@@ -5767,7 +5789,7 @@ class MiniX_Compiler {
 		const nodes = typeof block.getLiveNodes === 'function'
 			? block.getLiveNodes()
 			: (block.nodes || []);
-		nodes.forEach((node) => fragment.appendChild(node));
+		for (const node of nodes) fragment.appendChild(node);
 		parent.insertBefore(fragment, this._resolveInsertionReference(parent, referenceNode));
 		block.ensureMounted?.();
 	}
@@ -5882,6 +5904,7 @@ class MiniX_Compiler {
 		const stopEffect = this._effect(component, () => {
 			const runBaseScope = this.createScope(component, {}, marker.parentNode || scopeAnchor);
 			const list = sourceGetter(runBaseScope, []);
+			seenKeys.clear();
 			let iterate = null;
 			if (typeof list === 'number' && Number.isFinite(list) && list > 0) {
 				
@@ -7610,7 +7633,9 @@ class MiniX_Component {
 		tpl.innerHTML = html;
 
 		const fragment = tpl.content.cloneNode(true);
-		const nodes = Array.from(fragment.childNodes);
+		const nodes = [];
+		let _fc = fragment.firstChild;
+		while (_fc) { nodes.push(_fc); _fc = _fc.nextSibling; }
 		const textNodes = nodes.filter((node) => node.nodeType === Node.TEXT_NODE && node.textContent.includes('{{'));
 		let textEffectCleanup = null;
 
@@ -7745,20 +7770,25 @@ class MiniX_Component {
 				return { html: '', inst };
 			}
 
-			// First time seeing this layout reference — attempt instantiation.
-			// The try/catch is scoped tightly: only `new layout()` is inside it so that
-			// errors from view() are not silently swallowed.
-			let inst;
-			try {
-				inst = new layout();
-			} catch (_) {
-				// new layout() threw — it is a plain function, not a class.
-				// Cache this knowledge so we don't pay the throw cost on future renders.
+			// Detect class vs plain function without using exception-based control flow.
+			// ES class constructors always have a non-writable 'prototype' descriptor;
+			// plain arrow/regular functions have a writable one (or none at all).
+			const isClass = Object.getOwnPropertyDescriptor(layout, 'prototype')?.writable === false;
+
+			if (!isClass) {
 				this._layoutInst = null;
 				this._layoutInstClass = layout;
 				this._layoutIsPlainFn = true;
 				const html = layout(this.props);
 				return { html: html != null ? String(html) : '', inst: null };
+			}
+
+			let inst;
+			try {
+				inst = new layout();
+			} catch (e) {
+				if (this.options.dev) console.warn('[MiniX] Layout constructor threw:', e);
+				return { html: '', inst: null };
 			}
 
 			this._layoutInst = inst;
@@ -7824,8 +7854,8 @@ class MiniX_Component {
 
 			// Check for <template (must be followed by whitespace or '>' to exclude <templates> etc.)
 			// and for </template (same boundary guard, and '/' makes it unambiguous as a close tag).
-			const c9  = html.slice(tagStart, tagStart + 9).toLowerCase();
 			const c10 = html.slice(tagStart, tagStart + 10).toLowerCase();
+			const c9  = c10.slice(0, 9);
 			const charAfter9  = html[tagStart + 9]  ?? '>';
 			const charAfter10 = html[tagStart + 10] ?? '>';
 
@@ -7863,8 +7893,8 @@ class MiniX_Component {
 				const next = html.indexOf('<', j);
 				if (next === -1) break;
 
-				const nc9  = html.slice(next, next + 9).toLowerCase();
 				const nc10 = html.slice(next, next + 10).toLowerCase();
+				const nc9  = nc10.slice(0, 9);
 				const nAfter9  = html[next + 9]  ?? '>';
 				const nAfter10 = html[next + 10] ?? '>';
 
@@ -8534,7 +8564,9 @@ class MiniX_Request {
 		const url = this._resolveURL(desc._url, desc._params);
 
 		let fetchBody = undefined;
-		let headers = { ...desc._headers };
+		// Only copy headers when request interceptors may mutate them; otherwise
+		// use desc._headers directly to avoid an object allocation per request.
+		let headers = this._interceptors.request.size > 0 ? { ...desc._headers } : desc._headers;
 
 		if (desc._body !== undefined && desc._body !== null) {
 			if (typeof FormData !== 'undefined' && desc._body instanceof FormData) {
