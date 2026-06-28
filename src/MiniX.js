@@ -588,17 +588,15 @@ class MiniX_State {
 		
 		const existing = propMap.get(prop);
 		if (existing !== undefined) {
-			
-			existing.__dep._trackedVersion = tv;
+			existing._trackedVersion = tv;
 			return;
 		}
 		this._trackedEffects.add(effect);
 		const watchers = this._getTargetWatcherSet(target, prop, true);
 		const runner = effect._scheduleRunner;
-		propMap.set(prop, runner);
-		watchers.add(runner);
 		const dep = { state: this, depType: 'target', target, prop, runner, _trackedVersion: tv };
-		runner.__dep = dep;
+		propMap.set(prop, dep);
+		watchers.add(runner);
 		if (!effect.deps) effect.deps = new Set();
 		effect.deps.add(dep);
 		effect._depsDirty = true; 
