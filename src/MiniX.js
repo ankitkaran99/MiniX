@@ -243,18 +243,11 @@ class MiniX_State {
 		
 		
 		if (proto === null || proto === Object.prototype) {
-			const keys = Object.keys(value);
 			const ownKeys = Reflect.ownKeys(value);
-			let canFastClone = keys.length === ownKeys.length;
-			if (canFastClone) {
-				for (let i = 0; i < keys.length; i++) {
-					const desc = Object.getOwnPropertyDescriptor(value, keys[i]);
-					if (!desc || !desc.enumerable || !('value' in desc)) {
-						canFastClone = false;
-						break;
-					}
-				}
-			}
+			const keys = Object.keys(value);
+			// If lengths match, there are no symbol keys and no non-enumerable keys —
+			// safe to skip the per-descriptor check and fast-clone directly.
+			const canFastClone = ownKeys.length === keys.length;
 			if (canFastClone) {
 				const out = proto === null ? Object.create(null) : {};
 				seen.set(value, out);
@@ -287,13 +280,12 @@ class MiniX_State {
 	}
 
 	_isArrayIndex(prop) {
-		if (typeof prop === 'number') return Number.isInteger(prop) && prop >= 0 && prop < 4294967295;
+		if (typeof prop === 'number') return (prop >>> 0) === prop && prop < 4294967295;
 		if (typeof prop !== 'string' || prop === '') return false;
 		const n = prop.charCodeAt(0);
-		// Fast-reject: first char must be a digit 0-9
 		if (n < 48 || n > 57) return false;
 		const index = Number(prop);
-		return Number.isInteger(index) && index >= 0 && index < 4294967295 && String(index) === prop;
+		return (index >>> 0) === index && index < 4294967295 && String(index) === prop;
 	}
 
 	_unwrapProxy(value) {
@@ -342,12 +334,20 @@ class MiniX_State {
 	}
 
 	_joinPath(basePath, prop) {
-		const key = typeof prop === 'symbol' ? `Symbol(${String(prop)})` : prop;
+		let key;
+		if (typeof prop === 'symbol') {
+			key = MiniX_State._symbolKeyCache.get(prop);
+			if (key === undefined) {
+				key = 'Symbol(' + String(prop) + ')';
+				MiniX_State._symbolKeyCache.set(prop, key);
+			}
+		} else {
+			key = prop;
+		}
 		if (!basePath) return key;
 		if (typeof basePath === 'string') return basePath + '.' + key;
 		if (Array.isArray(basePath)) {
 			if (!basePath.length) return key;
-			// Join once via _pathString which caches the result for this exact array reference.
 			return this._pathString(basePath) + '.' + key;
 		}
 		return String(basePath) + '.' + key;
@@ -406,8 +406,8 @@ class MiniX_State {
 		
 		const direct = target.__minix_proxy__;
 		if (direct !== undefined) {
-			const directPath = MiniX_State._proxyDirectPaths?.get(direct);
-			const directOwner = MiniX_State._proxyDirectOwners?.get(direct);
+			const directPath = MiniX_State._proxyDirectPaths.get(direct);
+			const directOwner = MiniX_State._proxyDirectOwners.get(direct);
 			if (directPath === pathKey && directOwner === this) return direct;
 		}
 		const variants = this._proxyPathMap.get(target);
@@ -502,7 +502,7 @@ class MiniX_State {
 		const splitAt = pathKey.lastIndexOf('.');
 		const parentPath = splitAt === -1 ? '' : pathKey.slice(0, splitAt);
 		const parentKey = splitAt === -1 ? pathKey : pathKey.slice(splitAt + 1);
-		const rawState = this._state?.__raw || this._state;
+		const rawState = this._state.__raw ?? this._state;
 		const parentTarget = parentPath ? this._get(rawState, parentPath) : rawState;
 		this._linkTargetToParent(target, parentTarget, parentKey);
 	}
@@ -594,8 +594,7 @@ class MiniX_State {
 		}
 		this._trackedEffects.add(effect);
 		const watchers = this._getTargetWatcherSet(target, prop, true);
-		const runner = () => effect.schedule();
-		runner.__minix_effect__ = effect;
+		const runner = effect._scheduleRunner;
 		propMap.set(prop, runner);
 		watchers.add(runner);
 		const dep = { state: this, depType: 'target', target, prop, runner, _trackedVersion: tv };
@@ -613,14 +612,13 @@ class MiniX_State {
 
 	_notifyGlobalWatchers(newVal, oldVal, prop, meta = {}) {
 		if (!this._globalWatchers.size) return;
-		let propStr = null;
+		const propStr = typeof prop === 'symbol' ? String(prop) : (prop == null ? '' : String(prop));
 		let queued = false;
 		for (const cb of this._globalWatchers) {
 			const effect = cb.__minix_effect__;
 			if (effect) {
 				if (!effect._scheduled) effect.schedule();
 			} else {
-				if (propStr === null) propStr = typeof prop === 'symbol' ? String(prop) : String(prop ?? '');
 				this._queuePlainCallback(cb, newVal, oldVal, propStr, meta);
 				queued = true;
 			}
@@ -686,7 +684,6 @@ class MiniX_State {
 				queued = true;
 			}
 		}
-		queue.clear();
 		if (queued) MiniX_State._scheduleCallbackFlush();
 	}
 
@@ -701,7 +698,9 @@ class MiniX_State {
 	static _parentLinkStack = new Array(256);
 	static _walkParentLinksActive = false;
 
-	_queueBatchedTargetNotify(target, prop, newVal, oldVal, meta = {}) {
+	static _EMPTY_META = Object.freeze({});
+
+	_queueBatchedTargetNotify(target, prop, newVal, oldVal, meta = MiniX_State._EMPTY_META) {
 		if (MiniX_State._flushingBatchedNotifications) return false;
 		if (MiniX_Effect._batchDepth <= 0) return false;
 		if (!meta) meta = {};
@@ -813,7 +812,9 @@ class MiniX_State {
 				const currentParent = stack[--sp];
 				if (!currentParent || depth >= 64) continue;
 				if (this._hasWatchersForTarget(currentParent)) {
-					if (!structuralMeta) structuralMeta = { ...meta, structural: true };
+					if (!structuralMeta) {
+						structuralMeta = meta.structural ? meta : { ...meta, structural: true };
+					}
 					this._notifyTarget(currentParent, currentProp, newVal, oldVal, structuralMeta);
 				}
 				const parentLinks = this._parentLinks.get(currentParent);
@@ -843,15 +844,17 @@ class MiniX_State {
 			if (propMap && propMap.size > 0) {
 				const direct = propMap.get(prop);
 				if (direct) {
-					let propStr = null;
+					const propStr = typeof prop === 'symbol' ? String(prop) : (prop == null ? '' : String(prop));
+					let queued = false;
 					for (const cb of direct) {
 						const eff = cb.__minix_effect__;
 						if (eff) { if (!eff._scheduled) eff.schedule(); }
 						else {
-							if (propStr === null) propStr = typeof prop === 'symbol' ? String(prop) : String(prop ?? '');
 							this._queuePlainCallback(cb, newVal, oldVal, propStr, meta);
+							queued = true;
 						}
 					}
+					if (queued) MiniX_State._scheduleCallbackFlush();
 				}
 			}
 			const hasGlobal = this._globalWatchers.size > 0;
@@ -999,7 +1002,7 @@ class MiniX_State {
 						if (!obj.size) return undefined;
 						const oldVal = new Map(obj);
 						const oldSize = oldVal.size;
-						oldVal.forEach((value, key) => self._unlinkTargetFromParent(value, obj, String(key)));
+						for (const [key, value] of oldVal) self._unlinkTargetFromParent(value, obj, String(key));
 						obj.clear();
 						MiniX_Effect._beginBatch();
 						try {
@@ -1157,7 +1160,10 @@ class MiniX_State {
 						this._trackTargetEffect(obj, MiniX_State.ITERATE_KEY);
 						const result = Array.prototype[prop].apply(proxy, args);
 						if (result === true || (typeof result === 'number' && result !== -1)) return result;
-						const nextArgs = args.length ? [this._unwrapProxy(args[0]), ...args.slice(1)] : args;
+						// These methods take (searchElement, fromIndex?) — no need for a generic spread.
+						const nextArgs = args.length > 1
+							? [this._unwrapProxy(args[0]), args[1]]
+							: [this._unwrapProxy(args[0])];
 						return Array.prototype[prop].apply(obj, nextArgs);
 					};
 				}
@@ -1204,9 +1210,10 @@ class MiniX_State {
 									this._linkTargetToParent(obj[i], obj, _minix_intStr(i));
 								}
 							}
-							this._devCapture(`array:${prop}`, basePath, oldSnapshot, obj.slice(), { type: `array:${prop}` });
-							this._bubbleTargetNotify(obj, MiniX_State.ITERATE_KEY, proxy, oldSnapshot, { type: `array:${prop}` });
-							this._bubbleTargetNotify(obj, 'length', obj.length, oldSnapshot.length, { type: `array:${prop}` });
+							const mutType = 'array:' + prop;
+							this._devCapture(mutType, basePath, oldSnapshot, obj.slice(), { type: mutType });
+							this._bubbleTargetNotify(obj, MiniX_State.ITERATE_KEY, proxy, oldSnapshot, { type: mutType });
+							this._bubbleTargetNotify(obj, 'length', obj.length, oldSnapshot.length, { type: mutType });
 							return result;
 						} finally {
 							MiniX_Effect._endBatch();
@@ -1231,7 +1238,7 @@ class MiniX_State {
 				const hadKey = Object.prototype.hasOwnProperty.call(obj, prop);
 				const oldVal = obj[prop];
 				if (hadKey && Object.is(oldVal, value)) return true;
-				if (hadKey) this._unlinkTargetFromParent(oldVal, obj, String(prop));
+				if (hadKey) this._unlinkTargetFromParent(oldVal, obj, prop);
 				obj[prop] = value;
 				if (this._dev) this._devCapture('set', this._joinPath(basePath, prop), oldVal, value, { type: 'set' });
 				
@@ -1264,7 +1271,7 @@ class MiniX_State {
 				if (!hadKey) return true;
 				const ok = delete obj[prop];
 				if (ok) {
-					this._unlinkTargetFromParent(oldVal, obj, String(prop));
+					this._unlinkTargetFromParent(oldVal, obj, prop);
 					if (this._dev) this._devCapture('delete', this._joinPath(basePath, prop), oldVal, undefined, { type: 'delete' });
 					this._bubbleTargetNotify(obj, prop, undefined, oldVal, { type: 'delete' });
 				}
@@ -1286,7 +1293,7 @@ class MiniX_State {
 	}
 	has(path) {
 		const keys = this._normalize(path);
-		let current = this._state?.__raw || this._state;
+		let current = this._state.__raw ?? this._state;
 		if (!keys.length) return current !== undefined;
 		for (const key of keys) {
 			if (current == null) return false;
@@ -1310,7 +1317,7 @@ class MiniX_State {
 			this._proxyPathMapDirty = false;
 			return;
 		}
-		const rawState = this._state?.__raw || this._state;
+		const rawState = this._state.__raw ?? this._state;
 		const keys = segments || this._getPathSegments(path);
 		let current = rawState;
 		for (let i = 0; i < keys.length - 1; i++) {
@@ -1325,7 +1332,7 @@ class MiniX_State {
 	}
 	set(path, value) {
 		value = this._unwrapProxy(value);
-		const rawState = this._state?.__raw || this._state;
+		const rawState = this._state.__raw ?? this._state;
 		const compiled = this._compilePath(path);
 		const { raw, segments, isSimple, last } = compiled;
 		if (!segments.length) throw new Error('Path is required');
@@ -1592,6 +1599,7 @@ MiniX_State._META_SET      = Object.freeze({ type: 'set' });
 
 MiniX_State._proxyDirectPaths = new WeakMap();
 MiniX_State._proxyDirectOwners = new WeakMap();
+MiniX_State._symbolKeyCache = new Map();
 
 MiniX_State._cbIdCounter = 0;
 MiniX_State._suppressDevCaptureDepth = 0;
@@ -1710,14 +1718,15 @@ function _minix_parseSimplePathSegments(expression) {
 function _minix_shallowEqual(a, b) {
 	if (a === b) return true;
 	if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return false;
-	const keysA = Object.keys(a);
-	const keysB = Object.keys(b);
-	if (keysA.length !== keysB.length) return false;
-	for (let i = 0; i < keysA.length; i++) {
-		const key = keysA[i];
-		if (!Object.is(a[key], b[key])) return false;
+	let countA = 0;
+	for (const key in a) {
+		if (!Object.prototype.hasOwnProperty.call(a, key)) continue;
+		countA++;
+		if (!Object.prototype.hasOwnProperty.call(b, key) || !Object.is(a[key], b[key])) return false;
 	}
-	return true;
+	let countB = 0;
+	for (const key in b) { if (Object.prototype.hasOwnProperty.call(b, key)) countB++; }
+	return countA === countB;
 }
 
 
@@ -1899,9 +1908,7 @@ class MiniX_Renderer {
 
 
 
-			const forAndIgnoreEls = [
-				...tpl.content.querySelectorAll('[x-for], [x-ignore]')
-			];
+			const forAndIgnoreEls = tpl.content.querySelectorAll('[x-for], [x-ignore]');
 
 			const visited = new Set();
 
@@ -1966,6 +1973,8 @@ MiniX_Renderer._evalCache = new Map();
 MiniX_Renderer._evalFallbackCache = new Map();
 MiniX_Renderer._templateCache = new Map();
 
+const _MINIX_EMPTY_META = Object.freeze({});
+
 class MiniX_Event_Bus {
 	constructor() {
 		this._events = new Map();
@@ -1992,7 +2001,7 @@ class MiniX_Event_Bus {
 		if (!set.size) this._events.delete(name);
 		return ok;
 	}
-	emit(name, payload = null, meta = {}) {
+	emit(name, payload = null, meta = _MINIX_EMPTY_META) {
 		let _ts = 0;
 		const event = {
 			name, payload, meta,
@@ -2695,13 +2704,16 @@ class MiniX_Effect {
 		const p = options.priority;
 		this.priority = (typeof p === 'number' && isFinite(p)) ? p : 0;
 		this.active = true;
-		this.deps = null;  
+		this.deps = null;
 		this._running = false;
 		this._scheduled = false;
 		this._seq = 0;
 		this._depsDirty = false;
-		
 		this._phase = this.flush === 'post' ? 'post' : (this.flush === 'frame' ? 'frame' : 'pre');
+		// Pre-build a single schedule runner reused across all target deps for
+		// this effect — avoids one closure allocation per tracked target+prop.
+		this._scheduleRunner = () => this.schedule();
+		this._scheduleRunner.__minix_effect__ = this;
 		if (!this.lazy) this.run();
 	}
 
