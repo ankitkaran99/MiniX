@@ -7,7 +7,7 @@ metrics: ["Events::500 ring buffer","Bridge::window.MxDB","Panel::In-page inspec
 sidebar: "This guide covers the debug plugin surface area: installation, event stream types, runtime flags, console bridge, and store/router instrumentation."
 ---
 
-# MiniX Debug Plugin â€” README
+# MiniX Debug Plugin — README
 
 > **Product:** Mini-X Debug
 > **Summary:** Developer tracing for Mini-X apps, components, directives, stores, and router activity, with an in-page panel and console bridge.
@@ -29,7 +29,7 @@ README / Documentation
 
 # MiniX Debug Plugin
 
-A developer-mode debugging plugin for **MiniX** that traces component lifecycle, watcher activity, directive compilation, prop changes, x-for loop issues, store updates, and router navigation â€” while also exposing a live in-page debug panel and a console bridge through `window.MxDB`.
+A developer-mode debugging plugin for **MiniX** that traces component lifecycle, watcher activity, directive compilation, prop changes, x-for loop issues, store updates, and router navigation — while also exposing a live in-page debug panel and a console bridge through `window.MxDB`.
 
 Lifecycle tracing
 
@@ -59,7 +59,7 @@ Floating debug panel
 
 *   Logs human-readable component activity with component names.
 *   Records lifecycle hooks like `created`, `mounted`, `updated`, and `unmounted`.
-*   Wraps state watchers so path changes can be inspected as old value â†’ new value.
+*   Wraps state watchers so path changes can be inspected as old value → new value.
 *   Logs directive usage such as `x-if`, `x-for`, `x-model`, and bindings handled by the compiler.
 *   Diffs incoming props on child updates.
 *   Warns about risky `x-for` keys like missing keys, duplicate keys, or unstable index-style keys.
@@ -68,7 +68,7 @@ Floating debug panel
 
 ## Best fit
 
-Use this plugin during local development, integration testing, and framework debugging. It is especially handy when a component updates â€œfor no reasonâ€, a child prop is drifting, or your list rendering is doing tiny acts of DOM violence.
+Use this plugin during local development, integration testing, and framework debugging. It is especially handy when a component updates “for no reason”, a child prop is drifting, or your list rendering is doing tiny acts of DOM violence.
 
 This is a development tool. It patches MiniX internals and compiler methods globally for the current page, so it should not be treated like a lightweight production analytics plugin.
 
@@ -208,10 +208,10 @@ MxDB.enable({ verbose: true, panel: true });
 
 The panel is browser-only and includes tabs for:
 
-*   **Events** â€” recent event stream
-*   **Components** â€” live component registry snapshots
-*   **Stores** â€” MiniXStore snapshots
-*   **Router** â€” tracked router snapshots
+*   **Events** — recent event stream
+*   **Components** — live component registry snapshots
+*   **Stores** — MiniXStore snapshots
+*   **Router** — tracked router snapshots
 
 You can drag it, collapse it, close it, clear logs, and copy the event log to the clipboard.
 

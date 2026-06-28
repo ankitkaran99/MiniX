@@ -166,7 +166,7 @@ function scanScript(uri: vscode.Uri, text: string): MiniXSymbol[] {
 function looksLikeComponentClass(node: ts.ClassDeclaration): boolean {
   const memberNames = node.members.map((member) => member.name?.getText().replace(/^['"]|['"]$/g, '') ?? '');
   return memberNames.some((name) =>
-    ['data', 'view', 'template', 'registerComponents', 'mounted', 'beforeMount', 'updated', 'beforeUnmount', 'unmounted', 'watch', 'methods', 'props'].includes(name)
+    ['data', 'view', 'template', 'registerComponents', 'mounted', 'beforeMount', 'updated', 'beforeUnmount', 'unmounted', 'watch', 'methods', 'props', 'rules', 'stores'].includes(name)
   );
 }
 

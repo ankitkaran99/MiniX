@@ -99,7 +99,7 @@ MiniX.createApp(CounterApp).mount('#app');
 ```
 
 > [!TIP]
-> **Mental model:** write normal class code and normal HTML. MiniX does the reactive wiring behind the curtainâ€”the tiny electrician inside the wall.
+> **Mental model:** write normal class code and normal HTML. MiniX does the reactive wiring behind the curtain—the tiny electrician inside the wall.
 
 ## 3\. Architecture
 
@@ -389,7 +389,7 @@ Props can be arrays or descriptor objects. They are exposed as readonly `this.pr
 class ProductCard {
   static props = {
     product: { type: Object, required: true },
-    currency: { type: String, default: 'â‚¹' },
+    currency: { type: String, default: '₹' },
     showStock: { type: Boolean, default: true },
     onSelect: Function
   };
@@ -406,7 +406,7 @@ class ProductCard {
 *   `$setProps()` updates props and rerenders when needed.
 
 ```
-<div x-component="ProductCard" x-props="{ product: item, currency: 'â‚¹' }"></div>
+<div x-component="ProductCard" x-props="{ product: item, currency: '₹' }"></div>
 ```
 
 ## 11\. Lists and loops
@@ -518,7 +518,7 @@ const ToastPlugin = MiniX.Plugin.define({
       }
     }));
 
-    app.modifier('money', ({ value }) => 'â‚¹' + Number(value || 0).toFixed(2));
+    app.modifier('money', ({ value }) => '₹' + Number(value || 0).toFixed(2));
   }
 });
 

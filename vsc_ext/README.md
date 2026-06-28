@@ -6,8 +6,8 @@ VS Code extension for Mini-X projects. It provides workspace scanning, IntelliSe
 
 - Scans `.js`, `.mjs`, `.ts`, `.html`, `.blade.php`, and `.php` files.
 - Indexes Mini-X components, stores, routes, plugins, lifecycle hooks, props, event bus usage, directives, and template usage.
-- Completes Mini-X globals, class component members, directives, store APIs, router APIs, indexed components, and indexed stores.
-- Shows hover documentation for directives, lifecycle hooks, store helpers, router helpers, and event bus APIs.
+- Autocompletes Mini-X globals, class component options (`data`, `view`, `template`, `registerComponents`, `rules`, `stores`), all 26 core directives (including `x-else-if`, `x-portal`, `x-once`, etc.), store APIs, router APIs, form validation APIs (`this.$errors`, `this.$validate()`), translation APIs (`this.$t()`, `this.$i18n`), official plugin directives (`x-validate`, `x-ajax`, `x-mask`, `x-i18n`, `x-scroll`), and indexed components/stores.
+- Shows hover documentation for all core/plugin directives, lifecycle hooks, store helpers, router helpers, validation helpers, translation helpers, and event bus APIs.
 - Warns about common mistakes such as `MiniX.defineComponent`, `MiniX.component`, missing `.mount('#app')`, invalid `x-for`, empty `x-component`, unsupported `x-model`, duplicate component names, and empty templates.
 - Provides quick fixes for safe edits: add `.mount('#app')`, convert `x-on:click` to `@click`, add `x-key`, and replace `MiniX.defineComponent(...)` with a class skeleton.
 - Generates class components, stores, and routers without global component registration.

@@ -69,7 +69,7 @@ class MyApp {
 ## 4\. Available Helpers
 
 ```
-this.$errors          // reactive object â€” read per field: this.$errors.email
+this.$errors          // reactive object — read per field: this.$errors.email
 this.$validate()      // run validation, returns Promise<boolean>
 this.$validateForm()  // alias for $validate()
 this.$clearErrors()   // reset all field errors
@@ -77,7 +77,7 @@ this.$clearErrors()   // reset all field errors
 
 ## 5\. Error Display
 
-Errors are exposed via the reactive **$errors** scope object. Bind directly in the template using **x-show** and **x-text** â€” no `data-error-for` nodes or manual DOM writes needed:
+Errors are exposed via the reactive **$errors** scope object. Bind directly in the template using **x-show** and **x-text** — no `data-error-for` nodes or manual DOM writes needed:
 
 ```
 <!-- one div per field -->
@@ -109,6 +109,6 @@ MiniX.createApp(MyApp)
 
 *   Validation blocks submit automatically
 *   Inspect.js is required
-*   Do **not** use `data-error-for` â€” it is no longer supported. Use `x-show="$errors.field"` and `x-text="$errors.field || ''"` instead
-*   Each field in `rules()` must have a corresponding `data()` entry is _not_ required â€” errors live in plugin-managed state, not component data
+*   Do **not** use `data-error-for` — it is no longer supported. Use `x-show="$errors.field"` and `x-text="$errors.field || ''"` instead
+*   A corresponding `data()` entry is **not** required for every field in `rules()` — errors live in plugin-managed state, not component data
 *   `x-validate-on="blur|input"` enables live validation as the user types or leaves a field

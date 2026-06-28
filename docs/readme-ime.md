@@ -115,8 +115,8 @@ Tokens define which characters are accepted and how they are transformed.
 
 | Token | Accepts | Transform | Example |
 | --- | --- | --- | --- |
-| `A` | Letters only | Uppercase | `a` â†’ `A` |
-| `a` | Letters only | Lowercase | `B` â†’ `b` |
+| `A` | Letters only | Uppercase | `a` → `A` |
+| `a` | Letters only | Lowercase | `B` → `b` |
 | `9` | Digits only | No change | `7` |
 | `X` | Letters or digits | No change | `A`, `8` |
 | `*` | Any single character | No change | `@`, `a`, `5` |

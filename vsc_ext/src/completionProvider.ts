@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { MiniXProjectIndex } from './indexer';
-import { componentMembers, directives, globalApis, markdownFor, routerApis, storeApis } from './miniXData';
+import { componentMembers, directives, globalApis, markdownFor, routerApis, storeApis, formApis, i18nApis } from './miniXData';
 
 export class MiniXCompletionProvider implements vscode.CompletionItemProvider {
   constructor(private readonly index: MiniXProjectIndex) {}
@@ -31,6 +31,8 @@ export class MiniXCompletionProvider implements vscode.CompletionItemProvider {
     items.push(...componentMembers.map((item) => toCompletion(item, vscode.CompletionItemKind.Method)));
     items.push(...storeApis.map((item) => toCompletion(item, vscode.CompletionItemKind.Function)));
     items.push(...routerApis.map((item) => toCompletion(item, vscode.CompletionItemKind.Function)));
+    items.push(...formApis.map((item) => toCompletion(item, vscode.CompletionItemKind.Property)));
+    items.push(...i18nApis.map((item) => toCompletion(item, vscode.CompletionItemKind.Property)));
     items.push(...this.index.allSymbols().map((symbol) => {
       const completion = new vscode.CompletionItem(symbol.name, symbolKind(symbol.kind));
       completion.detail = `Mini-X ${symbol.kind}`;

@@ -8,7 +8,7 @@ sidebar: Use this page to load locales, install the plugin, translate DOM or tem
 ---
 {% raw %}
 
-# MiniX i18n Plugin Â· i18next integration
+# MiniX i18n Plugin · i18next integration
 
 > **Product:** Mini-X i18n
 > **Summary:** i18next integration for Mini-X with x-i18n, $t(), namespace loading, and language switching patterns.
@@ -305,7 +305,7 @@ A missing `/favicon.ico` request is harmless. Add a favicon file if you want to 
 
 The plugin guards `$t()` until i18next is initialized. If you call the raw i18next instance directly, wait for `this.$i18n.ready` or the i18next init promise.
 
-MiniX i18n Plugin Â· i18next integration Â· See `demos/mini-x-plugins/demo-i18n.html` for a working example.
+MiniX i18n Plugin · i18next integration · See `demos/mini-x-plugins/demo-i18n.html` for a working example.
 
 document.querySelectorAll('pre code').forEach((block) => { if (window.Prism) Prism.highlightElement(block); });
 {% endraw %}

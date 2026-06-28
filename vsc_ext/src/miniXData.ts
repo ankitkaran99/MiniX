@@ -60,7 +60,9 @@ export const componentMembers: MiniXDocItem[] = [
   { name: 'unmounted', detail: 'unmounted() {}', documentation: 'Lifecycle hook called after the component is removed.' },
   { name: 'watch', detail: 'watch = { key(value, oldValue) {} }', documentation: 'Declares watchers for component state.' },
   { name: 'methods', detail: 'methods = { action() {} }', documentation: 'Declares methods exposed to template expressions.' },
-  { name: 'static props', detail: 'static props = { name: String }', documentation: 'Declares component props accepted from x-props.' }
+  { name: 'static props', detail: 'static props = { name: String }', documentation: 'Declares component props accepted from x-props.' },
+  { name: 'stores', detail: 'stores() { return { ... } }', documentation: 'Registers global stores for component template scope access.', insertText: 'stores() {\n\treturn {\n\t\t$1\n\t};\n}' },
+  { name: 'rules', detail: 'rules() { return [ ... ] }', documentation: 'Returns validation rules configuration for the form validate plugin.', insertText: 'rules() {\n\treturn [\n\t\t$1\n\t];\n}' }
 ];
 
 export const directives: MiniXDocItem[] = [
@@ -70,6 +72,8 @@ export const directives: MiniXDocItem[] = [
   { name: 'x-model', detail: 'x-model="field"', documentation: 'Binds input, textarea, or select value to state.' },
   { name: 'x-for', detail: 'x-for="item in items"', documentation: 'Repeats an element or template for each item. Prefer a stable x-key or :key.' },
   { name: 'x-if', detail: 'x-if="condition"', documentation: 'Conditionally renders an element.' },
+  { name: 'x-else-if', detail: 'x-else-if="condition"', documentation: 'Else-if branch for conditional rendering.' },
+  { name: 'x-else', detail: 'x-else', documentation: 'Fallback branch for conditional rendering.' },
   { name: 'x-show', detail: 'x-show="condition"', documentation: 'Toggles element visibility without destroying it.' },
   { name: 'x-class', detail: 'x-class="{ active: isActive }"', documentation: 'Applies classes from object, string, or array expressions.' },
   { name: 'x-style', detail: 'x-style="{ color }"', documentation: 'Applies inline styles from an expression.' },
@@ -80,14 +84,33 @@ export const directives: MiniXDocItem[] = [
   { name: '@change', detail: '@change="handler"', documentation: 'Change event listener shorthand.' },
   { name: '@submit', detail: '@submit.prevent="handler"', documentation: 'Submit event listener shorthand, commonly used on forms.' },
   { name: 'x-component', detail: 'x-component="ComponentName"', documentation: 'Mounts a locally registered class component.' },
-  { name: 'x-render', detail: 'x-render="ComponentName"', documentation: 'Renders a component or render target dynamically.' },
   { name: 'x-slot', detail: 'x-slot="name"', documentation: 'Marks slot content passed to a child component.' },
-  { name: 'x-teleport', detail: 'x-teleport="selector"', documentation: 'Moves rendered content into another DOM target.' },
+  { name: 'x-portal', detail: 'x-portal="selector"', documentation: 'Moves rendered content into another DOM target (alias x-teleport).' },
+  { name: 'x-teleport', detail: 'x-teleport="selector"', documentation: 'Moves rendered content into another DOM target (alias of x-portal).' },
   { name: 'x-key', detail: 'x-key="item.id"', documentation: 'Provides a stable key for repeated content.' },
   { name: 'x-ref', detail: 'x-ref="name"', documentation: 'Registers an element in this.$refs.' },
+  { name: 'x-ignore', detail: 'x-ignore', documentation: 'Skips compiling the element and all its children.' },
+  { name: 'x-bind', detail: 'x-bind:name="expression"', documentation: 'Binds an attribute dynamically. Shorthand :name="expression" is also supported.' },
+  { name: 'x-init', detail: 'x-init="expression"', documentation: 'Runs work when the element is compiled.' },
+  { name: 'x-focus', detail: 'x-focus="expression"', documentation: 'Sets focus on the element if the expression evaluates to truthy.' },
+  { name: 'x-disabled', detail: 'x-disabled="expression"', documentation: 'Toggles the disabled attribute dynamically.' },
+  { name: 'x-value', detail: 'x-value="expression"', documentation: 'Sets the element\'s value dynamically.' },
+  { name: 'x-cloak', detail: 'x-cloak', documentation: 'Removes the x-cloak attribute after compilation to prevent flash of uncompiled content.' },
+  { name: 'x-transition', detail: 'x-transition="fade"', documentation: 'Applies transition classes during showing/hiding.' },
+  { name: 'x-once', detail: 'x-once', documentation: 'Renders the element subtree once and freezes reactive updates.' },
   { name: 'x-router-view', detail: 'x-router-view', documentation: 'Router outlet where the matched route component renders.' },
   { name: 'x-route', detail: 'x-route="routeName"', documentation: 'Navigates to a named Mini-X route.' },
-  { name: 'x-link', detail: 'x-link="/path"', documentation: 'Router-aware link binding.' }
+  { name: 'x-link', detail: 'x-link="/path"', documentation: 'Router-aware link binding.' },
+  { name: 'x-validate', detail: 'x-validate', documentation: 'Enables rule-driven validation on a form.' },
+  { name: 'x-validate-on', detail: 'x-validate-on="blur|input"', documentation: 'Configures when form validation triggers (e.g. on blur or input).' },
+  { name: 'x-ajax', detail: 'x-ajax="options"', documentation: 'Enables AJAX form submission with lifecycle callbacks.' },
+  { name: 'x-mask', detail: 'x-mask="pattern"', documentation: 'Applies a literal input mask pattern (e.g. (999) 999-9999).' },
+  { name: 'x-mask-free', detail: 'x-mask-free="options"', documentation: 'Applies a free token-based input mask constraint.' },
+  { name: 'x-i18n', detail: 'x-i18n="key"', documentation: 'Directly translates the element\'s text content using i18next.' },
+  { name: 'x-scroll', detail: 'x-scroll="callback"', documentation: 'Executes a callback when the element is scrolled near its boundary.' },
+  { name: 'x-scroll-dir', detail: 'x-scroll-dir="bottom"', documentation: 'Sets scroll boundary detection direction (bottom or top).' },
+  { name: 'x-scroll-threshold', detail: 'x-scroll-threshold="20"', documentation: 'Threshold distance in px from boundary before triggering (default 10).' },
+  { name: 'x-scroll-initial', detail: 'x-scroll-initial', documentation: 'Triggers scroll callback once on mount if already near boundary.' }
 ];
 
 export const storeApis: MiniXDocItem[] = [
@@ -115,6 +138,21 @@ export const routerApis: MiniXDocItem[] = [
   { name: 'this.$data', detail: 'this.$data', documentation: 'The current route data (custom history state).' }
 ];
 
+export const formApis: MiniXDocItem[] = [
+  { name: 'this.$errors', detail: 'this.$errors', documentation: 'A reactive object containing field validation errors.' },
+  { name: '$errors', detail: '$errors', documentation: 'A reactive template scope object containing field validation errors.' },
+  { name: 'this.$validate', detail: 'this.$validate()', documentation: 'Runs validation rules configured in the component, returning a Promise<boolean>.' },
+  { name: 'this.$validateForm', detail: 'this.$validateForm()', documentation: 'Alias for this.$validate().' },
+  { name: 'this.$clearErrors', detail: 'this.$clearErrors()', documentation: 'Resets and clears all validation errors from the current form.' }
+];
+
+export const i18nApis: MiniXDocItem[] = [
+  { name: 'this.$t', detail: 'this.$t(key, options?)', documentation: 'Translates a key using i18next.' },
+  { name: '$t', detail: '$t(key, options?)', documentation: 'Translates a key using i18next from within template expressions.' },
+  { name: 'this.$i18n', detail: 'this.$i18n', documentation: 'The initialized i18next instance.' },
+  { name: '$i18n', detail: '$i18n', documentation: 'The initialized i18next instance from within template expressions.' }
+];
+
 export const lifecycleHooks = componentMembers.filter((item) =>
   ['mounted', 'beforeMount', 'updated', 'beforeUnmount', 'unmounted'].includes(item.name)
 );
@@ -124,7 +162,9 @@ export const allDocItems = [
   ...componentMembers,
   ...directives,
   ...storeApis,
-  ...routerApis
+  ...routerApis,
+  ...formApis,
+  ...i18nApis
 ];
 
 export function markdownFor(item: MiniXDocItem): vscode.MarkdownString {
