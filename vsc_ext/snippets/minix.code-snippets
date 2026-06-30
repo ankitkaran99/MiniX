@@ -85,6 +85,27 @@
     ],
     "description": "Mini-X parent component with local child registration."
   },
+  "Mini-X component with tag-based child components": {
+    "prefix": "minix-tag-children",
+    "body": [
+      "import ${1:ChildCard} from './${1:ChildCard}.js';",
+      "",
+      "export default class ${2:ParentComponent} {",
+      "\tregisterComponents() {",
+      "\t\treturn { '${3:child-card}': ${1:ChildCard} };",
+      "\t}",
+      "",
+      "\tview() {",
+      "\t\treturn `",
+      "\t\t\t<section>",
+      "\t\t\t\t<${3:child-card} x-props=\"{ title: '${4:Child}' }\"></${3:child-card}>",
+      "\t\t\t</section>",
+      "\t\t`;",
+      "\t}",
+      "}"
+    ],
+    "description": "Mini-X parent component with local child registration using hyphenated tag name (auto-component)."
+  },
   "Mini-X data computed watch": {
     "prefix": "minix-stateful",
     "body": [

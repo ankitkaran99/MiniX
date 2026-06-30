@@ -10,11 +10,13 @@ export class MiniXDefinitionProvider implements vscode.DefinitionProvider {
       return undefined;
     }
 
-    const candidates = this.index.allSymbols().filter((symbol) =>
-      symbol.name === token ||
-      symbol.name.endsWith(`.${token}`) ||
-      stripQuotes(symbol.name) === token
-    );
+    const candidates = this.index.allSymbols().filter((symbol) => {
+      const cleanSymbol = stripQuotes(symbol.name);
+      return cleanSymbol === token ||
+        symbol.name.endsWith(`.${token}`) ||
+        stripQuotes(symbol.name) === token ||
+        toKebabCase(cleanSymbol) === toKebabCase(token);
+    });
     if (candidates.length === 0) {
       return undefined;
     }
@@ -75,5 +77,12 @@ function readToken(document: vscode.TextDocument, position: vscode.Position): st
 
 function stripQuotes(value: string): string {
   return value.replace(/^['"]|['"]$/g, '');
+}
+
+function toKebabCase(str: string): string {
+  return str
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .replace(/([A-Z])([A-Z][a-z])/g, '$1-$2')
+    .toLowerCase();
 }
 

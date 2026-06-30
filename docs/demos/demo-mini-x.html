@@ -990,6 +990,18 @@
           </div>
         </div>
         <div class="test-box">
+          <div class="test-label">Auto-component (Tag-based mounting) <span id="badge-autocomp" class="badge gray">pending</span></div>
+          <div class="test-content col">
+            <div class="row">
+              <input type="text" x-model="compTitle" placeholder="Component title…">
+              <button class="btn sm primary" @click="compCount++">+1 to child</button>
+            </div>
+            <div class="mt">
+              <info-card x-props="{ title: compTitle + ' (Auto)', count: compCount }"></info-card>
+            </div>
+          </div>
+        </div>
+        <div class="test-box">
           <div class="test-label">Slots <span id="badge-slots" class="badge gray">pending</span></div>
           <div class="test-content col">
             <div x-component="CardShell">
@@ -1589,6 +1601,7 @@ class DemoApp {
     check('transition', 'x-transition', 'x-transition', (r) => r.querySelector('[x-transition]'));
     // components
     check('comp', 'Child component', 'x-component + x-props', (r) => r.querySelector('[x-component="InfoCard"]'));
+    check('autocomp', 'Auto-component tag-based mounting', '<info-card>', (r) => r.querySelector('info-card'));
     check('slots', 'Slots', 'x-slot', (r) => r.querySelector('[x-slot="title"]'));
     // scoped
     check('scoped', 'Scoped x-data', 'x-data', (r) => r.querySelector('[x-data]'));
@@ -1637,6 +1650,7 @@ const apps = {};
 // We mount a single root app over the entire main
 MiniX.createApp(DemoApp)
   .component('InfoCard', InfoCard)
+  .component('info-card', InfoCard)
   .component('CardShell', CardShell)
   .mount('#demo-main');
 

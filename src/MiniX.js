@@ -3280,7 +3280,7 @@ class MiniX_Compiler {
 		if (typeof component._syncChildrenArray === 'function') component._syncChildrenArray();
 	}
 
-	_walkElements(root) {
+	_walkElements(root, localComponents = null) {
 		const elements = [];
 		const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
 		const structuralAttrs = MiniX_Compiler._STRUCTURAL_ATTRS;
@@ -3293,6 +3293,15 @@ class MiniX_Compiler {
 					const attrNames = node.getAttributeNames();
 					for (let ai = 0; ai < attrNames.length; ai++) {
 						if (structuralAttrs.has(attrNames[ai])) { isStructural = true; break; }
+					}
+				}
+				// Also treat auto-component elements as structural — their subtree is
+				// owned by the child component and must not be compiled by the parent.
+				if (!isStructural && node !== root) {
+					const tn = node.tagName?.toLowerCase();
+					if (tn && tn.includes('-') && !node.hasAttribute('x-component')) {
+						const isLocal = localComponents && Object.prototype.hasOwnProperty.call(localComponents, tn);
+						if (isLocal || MiniX_Component.registry.has(tn)) isStructural = true;
 					}
 				}
 				if (isStructural) {
@@ -3420,12 +3429,22 @@ class MiniX_Compiler {
 		};
 	}
 
-	_collectDirectives(el) {
+	_collectDirectives(el, localComponents = null) {
 		const attrs = el.attributes || [];
 		const attrNames = el.getAttributeNames ? el.getAttributeNames() : null;
 		const count = attrNames ? attrNames.length : attrs.length;
 
+		// Auto-component: if the element's tag name matches a registered component
+		// and it doesn't already have an explicit x-component attribute, synthesize
+		// one so the existing compile pipeline handles it without any new code paths.
+		const tagName = el.tagName ? el.tagName.toLowerCase() : null;
+		const hasXComponent = tagName && el.hasAttribute('x-component');
+		const autoComponentName = (!hasXComponent && tagName && tagName.includes('-'))
+			? (localComponents?.[tagName] || MiniX_Component.registry.has(tagName) ? tagName : null)
+			: null;
+
 		const sigParts = [];
+		if (autoComponentName) sigParts.push('x-component\x00' + autoComponentName);
 		for (let i = 0; i < count; i++) {
 			const name = attrNames ? attrNames[i] : attrs[i].name;
 			const ch0 = name.charCodeAt(0);
@@ -3439,6 +3458,13 @@ class MiniX_Compiler {
 		const cached = el.__minix_directives_cache__;
 		if (cached && cached.signature === signature) return cached.value;
 		const resolved = [];
+
+		// Inject the synthetic x-component directive first (highest priority).
+		if (autoComponentName) {
+			const r = this._resolveDirectiveFromAttr({ name: 'x-component', value: autoComponentName });
+			if (r) resolved.push(r);
+		}
+
 		for (let i = 0; i < count; i++) {
 			const name = attrNames ? attrNames[i] : attrs[i].name;
 			const attr = { name, value: attrNames ? el.getAttribute(name) : attrs[i].value };
@@ -3459,12 +3485,13 @@ class MiniX_Compiler {
 		return resolved;
 	}
 
-	_prepareCompileGraph(root) {
+	_prepareCompileGraph(root, component = null) {
 		const cached = root.__minix_graph_cache__;
 		const gen = MiniX_Compiler._scopeGen;
 		if (cached && cached.gen === gen) return cached.value;
+		const localComponents = component?.localComponents || null;
 		const entries = [];
-		const elements = this._walkElements(root);
+		const elements = this._walkElements(root, localComponents);
 		const conditionalSkip = new WeakSet();
 		// Cache closest('[data-x-once]') and closest('[x-component]') per element
 		// using ancestor tracking to avoid redundant DOM walks on every element.
@@ -3479,23 +3506,41 @@ class MiniX_Compiler {
 			onceAncestorCache.set(p, result);
 			return result;
 		};
+		const isAutoComponentTag = (tn) => {
+			if (!tn || !tn.includes('-')) return false;
+			return (localComponents && Object.prototype.hasOwnProperty.call(localComponents, tn)) || MiniX_Component.registry.has(tn);
+		};
 		const componentAncestorNotRoot = (el) => {
 			if (el === root) return null;
 			const p = el.parentElement;
 			if (!p) return null;
 			if (componentAncestorCache.has(p)) return componentAncestorCache.get(p);
-			const found = p.closest('[x-component]');
-			componentAncestorCache.set(p, found || null);
-			return found || null;
+			// Check for explicit x-component attribute first, then auto-component tag names.
+			let found = p.closest('[x-component]') || null;
+			if (!found) {
+				// Walk ancestors looking for an auto-component element.
+				let cursor = p;
+				while (cursor && cursor !== root) {
+					const tn = cursor.tagName?.toLowerCase();
+					if (tn && !cursor.hasAttribute('x-component') && isAutoComponentTag(tn)) {
+						found = cursor;
+						break;
+					}
+					cursor = cursor.parentElement;
+				}
+			}
+			componentAncestorCache.set(p, found);
+			return found;
 		};
 		for (const el of elements) {
-			const directives = this._collectDirectives(el);
+			const directives = this._collectDirectives(el, localComponents);
 			const entry = { el, directives, skip: false };
 			if (conditionalSkip.has(el)) entry.skip = true;
 			if (el !== root && hasOnceAncestor(el)) entry.skip = true;
 			if (el === root && root.__minix_skip_root_directives__) entry.skip = true;
 			if (el === root) {
-				const isComponentHost = el.hasAttribute('x-component');
+				const isComponentHost = el.hasAttribute('x-component')
+					|| (el.tagName && isAutoComponentTag(el.tagName.toLowerCase()));
 				if (isComponentHost || el.hasAttribute('x-for') || el.hasAttribute('x-portal') || el.hasAttribute('x-teleport')) entry.skip = true;
 			}
 			if (el !== root) {
@@ -3845,13 +3890,9 @@ class MiniX_Compiler {
 				const json = selected.join('\u0001');
 				if (json !== lastSyncedJSON) {
 					lastSyncedJSON = json;
+					const selectedSet = new Set(selected);
 					for (let i = 0; i < el.options.length; i++) {
-						const option = el.options[i];
-						let selectedOption = false;
-						for (let j = 0; j < selected.length; j++) {
-							if (selected[j] === option.value) { selectedOption = true; break; }
-						}
-						option.selected = selectedOption;
+						el.options[i].selected = selectedSet.has(el.options[i].value);
 					}
 				}
 			} else {
@@ -5175,13 +5216,10 @@ class MiniX_Compiler {
 							const json = selected.join('\u0001');
 							if (json !== binding.lastModelJSON) {
 								binding.lastModelJSON = json;
+								const selectedSet = new Set(selected);
 								for (let i = 0; i < el.options.length; i++) {
 									const option = el.options[i];
-									let selectedOption = false;
-									for (let j = 0; j < selected.length; j++) {
-										if (selected[j] === option.value) { selectedOption = true; break; }
-									}
-									option.selected = selectedOption;
+									option.selected = selectedSet.has(option.value);
 								}
 							}
 						} else {
@@ -5230,7 +5268,8 @@ class MiniX_Compiler {
 			setScope(nextExtra = {}) {
 				if (nextExtra.__minix_loop_meta) runtimeComponent.__minix_loop_state__.meta = nextExtra.__minix_loop_meta;
 				let dirtyMask = 0;
-				const nextKeys = Object.keys(nextExtra);
+				const nextKeys = [];
+				for (const k in nextExtra) { if (Object.prototype.hasOwnProperty.call(nextExtra, k)) nextKeys.push(k); }
 				for (const staleKey of renderKeys) {
 					if (!(staleKey in nextExtra)) {
 						delete loopScope[staleKey];
@@ -5443,10 +5482,7 @@ class MiniX_Compiler {
 
 		const mountChildComponent = () => {
 			const scope = localComponent._createRenderScope();
-			const rawName = this._evaluate(componentExpr, scope, componentExpr);
-			const componentName = component._resolveComponentName(
-				typeof rawName === 'string' ? rawName : componentExpr
-			);
+			const componentName = component._resolveComponentName(componentExpr);
 			const props = this._evaluateComponentHostProps(template, scope);
 
 			const Child = MiniX_Component.resolve(componentName, component.localComponents);
@@ -5523,10 +5559,7 @@ class MiniX_Compiler {
 				loopSignal.increment('version');
 
 				const scope = localComponent._createRenderScope();
-				const rawName = this._evaluate(componentExpr, scope, componentExpr);
-				const nextName = component._resolveComponentName(
-					typeof rawName === 'string' ? rawName : componentExpr
-				);
+				const nextName = component._resolveComponentName(componentExpr);
 				const nextProps = this._evaluateComponentHostProps(template, scope);
 
 				if (!childComponent || childComponent.isDestroyed) {
@@ -6186,8 +6219,15 @@ class MiniX_Compiler {
 			
 			
 			const scope = this.createScope(component, {}, el.parentNode || el);
-			const rawName = this._evaluate(expression, scope, expression);
-			const componentName = component._resolveComponentName(typeof rawName === 'string' ? rawName : expression);
+			// If the directive's expression is already a literal, registered
+			// component name (the common case for both explicit x-component="name"
+			// and auto-component tag-name elements), skip _evaluate entirely.
+			// Evaluating a hyphenated tag name like "clock-widget" as a JS
+			// expression throws (parsed as subtraction) and silently falls back
+			// to the literal string anyway — this just avoids the wasted
+			// compile+throw+catch cycle and the risk of a same-named scope
+			// variable accidentally shadowing the literal component name.
+			const componentName = component._resolveComponentName(expression);
 			const props = this._evaluateComponentHostProps(el, scope);
 			const nextSlotSignature = cachedSlotSignature;
 
@@ -6336,8 +6376,7 @@ class MiniX_Compiler {
 
 		const mountOrUpdate = () => {
 			const scope = this.createScope(component, {}, start.parentNode || component.root);
-			const rawName = this._evaluate(expression, scope, expression);
-			const componentName = component._resolveComponentName(typeof rawName === 'string' ? rawName : expression);
+			const componentName = component._resolveComponentName(expression);
 			const props = this._evaluateComponentHostProps(template, scope);
 
 			if (mountedChild && !mountedChild.isDestroyed && componentName === lastComponentName && this._shallowEqual(props, lastProps)) {
@@ -6433,7 +6472,7 @@ class MiniX_Compiler {
 	}
 
 	_buildCompileOpcodes(target, component) {
-		const graph = this._prepareCompileGraph(target);
+		const graph = this._prepareCompileGraph(target, component);
 		const opcodes = this._buildInterpolationOpcodes(target, component);
 		for (const { el, directives, skip } of graph) {
 			if (skip) continue;
@@ -6658,6 +6697,9 @@ MiniX_Compiler._loopTemplateMetaWeakCache = new WeakMap();
 
 class MiniX_Component {
 	static registry = new Map();
+	// Shared frozen empty array — used as a default for scopeFactories/instanceAPIs
+	// to avoid allocating a fresh [] on every child component mount.
+	static _EMPTY_ARRAY = Object.freeze([]);
 	static layoutRegistry = new Map();
 
 	static register(name, definition) {
@@ -6936,12 +6978,14 @@ class MiniX_Component {
 			return stateApi.set(path, { ...current, ...obj });
 		};
 		staticScope.$toggle = (path) => stateApi.set(path, !this.state.get(path));
-		staticScope.$emit = (name, payload = null, meta = {}) =>
-			this.eventBus.emit(name, payload, {
-				component: this.ComponentClass?.name || 'AnonymousComponent',
-				componentInstance: instance,
-				...meta
-			});
+		staticScope.$emit = (name, payload = null, meta = {}) => {
+			let hasExtra = false;
+			if (meta) { for (const _ in meta) { hasExtra = true; break; } }
+			const emitMeta = hasExtra
+				? { component: this.ComponentClass?.name || 'AnonymousComponent', componentInstance: instance, ...meta }
+				: { component: this.ComponentClass?.name || 'AnonymousComponent', componentInstance: instance };
+			return this.eventBus.emit(name, payload, emitMeta);
+		};
 
 		Object.defineProperty(staticScope, '$refs', { get: () => instance.$refs, enumerable: true, configurable: true });
 
@@ -7070,7 +7114,7 @@ class MiniX_Component {
 		};
 	}
 
-	_createRenderScope(extra = {}, el = null) {
+	_createRenderScope(extra = null, el = null) {
 		const base = this._getBaseScope();
 		let scope = base;
 
@@ -7667,6 +7711,10 @@ class MiniX_Component {
 		const layoutResult = this._resolveLayoutTemplate();
 		const layoutHtml = layoutResult?.html ?? null;
 		const layoutInst = layoutResult?.inst ?? null;
+		// Fire layout activated/deactivated hooks — matches _render()'s behaviour.
+		// Without this, inline-mounted components (loop rows, conditional branches,
+		// dynamic x-component mounts) never trigger layout lifecycle hooks.
+		this._syncActiveLayout(layoutInst, { reason: layoutHtml ? 'render' : 'layout-removed' });
 		const viewHtml = this._resolveView();
 		const template = layoutHtml ? this._injectLayout(layoutHtml, viewHtml, layoutInst) : viewHtml;
 		const html = this.renderer.render(
@@ -8215,7 +8263,8 @@ class MiniX_Component {
 		if (existing && existing.name === normalizedName && !existing.component.isDestroyed) {
 			existing.slots = meta.slots || existing.slots || {};
 			if (existing.slots) element.__minix_slots__ = existing.slots;
-			const hasSlots = !!(existing.slots && Object.keys(existing.slots).length);
+			let hasSlots = false;
+			if (existing.slots) { for (const _ in existing.slots) { hasSlots = true; break; } }
 			existing.component.updateProps(props, {
 				forceRerender: hasSlots,
 				immediate: hasSlots,
@@ -8235,6 +8284,10 @@ class MiniX_Component {
 			this._childRecords.delete(element);
 		}
 
+		const _hasParentSF = Array.isArray(this._scopeFactories) && this._scopeFactories.length > 0;
+		const _hasLocalSF = Array.isArray(this._localScopeFactories) && this._localScopeFactories.length > 0;
+		const _hasInstanceAPIs = Array.isArray(this._instanceAPIFactories) && this._instanceAPIFactories.length > 0;
+
 		const childComponent = new MiniX_Component(Child, {
 			root: element,
 			props,
@@ -8244,13 +8297,10 @@ class MiniX_Component {
 			renderer: this.renderer,
 			sanitizer: this.sanitizer,
 			compiler: this.compiler,
-			scopeFactories: [
-				...(Array.isArray(this._scopeFactories) ? this._scopeFactories : []),
-				...(Array.isArray(this._localScopeFactories) ? this._localScopeFactories : [])
-			],
-			instanceAPIs: [
-				...(Array.isArray(this._instanceAPIFactories) ? this._instanceAPIFactories : [])
-			],
+			scopeFactories: !_hasParentSF && !_hasLocalSF
+				? MiniX_Component._EMPTY_ARRAY
+				: (_hasParentSF ? this._scopeFactories : []).concat(_hasLocalSF ? this._localScopeFactories : []),
+			instanceAPIs: _hasInstanceAPIs ? this._instanceAPIFactories : MiniX_Component._EMPTY_ARRAY,
 			dev: this.options.dev
 		});
 
@@ -8514,11 +8564,20 @@ class MiniX_Request {
 
 	static _descriptorProto = {
 		header(name, value) {
+			// _headers may be a direct reference to the shared instance defaults
+			// object (see _builder) when opts.headers was not passed — copy on
+			// first write so mutating one descriptor's headers never leaks into
+			// the instance's defaults or other in-flight requests.
+			if (this._headers === this._instance._defaults.headers) this._headers = { ...this._headers };
 			if (typeof name === 'object') Object.assign(this._headers, name);
 			else this._headers[name] = value;
 			return this;
 		},
-		query(params) { Object.assign(this._params, params); return this; },
+		query(params) {
+			if (!this._params) this._params = {};
+			Object.assign(this._params, params);
+			return this;
+		},
 		body(value) { this._body = value; return this; },
 		as(type) {
 			if (this._promise && this._sentResponseType !== type) {
@@ -8582,7 +8641,7 @@ class MiniX_Request {
 		desc._headers = opts.headers
 			? { ...this._defaults.headers, ...opts.headers }
 			: this._defaults.headers;
-		desc._params = { ...(opts.params || {}) };
+		desc._params = opts.params ? { ...opts.params } : null;
 		desc._timeout = opts.timeout !== undefined ? opts.timeout : this._defaults.timeout;
 		desc._signal = opts.signal || null;
 		desc._credentials = opts.credentials || this._defaults.credentials;
@@ -8621,9 +8680,10 @@ class MiniX_Request {
 		const url = this._resolveURL(desc._url, desc._params);
 
 		let fetchBody = undefined;
-		// Only copy headers when request interceptors may mutate them; otherwise
-		// use desc._headers directly to avoid an object allocation per request.
-		let headers = this._interceptors.request.size > 0 ? { ...desc._headers } : desc._headers;
+		// Copy headers when interceptors or body processing may mutate them.
+		// Without a copy, body serialisation would mutate the shared desc._headers object.
+		const needsHeaderCopy = this._interceptors.request.size > 0 || (desc._body !== undefined && desc._body !== null);
+		let headers = needsHeaderCopy ? { ...desc._headers } : desc._headers;
 
 		if (desc._body !== undefined && desc._body !== null) {
 			if (typeof FormData !== 'undefined' && desc._body instanceof FormData) {
@@ -8880,7 +8940,7 @@ class MiniX_Request {
 
 	_cacheKey(desc) {
 		const type = desc._responseType == null ? '' : String(desc._responseType);
-		const url = desc._resolvedURL || this._resolveURL(desc._url, desc._params || {});
+		const url = desc._resolvedURL || this._resolveURL(desc._url, desc._params);
 		const creds = desc._credentials == null ? '' : String(desc._credentials);
 		const mode = desc._mode == null ? '' : String(desc._mode);
 		return `${desc._method}:${url}:${type}:${creds}:${mode}`;

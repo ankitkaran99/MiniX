@@ -12,12 +12,27 @@ export class MiniXCompletionProvider implements vscode.CompletionItemProvider {
 
     if (inMarkup) {
       items.push(...directives.map((item) => toCompletion(item, vscode.CompletionItemKind.Property)));
-      items.push(...this.index.allSymbols('component').map((symbol) => {
+      this.index.allSymbols('component').forEach((symbol) => {
         const completion = new vscode.CompletionItem(symbol.name, vscode.CompletionItemKind.Class);
         completion.detail = 'Mini-X component';
         completion.documentation = symbol.detail ?? 'Indexed Mini-X component.';
-        return completion;
-      }));
+        items.push(completion);
+
+        const kebabName = toKebabCase(symbol.name);
+        if (kebabName.includes('-')) {
+          const completionTag = new vscode.CompletionItem(kebabName, vscode.CompletionItemKind.Class);
+          completionTag.detail = 'Mini-X auto-component tag';
+          completionTag.documentation = `Mounts ${symbol.name} component using tag-based syntax.`;
+          
+          const hasLessThan = /<\s*[\w-]*$/.test(linePrefix);
+          if (hasLessThan) {
+            completionTag.insertText = new vscode.SnippetString(`${kebabName} x-props="$1">\n\t$0\n</${kebabName}>`);
+          } else {
+            completionTag.insertText = new vscode.SnippetString(`<${kebabName} x-props="$1">\n\t$0\n</${kebabName}>`);
+          }
+          items.push(completionTag);
+        }
+      });
       items.push(...this.index.allSymbols('store').map((symbol) => {
         const completion = new vscode.CompletionItem(`$store('${symbol.name}')`, vscode.CompletionItemKind.Value);
         completion.detail = 'Mini-X store';
@@ -76,5 +91,12 @@ function symbolKind(kind: string): vscode.CompletionItemKind {
     default:
       return vscode.CompletionItemKind.Value;
   }
+}
+
+function toKebabCase(str: string): string {
+  return str
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .replace(/([A-Z])([A-Z][a-z])/g, '$1-$2')
+    .toLowerCase();
 }
 

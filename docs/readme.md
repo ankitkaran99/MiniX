@@ -330,7 +330,7 @@ The compiler registers directives with priorities. Structural directives run fir
 | `x-else-if` | 999 | Else-if branch. | `<div x-else-if="loading">` |
 | `x-else` | 998 | Fallback branch. | `<div x-else>` |
 | `x-for` | 950 | Render list. | `<template x-for="item in items">` |
-| `x-component` | 900 | Mount child component. | `<div x-component="UserCard">` |
+| `x-component` | 900 | Mount child component (or use tag-based mounting). | `<div x-component="UserCard">` or `<user-card>` |
 | `x-portal`/`x-teleport` | 850 | Render elsewhere. | `<div x-portal="'#modal-root'">` |
 | `x-ignore` | 800 | Skip subtree. | `<div x-ignore>` |
 | `x-data` | 790 | Scoped data. | `<div x-data="{ open:false }">` |
@@ -405,8 +405,12 @@ class ProductCard {
 *   Array/object defaults are shallow-cloned.
 *   `$setProps()` updates props and rerenders when needed.
 
-```
+```html
+<!-- Explicit component mounting -->
 <div x-component="ProductCard" x-props="{ product: item, currency: '₹' }"></div>
+
+<!-- Tag-based auto-component mounting (requires hyphenated component tag name) -->
+<product-card x-props="{ product: item, currency: '₹' }"></product-card>
 ```
 
 ## 11\. Lists and loops
@@ -590,6 +594,9 @@ MiniX.createApp(UsersPage)
   })
   .mount('#app');
 ```
+
+> [!NOTE]
+> **Interceptors & Header Copying:** Request headers are cloned when interceptors are active or when a request body is present. This prevents body serialization or interceptors from mutating the shared `desc._headers` object. In addition, query parameters `desc._params` default to `null` if none are provided.
 
 | Group | Methods |
 | --- | --- |
@@ -869,9 +876,22 @@ this.$batch(() => { ... });
 
 #### Child component
 
-```
+```javascript
 app.component('UserCard', UserCard);
+```
+```html
 <div x-component="UserCard" x-props="{ user }"></div>
+```
+
+#### Auto-component (Tag-based mounting)
+
+If a globally or locally registered component has a hyphenated name (must contain a `-`), you can mount it directly using its tag name without an explicit `x-component` attribute. The compiler automatically synthesizes the `x-component` directive on compile.
+
+```javascript
+app.component('user-card', UserCard);
+```
+```html
+<user-card x-props="{ user }"></user-card>
 ```
 
 ## 21\. Appendix: namespace
