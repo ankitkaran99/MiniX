@@ -37,7 +37,7 @@ class MiniX_State {
 			
 			const q = MiniX_State._pendingCallbackQueue;
 			const jobs = [];
-			q.forEach(job => jobs.push(job));
+			for (const job of q.values()) jobs.push(job);
 			q.clear();
 			
 			
@@ -56,7 +56,14 @@ class MiniX_State {
 	}
 	static markRaw(value) {
 		if (value && typeof value === "object") {
-			try { Object.defineProperty(value, MiniX_State.RAW_FLAG, { value: true, configurable: true }); } catch (_) { value[MiniX_State.RAW_FLAG] = true; }
+			try {
+				Object.defineProperty(value, MiniX_State.RAW_FLAG, { value: true, configurable: true });
+			} catch (_) {
+				// Frozen/sealed objects reject both defineProperty and direct
+				// assignment identically under strict mode — degrade gracefully
+				// rather than letting the fallback throw uncaught.
+				try { value[MiniX_State.RAW_FLAG] = true; } catch (_) { }
+			}
 		}
 		return value;
 	}
@@ -297,12 +304,13 @@ class MiniX_State {
 	}
 
 	_isWrappable(value) {
-		
 		if (value === null || typeof value !== 'object') return false;
 		// Both instance and static proxySet are kept in sync — one check suffices.
 		if (MiniX_State._proxySet.has(value)) return false;
 		if (value[MiniX_State.RAW_FLAG]) return false;
-		if (MiniX_State._NodeClass && value instanceof MiniX_State._NodeClass) return false;
+		// Duck-type DOM node check: cheaper than instanceof and works without
+		// _NodeClass being set. nodeType is 1–12 for all standard DOM nodes.
+		if (value.nodeType !== undefined && (value.nodeType > 0)) return false;
 		if (value instanceof Date || value instanceof RegExp || value instanceof Promise) return false;
 		if (Object.isFrozen(value)) return false;
 		return true;
@@ -324,7 +332,7 @@ class MiniX_State {
 			normalized = [];
 			path.replace(/[^.[\]]+|\[(\d+|(["'])(.*?)\2)\]/g, (match, bracketedNumber, quote, quotedKey) => {
 				if (quote) normalized.push(quotedKey);
-				else if (bracketedNumber !== undefined) normalized.push(String(bracketedNumber).replace(/^["']|["']$/g, ''));
+				else if (bracketedNumber !== undefined) normalized.push(bracketedNumber);
 				else normalized.push(match);
 			});
 		}
@@ -1241,10 +1249,10 @@ class MiniX_State {
 				if (this._dev) this._devCapture('set', this._joinPath(basePath, prop), oldVal, value, { type: 'set' });
 				
 				this._bubbleTargetNotify(obj, prop, value, oldVal, isArray && prop === 'length'
-					? { type: 'set', affectsLength: true }
+					? MiniX_State._META_SET_LEN
 					: MiniX_State._META_SET);
 				if (!hadKey && !isArray) {
-					this._bubbleTargetNotify(obj, MiniX_State.ITERATE_KEY, obj, obj, { type: 'set', structural: true });
+					this._bubbleTargetNotify(obj, MiniX_State.ITERATE_KEY, obj, obj, MiniX_State._META_SET_STRUCTURAL);
 				}
 				return true;
 			},
@@ -1259,10 +1267,10 @@ class MiniX_State {
 					for (let i = 0; i < obj.length; i++) {
 						this._linkTargetToParent(obj[i], obj, _minix_intStr(i));
 					}
-					if (this._dev) this._devCapture('array:delete', this._joinPath(basePath, prop), oldVal, undefined, { type: 'array:delete' });
-					this._bubbleTargetNotify(obj, prop, undefined, oldVal, { type: 'array:delete' });
-					this._bubbleTargetNotify(obj, MiniX_State.ITERATE_KEY, proxy, oldSnapshot, { type: 'array:delete' });
-					this._bubbleTargetNotify(obj, 'length', obj.length, oldSnapshot.length, { type: 'array:delete' });
+					if (this._dev) this._devCapture('array:delete', this._joinPath(basePath, prop), oldVal, undefined, MiniX_State._META_ARR_DEL);
+					this._bubbleTargetNotify(obj, prop, undefined, oldVal, MiniX_State._META_ARR_DEL);
+					this._bubbleTargetNotify(obj, MiniX_State.ITERATE_KEY, proxy, oldSnapshot, MiniX_State._META_ARR_DEL);
+					this._bubbleTargetNotify(obj, 'length', obj.length, oldSnapshot.length, MiniX_State._META_ARR_DEL);
 					return true;
 				}
 				const hadKey = Object.prototype.hasOwnProperty.call(obj, prop);
@@ -1270,8 +1278,8 @@ class MiniX_State {
 				const ok = delete obj[prop];
 				if (ok) {
 					this._unlinkTargetFromParent(oldVal, obj, prop);
-					if (this._dev) this._devCapture('delete', this._joinPath(basePath, prop), oldVal, undefined, { type: 'delete' });
-					this._bubbleTargetNotify(obj, prop, undefined, oldVal, { type: 'delete' });
+					if (this._dev) this._devCapture('delete', this._joinPath(basePath, prop), oldVal, undefined, MiniX_State._META_DELETE);
+					this._bubbleTargetNotify(obj, prop, undefined, oldVal, MiniX_State._META_DELETE);
 				}
 				return ok;
 			}
@@ -1432,9 +1440,9 @@ class MiniX_State {
 				this._linkTargetToParent(rawParent[i], rawParent, _minix_intStr(i));
 			}
 			this._devCapture('array:delete', raw, oldVal, undefined, { type: 'array:delete', api: 'delete()' });
-			this._bubbleTargetNotify(rawParent, last, undefined, oldVal, { type: 'array:delete' });
-			this._bubbleTargetNotify(rawParent, MiniX_State.ITERATE_KEY, rawParent, oldSnapshot, { type: 'array:delete' });
-			this._bubbleTargetNotify(rawParent, 'length', rawParent.length, oldSnapshot.length, { type: 'array:delete' });
+			this._bubbleTargetNotify(rawParent, last, undefined, oldVal, MiniX_State._META_ARR_DEL);
+			this._bubbleTargetNotify(rawParent, MiniX_State.ITERATE_KEY, rawParent, oldSnapshot, MiniX_State._META_ARR_DEL);
+			this._bubbleTargetNotify(rawParent, 'length', rawParent.length, oldSnapshot.length, MiniX_State._META_ARR_DEL);
 			return true;
 		}
 		const oldVal = rawParent[last];
@@ -1594,6 +1602,10 @@ MiniX_State._NodeClass = (typeof Node !== 'undefined') ? Node : null;
 
 MiniX_State._META_SET_PATH = Object.freeze({ type: 'set:path' });
 MiniX_State._META_SET      = Object.freeze({ type: 'set' });
+MiniX_State._META_SET_LEN  = Object.freeze({ type: 'set', affectsLength: true });
+MiniX_State._META_DELETE   = Object.freeze({ type: 'delete' });
+MiniX_State._META_ARR_DEL  = Object.freeze({ type: 'array:delete' });
+MiniX_State._META_SET_STRUCTURAL = Object.freeze({ type: 'set', structural: true });
 
 MiniX_State._proxyDirectPaths = new WeakMap();
 MiniX_State._proxyDirectOwners = new WeakMap();
@@ -2110,9 +2122,6 @@ class MiniX_Sanitizer {
 		}
 		this._attrLookupRef = allowedAttributes;
 		this._attrLookupCache = lookup;
-		// tagSet is always derived from the same allowedTags reference; cache it here
-		// so _fallback() doesn't rebuild it on every call.
-		this._tagSetRef = null; // will be set lazily by _fallback
 		return lookup;
 	}
 
