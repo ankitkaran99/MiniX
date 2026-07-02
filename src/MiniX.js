@@ -633,7 +633,7 @@ class MiniX_State {
 	}
 
 
-	_notifyTarget(target, prop, newVal, oldVal, meta = {}) {
+	_notifyTarget(target, prop, newVal, oldVal, meta = MiniX_State._EMPTY_META) {
 		if (!target || (typeof target !== 'object' && typeof target !== 'function')) return;
 		const propMap = this._targetWatchers.get(target);
 		if (!propMap || propMap.size === 0) return;
@@ -642,13 +642,7 @@ class MiniX_State {
 		const metaType = meta.type || '';
 		let structural = false;
 		if (metaType !== 'set' && metaType !== 'set:path') {
-			structural = (meta.structural === true)
-				|| MiniX_State._STRUCTURAL_TYPES.has(metaType)
-				|| (metaType.length > 5
-					&& (metaType.charCodeAt(0) === 97  || metaType.charCodeAt(0) === 109 )
-					&& (metaType.startsWith('array:') || metaType.startsWith('map:')))
-				|| (metaType.length > 4 && metaType.charCodeAt(0) === 115
-					&& (metaType === 'set:add' || metaType === 'set:delete' || metaType === 'set:clear'));
+			structural = (meta.structural === true) || MiniX_State._STRUCTURAL_TYPES.has(metaType);
 		}
 		const iterate = (structural || prop === MiniX_State.ITERATE_KEY) ? propMap.get(MiniX_State.ITERATE_KEY) : null;
 		const lengthWatchers = Array.isArray(target) && (prop === 'length' || (meta.affectsLength === true))
@@ -971,11 +965,11 @@ class MiniX_State {
 							if (hadKey) self._unlinkTargetFromParent(oldVal, obj, String(key));
 							obj.set(key, wrapped);
 							if (self._isWrappable(value)) self._linkTargetToParent(value, obj, String(key));
-							self._devCapture('map:set', childPath, oldVal, wrapped, { type: 'map:set' });
-							self._bubbleTargetNotify(obj, key, wrapped, oldVal, { type: 'map:set' });
+							self._devCapture('map:set', childPath, oldVal, wrapped, MiniX_State._META_MAP_SET);
+							self._bubbleTargetNotify(obj, key, wrapped, oldVal, MiniX_State._META_MAP_SET);
 							
 							if (obj.size !== oldSize) {
-								self._bubbleTargetNotify(obj, MiniX_State.SIZE_KEY, obj.size, oldSize, { type: 'map:set' });
+								self._bubbleTargetNotify(obj, MiniX_State.SIZE_KEY, obj.size, oldSize, MiniX_State._META_MAP_SET);
 							}
 							return receiver;
 						} finally {
@@ -993,9 +987,9 @@ class MiniX_State {
 							MiniX_Effect._beginBatch();
 							try {
 								self._unlinkTargetFromParent(oldVal, obj, String(key));
-								self._devCapture('map:delete', childPath, oldVal, undefined, { type: 'map:delete' });
-								self._bubbleTargetNotify(obj, key, undefined, oldVal, { type: 'map:delete' });
-								self._bubbleTargetNotify(obj, MiniX_State.SIZE_KEY, obj.size, oldSize, { type: 'map:delete' });
+								self._devCapture('map:delete', childPath, oldVal, undefined, MiniX_State._META_MAP_DEL);
+								self._bubbleTargetNotify(obj, key, undefined, oldVal, MiniX_State._META_MAP_DEL);
+								self._bubbleTargetNotify(obj, MiniX_State.SIZE_KEY, obj.size, oldSize, MiniX_State._META_MAP_DEL);
 							} finally {
 								MiniX_Effect._endBatch();
 							}
@@ -1012,9 +1006,9 @@ class MiniX_State {
 						obj.clear();
 						MiniX_Effect._beginBatch();
 						try {
-							self._devCapture('map:clear', basePath, oldVal, obj, { type: 'map:clear' });
-							self._bubbleTargetNotify(obj, MiniX_State.ITERATE_KEY, obj, oldVal, { type: 'map:clear' });
-							self._bubbleTargetNotify(obj, MiniX_State.SIZE_KEY, obj.size, oldSize, { type: 'map:clear' });
+							self._devCapture('map:clear', basePath, oldVal, obj, MiniX_State._META_MAP_CLR);
+							self._bubbleTargetNotify(obj, MiniX_State.ITERATE_KEY, obj, oldVal, MiniX_State._META_MAP_CLR);
+							self._bubbleTargetNotify(obj, MiniX_State.SIZE_KEY, obj.size, oldSize, MiniX_State._META_MAP_CLR);
 						} finally {
 							MiniX_Effect._endBatch();
 						}
@@ -1084,7 +1078,7 @@ class MiniX_State {
 							try {
 								self._devCapture('set:add', basePath, undefined, wrapped, { type: 'set:add', value: wrapped });
 								self._bubbleTargetNotify(obj, MiniX_State.ITERATE_KEY, obj, obj, { type: 'set:add', value: wrapped });
-								self._bubbleTargetNotify(obj, MiniX_State.SIZE_KEY, obj.size, oldSize, { type: 'set:add' });
+								self._bubbleTargetNotify(obj, MiniX_State.SIZE_KEY, obj.size, oldSize, MiniX_State._META_COL_ADD);
 							} finally {
 								MiniX_Effect._endBatch();
 							}
@@ -1106,7 +1100,7 @@ class MiniX_State {
 							try {
 								self._devCapture('set:delete', basePath, storedValue, undefined, { type: 'set:delete', value: storedValue });
 								self._bubbleTargetNotify(obj, MiniX_State.ITERATE_KEY, obj, obj, { type: 'set:delete', value: storedValue });
-								self._bubbleTargetNotify(obj, MiniX_State.SIZE_KEY, obj.size, oldSize, { type: 'set:delete' });
+								self._bubbleTargetNotify(obj, MiniX_State.SIZE_KEY, obj.size, oldSize, MiniX_State._META_COL_DEL);
 							} finally {
 								MiniX_Effect._endBatch();
 							}
@@ -1122,9 +1116,9 @@ class MiniX_State {
 						obj.clear();
 						MiniX_Effect._beginBatch();
 						try {
-							self._devCapture('set:clear', basePath, snapshot, undefined, { type: 'set:clear' });
-							self._bubbleTargetNotify(obj, MiniX_State.ITERATE_KEY, obj, obj, { type: 'set:clear' });
-							self._bubbleTargetNotify(obj, MiniX_State.SIZE_KEY, obj.size, oldSize, { type: 'set:clear' });
+							self._devCapture('set:clear', basePath, snapshot, undefined, MiniX_State._META_COL_CLR);
+							self._bubbleTargetNotify(obj, MiniX_State.ITERATE_KEY, obj, obj, MiniX_State._META_COL_CLR);
+							self._bubbleTargetNotify(obj, MiniX_State.SIZE_KEY, obj.size, oldSize, MiniX_State._META_COL_CLR);
 						} finally {
 							MiniX_Effect._endBatch();
 						}
@@ -1246,7 +1240,7 @@ class MiniX_State {
 				if (hadKey && Object.is(oldVal, value)) return true;
 				if (hadKey) this._unlinkTargetFromParent(oldVal, obj, prop);
 				obj[prop] = value;
-				if (this._dev) this._devCapture('set', this._joinPath(basePath, prop), oldVal, value, { type: 'set' });
+				if (this._dev) this._devCapture('set', this._joinPath(basePath, prop), oldVal, value, MiniX_State._META_SET);
 				
 				this._bubbleTargetNotify(obj, prop, value, oldVal, isArray && prop === 'length'
 					? MiniX_State._META_SET_LEN
@@ -1349,10 +1343,10 @@ class MiniX_State {
 			if (hadKey && Object.is(oldVal, value)) return value;
 			if (hadKey) this._unlinkTargetFromParent(oldVal, rawState, String(last));
 			rawState[last] = value;
-			if (this._dev) this._devCapture('set', raw, oldVal, value, { type: 'set:path', api: 'set()' });
+			if (this._dev) this._devCapture('set', raw, oldVal, value, MiniX_State._META_SET_PATH_API);
 			this._bubbleTargetNotify(rawState, last, value, oldVal, MiniX_State._META_SET_PATH);
 			if (!hadKey && !Array.isArray(rawState)) {
-				this._bubbleTargetNotify(rawState, MiniX_State.ITERATE_KEY, rawState, rawState, { type: 'set:path', structural: true });
+				this._bubbleTargetNotify(rawState, MiniX_State.ITERATE_KEY, rawState, rawState, MiniX_State._META_SET_PATH_STRUCT);
 			}
 			return value;
 		}
@@ -1393,10 +1387,10 @@ class MiniX_State {
 		else parent[last] = value;
 
 		this._invalidateProxyCache(raw, segments);
-		if (this._dev) this._devCapture('set', raw, oldVal, value, { type: 'set:path', api: 'set()' });
+		if (this._dev) this._devCapture('set', raw, oldVal, value, MiniX_State._META_SET_PATH_API);
 		this._bubbleTargetNotify(parent, last, value, oldVal, MiniX_State._META_SET_PATH);
 		if (!hadKey && !(parent instanceof Map) && !Array.isArray(parent)) {
-			this._bubbleTargetNotify(parent, MiniX_State.ITERATE_KEY, parent, parent, { type: 'set:path', structural: true });
+			this._bubbleTargetNotify(parent, MiniX_State.ITERATE_KEY, parent, parent, MiniX_State._META_SET_PATH_STRUCT);
 		}
 		return value;
 	}
@@ -1418,7 +1412,7 @@ class MiniX_State {
 			if (ok) {
 				this._unlinkTargetFromParent(oldVal, parent, String(last));
 				if (this._dev) this._devCapture('delete', raw, oldVal, undefined, { type: 'delete:path', api: 'delete()' });
-				this._bubbleTargetNotify(parent, last, undefined, oldVal, { type: 'delete:path' });
+				this._bubbleTargetNotify(parent, last, undefined, oldVal, MiniX_State._META_DEL_PATH);
 			}
 			return ok;
 		}
@@ -1450,7 +1444,7 @@ class MiniX_State {
 		if (ok) {
 			this._unlinkTargetFromParent(oldVal, rawParent, String(last));
 			this._devCapture('delete', raw, oldVal, undefined, { type: 'delete:path', api: 'delete()' });
-			this._bubbleTargetNotify(rawParent, last, undefined, oldVal, { type: 'delete:path' });
+			this._bubbleTargetNotify(rawParent, last, undefined, oldVal, MiniX_State._META_DEL_PATH);
 			if (!Array.isArray(rawParent)) {
 				this._bubbleTargetNotify(rawParent, MiniX_State.ITERATE_KEY, rawParent, rawParent, { type: 'delete:path', structural: true });
 			}
@@ -1527,7 +1521,7 @@ class MiniX_State {
 				else toRemove.push(effect);
 			}
 			for (const effect of toRemove) this._trackedEffects.delete(effect);
-			this._notify('', this._state, oldState, { type: 'reset' });
+			this._notify('', this._state, oldState, MiniX_State._META_RESET);
 		} finally {
 			MiniX_Effect._endBatch();
 		}
@@ -1576,7 +1570,7 @@ class MiniX_State {
 			if (Object.is(newVal, oldVal)) return;
 			const prev = oldVal;
 			oldVal = snapshot(newVal);
-			callback(newVal, prev, key, { type: 'watch' });
+			callback(newVal, prev, key, MiniX_State._META_WATCH);
 		}, { flush: 'post' });
 		return () => effect.stop();
 	}
@@ -1590,7 +1584,13 @@ MiniX_State._batchedNotifyPending = false;
 MiniX_State._flushingBatchedNotifications = false;
 
 
-MiniX_State._STRUCTURAL_TYPES = new Set(['delete', 'delete:path']);
+MiniX_State._STRUCTURAL_TYPES = new Set([
+	'delete', 'delete:path',
+	'array:delete', 'array:push', 'array:pop', 'array:shift', 'array:unshift',
+	'array:splice', 'array:sort', 'array:reverse', 'array:fill', 'array:copyWithin',
+	'map:set', 'map:delete', 'map:clear',
+	'set:add', 'set:delete', 'set:clear'
+]);
 MiniX_State._proxySet = new WeakSet();
 MiniX_State._ARRAY_MUTATORS = new Set(['push', 'pop', 'shift', 'unshift', 'splice', 'sort', 'reverse']);
 MiniX_State._normalizeCache = new Map();
@@ -1600,12 +1600,24 @@ MiniX_State._pathArrayCache = new WeakMap();
 MiniX_State._NodeClass = (typeof Node !== 'undefined') ? Node : null;
 
 
-MiniX_State._META_SET_PATH = Object.freeze({ type: 'set:path' });
+MiniX_State._META_SET_PATH         = Object.freeze({ type: 'set:path' });
+MiniX_State._META_SET_PATH_STRUCT  = Object.freeze({ type: 'set:path', structural: true });
+MiniX_State._META_SET_PATH_API     = Object.freeze({ type: 'set:path', api: 'set()' });
+MiniX_State._META_DEL_PATH         = Object.freeze(MiniX_State._META_DEL_PATH);
+MiniX_State._META_RESET            = Object.freeze(MiniX_State._META_RESET);
+MiniX_State._META_WATCH            = Object.freeze(MiniX_State._META_WATCH);
+MiniX_State._META_INCREMENT        = Object.freeze(MiniX_State._META_INCREMENT);
 MiniX_State._META_SET      = Object.freeze({ type: 'set' });
 MiniX_State._META_SET_LEN  = Object.freeze({ type: 'set', affectsLength: true });
+MiniX_State._META_SET_STRUCTURAL = Object.freeze({ type: 'set', structural: true });
 MiniX_State._META_DELETE   = Object.freeze({ type: 'delete' });
 MiniX_State._META_ARR_DEL  = Object.freeze({ type: 'array:delete' });
-MiniX_State._META_SET_STRUCTURAL = Object.freeze({ type: 'set', structural: true });
+MiniX_State._META_MAP_SET  = Object.freeze({ type: 'map:set' });
+MiniX_State._META_MAP_DEL  = Object.freeze({ type: 'map:delete' });
+MiniX_State._META_MAP_CLR  = Object.freeze({ type: 'map:clear' });
+MiniX_State._META_COL_ADD  = Object.freeze({ type: 'set:add' });
+MiniX_State._META_COL_DEL  = Object.freeze({ type: 'set:delete' });
+MiniX_State._META_COL_CLR  = Object.freeze({ type: 'set:clear' });
 
 MiniX_State._proxyDirectPaths = new WeakMap();
 MiniX_State._proxyDirectOwners = new WeakMap();
@@ -2646,7 +2658,7 @@ class MiniX_Signal {
 		const oldVal = Number(this._state[key] || 0);
 		const nextVal = oldVal + 1;
 		this._state[key] = nextVal;
-		this._notify(key, nextVal, oldVal, { type: 'increment' });
+		this._notify(key, nextVal, oldVal, MiniX_State._META_INCREMENT);
 		return nextVal;
 	}
 
