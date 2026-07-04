@@ -92,7 +92,7 @@ class MiniX_State {
 
 	
 
-	_devCapture(operation, path, oldVal, newVal, meta = {}) {
+	_devCapture(operation, path, oldVal, newVal, meta = MiniX_State._EMPTY_META) {
 		if (!this._dev) return;
 		if (MiniX_State._suppressDevCaptureDepth > 0) return;
 
@@ -616,7 +616,7 @@ class MiniX_State {
 		MiniX_State._pendingCallbackQueue.set(key, [cb, newVal, oldVal, propStr, meta]);
 	}
 
-	_notifyGlobalWatchers(newVal, oldVal, prop, meta = {}) {
+	_notifyGlobalWatchers(newVal, oldVal, prop, meta = MiniX_State._EMPTY_META) {
 		if (!this._globalWatchers.size) return;
 		const propStr = typeof prop === 'symbol' ? String(prop) : (prop == null ? '' : String(prop));
 		let queued = false;
@@ -732,7 +732,7 @@ class MiniX_State {
 			// coalesced write in tight mutation loops.
 			if (meta) {
 				for (const k in meta) {
-					if (Object.prototype.hasOwnProperty.call(meta, k)) record.meta[k] = meta[k];
+					if (Object.hasOwn(meta, k)) record.meta[k] = meta[k];
 				}
 				if (meta.structural || MiniX_State._STRUCTURAL_TYPES.has(meta.type)) {
 					record.meta.structural = true;
@@ -834,7 +834,7 @@ class MiniX_State {
 		}
 	}
 
-	_bubbleTargetNotify(target, prop, newVal, oldVal, meta = {}) {
+	_bubbleTargetNotify(target, prop, newVal, oldVal, meta = MiniX_State._EMPTY_META) {
 		if (!target || (typeof target !== 'object' && typeof target !== 'function')) return;
 		if (this._queueBatchedTargetNotify(target, prop, newVal, oldVal, meta)) return;
 
@@ -884,7 +884,7 @@ class MiniX_State {
 		if (hasGlobal) this._notifyGlobalWatchers(newVal, oldVal, prop, meta);
 	}
 
-	_notify(path, newVal, oldVal, meta = {}) {
+	_notify(path, newVal, oldVal, meta = MiniX_State._EMPTY_META) {
 		this._notifyGlobalWatchers(newVal, oldVal, this._pathString(path), meta);
 	}
 
@@ -1211,9 +1211,10 @@ class MiniX_State {
 								}
 							}
 							const mutType = 'array:' + prop;
-							this._devCapture(mutType, basePath, oldSnapshot, obj.slice(), { type: mutType });
-							this._bubbleTargetNotify(obj, MiniX_State.ITERATE_KEY, proxy, oldSnapshot, { type: mutType });
-							this._bubbleTargetNotify(obj, 'length', obj.length, oldSnapshot.length, { type: mutType });
+							const mutMeta = MiniX_State._META_ARR_MUTATORS.get(prop) || Object.freeze({ type: mutType });
+							this._devCapture(mutType, basePath, oldSnapshot, obj.slice(), mutMeta);
+							this._bubbleTargetNotify(obj, MiniX_State.ITERATE_KEY, proxy, oldSnapshot, mutMeta);
+							this._bubbleTargetNotify(obj, 'length', obj.length, oldSnapshot.length, mutMeta);
 							return result;
 						} finally {
 							MiniX_Effect._endBatch();
@@ -1235,7 +1236,7 @@ class MiniX_State {
 			},
 			set: (obj, prop, value) => {
 				value = this._unwrapProxy(value);
-				const hadKey = Object.prototype.hasOwnProperty.call(obj, prop);
+				const hadKey = Object.hasOwn(obj, prop);
 				const oldVal = obj[prop];
 				if (hadKey && Object.is(oldVal, value)) return true;
 				if (hadKey) this._unlinkTargetFromParent(oldVal, obj, prop);
@@ -1267,7 +1268,7 @@ class MiniX_State {
 					this._bubbleTargetNotify(obj, 'length', obj.length, oldSnapshot.length, MiniX_State._META_ARR_DEL);
 					return true;
 				}
-				const hadKey = Object.prototype.hasOwnProperty.call(obj, prop);
+				const hadKey = Object.hasOwn(obj, prop);
 				if (!hadKey) return true;
 				const ok = delete obj[prop];
 				if (ok) {
@@ -1326,8 +1327,9 @@ class MiniX_State {
 		}
 		if (current && typeof current === 'object') {
 			this._proxyPathMap.delete(current);
-			
-			try { if (current.__minix_proxy__ !== undefined) current.__minix_proxy__ = undefined; } catch (_) {}
+			try {
+				if (current.__minix_proxy__ !== undefined) delete current.__minix_proxy__;
+			} catch (_) {}
 		}
 	}
 	set(path, value) {
@@ -1338,7 +1340,7 @@ class MiniX_State {
 		if (!segments.length) throw new Error('Path is required');
 
 		if (isSimple) {
-			const hadKey = Object.prototype.hasOwnProperty.call(rawState, last);
+			const hadKey = Object.hasOwn(rawState, last);
 			const oldVal = rawState[last];
 			if (hadKey && Object.is(oldVal, value)) return value;
 			if (hadKey) this._unlinkTargetFromParent(oldVal, rawState, String(last));
@@ -1378,7 +1380,7 @@ class MiniX_State {
 			}
 		}
 
-		const hadKey = parent instanceof Map ? parent.has(last) : Object.prototype.hasOwnProperty.call(parent, last);
+		const hadKey = parent instanceof Map ? parent.has(last) : Object.hasOwn(parent, last);
 		const oldVal = parent instanceof Map ? parent.get(last) : parent[last];
 		if (hadKey && Object.is(oldVal, value)) return value;
 
@@ -1397,12 +1399,11 @@ class MiniX_State {
 	delete(path) {
 		const compiled = this._compilePath(path);
 		const { raw, segments, last } = compiled;
-		const parentSegments = segments.length > 1 ? segments.slice(0, -1) : null;
 		let parent = this._state;
-		if (parentSegments) {
-			for (const key of parentSegments) {
+		if (segments.length > 1) {
+			for (let i = 0; i < segments.length - 1; i++) {
 				if (parent == null) return false;
-				parent = parent instanceof Map ? parent.get(key) : parent[key];
+				parent = parent instanceof Map ? parent.get(segments[i]) : parent[segments[i]];
 			}
 		}
 		if (parent instanceof Map) {
@@ -1422,7 +1423,7 @@ class MiniX_State {
 		
 		
 		const rawParent = (parent && typeof parent === 'object' && parent.__raw) ? parent.__raw : parent;
-		if (!rawParent || !Object.prototype.hasOwnProperty.call(rawParent, last)) return false;
+		if (!rawParent || !Object.hasOwn(rawParent, last)) return false;
 		if (Array.isArray(rawParent) && this._isArrayIndex(last)) {
 			const oldSnapshot = rawParent.slice();
 			const oldVal = rawParent[last];
@@ -1612,6 +1613,20 @@ MiniX_State._META_SET_LEN  = Object.freeze({ type: 'set', affectsLength: true })
 MiniX_State._META_SET_STRUCTURAL = Object.freeze({ type: 'set', structural: true });
 MiniX_State._META_DELETE   = Object.freeze({ type: 'delete' });
 MiniX_State._META_ARR_DEL  = Object.freeze({ type: 'array:delete' });
+// Pre-built frozen meta objects for every array mutator type — keyed by
+// the mutator name so the hot mutator handler can do O(1) lookup instead
+// of allocating two { type: 'array:X' } objects per call.
+MiniX_State._META_ARR_MUTATORS = new Map([
+	['push',       Object.freeze({ type: 'array:push' })],
+	['pop',        Object.freeze({ type: 'array:pop' })],
+	['shift',      Object.freeze({ type: 'array:shift' })],
+	['unshift',    Object.freeze({ type: 'array:unshift' })],
+	['splice',     Object.freeze({ type: 'array:splice' })],
+	['sort',       Object.freeze({ type: 'array:sort' })],
+	['reverse',    Object.freeze({ type: 'array:reverse' })],
+	['fill',       Object.freeze({ type: 'array:fill' })],
+	['copyWithin', Object.freeze({ type: 'array:copyWithin' })],
+]);
 MiniX_State._META_MAP_SET  = Object.freeze({ type: 'map:set' });
 MiniX_State._META_MAP_DEL  = Object.freeze({ type: 'map:delete' });
 MiniX_State._META_MAP_CLR  = Object.freeze({ type: 'map:clear' });
@@ -1742,12 +1757,12 @@ function _minix_shallowEqual(a, b) {
 	if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return false;
 	let countA = 0;
 	for (const key in a) {
-		if (!Object.prototype.hasOwnProperty.call(a, key)) continue;
+		if (!Object.hasOwn(a, key)) continue;
 		countA++;
-		if (!Object.prototype.hasOwnProperty.call(b, key) || !Object.is(a[key], b[key])) return false;
+		if (!Object.hasOwn(b, key) || !Object.is(a[key], b[key])) return false;
 	}
 	let countB = 0;
-	for (const key in b) { if (Object.prototype.hasOwnProperty.call(b, key)) countB++; }
+	for (const key in b) { if (Object.hasOwn(b, key)) countB++; }
 	return countA === countB;
 }
 
@@ -2620,18 +2635,16 @@ class MiniX_Signal {
 		}
 		const tv = effect._trackVersion;
 		if (keyMap.has(key)) {
-			
-			const existingDep = keyMap.get(key).__dep;
+			const entry = keyMap.get(key);
+			const existingDep = entry?.dep || entry?.__dep;
 			if (existingDep) existingDep._trackedVersion = tv;
 			return;
 		}
-		const runner = () => effect.schedule();
-		runner.__minix_effect__ = effect;
+		const runner = effect._scheduleRunner;
 		watchers.add(runner);
-		keyMap.set(key, runner);
-		if (!effect.deps) effect.deps = new Set();
 		const dep = { state: this, key, runner, _trackedVersion: tv };
-		runner.__dep = dep;
+		keyMap.set(key, { runner, dep });
+		if (!effect.deps) effect.deps = new Set();
 		effect.deps.add(dep);
 		effect._depsDirty = true;
 	}
@@ -2645,7 +2658,7 @@ class MiniX_Signal {
 
 	set(path, value) {
 		const key = typeof path === 'string' ? path : String(path || '');
-		const hadKey = Object.prototype.hasOwnProperty.call(this._state, key);
+		const hadKey = Object.hasOwn(this._state, key);
 		const oldVal = this._state[key];
 		if (hadKey && Object.is(oldVal, value)) return value;
 		this._state[key] = value;
@@ -2662,7 +2675,7 @@ class MiniX_Signal {
 		return nextVal;
 	}
 
-	_notify(pathKey, newVal, oldVal, meta = {}) {
+	_notify(pathKey, newVal, oldVal, meta = MiniX_State._EMPTY_META) {
 		const globalWatchers = this._globalWatchers;
 		const watchers = this._watchers.get(pathKey);
 		let queued = false;
@@ -3128,7 +3141,7 @@ class MiniX_Compiler {
 				const arg = { value: current, modifier: modName, compiler };
 				if (context && typeof context === 'object') {
 					for (const k in context) {
-						if (Object.prototype.hasOwnProperty.call(context, k)) arg[k] = context[k];
+						if (Object.hasOwn(context, k)) arg[k] = context[k];
 					}
 				}
 				current = handler(arg);
@@ -3155,7 +3168,7 @@ class MiniX_Compiler {
 
 	useDirectives(definitions = {}) {
 		for (const name in definitions) {
-			if (!Object.prototype.hasOwnProperty.call(definitions, name)) continue;
+			if (!Object.hasOwn(definitions, name)) continue;
 			const def = definitions[name];
 			if (typeof def === 'function') this.directive(name, def);
 			else if (def && typeof def.handler === 'function') this.directive(name, def.handler, def);
@@ -3189,7 +3202,7 @@ class MiniX_Compiler {
 		// Create a new scope that inherits from baseScope and includes extra properties
 		const scope = Object.create(baseScope);
 		for (const k in extra) {
-			if (Object.prototype.hasOwnProperty.call(extra, k)) {
+			if (Object.hasOwn(extra, k)) {
 				scope[k] = extra[k];
 			}
 		}
@@ -3321,7 +3334,7 @@ class MiniX_Compiler {
 				if (!isStructural && node !== root) {
 					const tn = node.tagName?.toLowerCase();
 					if (tn && tn.includes('-') && !node.hasAttribute('x-component')) {
-						const isLocal = localComponents && Object.prototype.hasOwnProperty.call(localComponents, tn);
+						const isLocal = localComponents && Object.hasOwn(localComponents, tn);
 						if (isLocal || MiniX_Component.registry.has(tn)) isStructural = true;
 					}
 				}
@@ -3529,7 +3542,7 @@ class MiniX_Compiler {
 		};
 		const isAutoComponentTag = (tn) => {
 			if (!tn || !tn.includes('-')) return false;
-			return (localComponents && Object.prototype.hasOwnProperty.call(localComponents, tn)) || MiniX_Component.registry.has(tn);
+			return (localComponents && Object.hasOwn(localComponents, tn)) || MiniX_Component.registry.has(tn);
 		};
 		const componentAncestorNotRoot = (el) => {
 			if (el === root) return null;
@@ -4678,7 +4691,7 @@ class MiniX_Compiler {
 				const entries = [];
 				let index = 0;
 				for (const entryKey in list) {
-					if (!Object.prototype.hasOwnProperty.call(list, entryKey)) continue;
+					if (!Object.hasOwn(list, entryKey)) continue;
 					entries.push({ value: list[entryKey], key: entryKey, index: index++, kind: 'object' });
 				}
 				return entries;
@@ -5020,7 +5033,7 @@ class MiniX_Compiler {
 			_createRenderScope: () => renderScope,
 			__minix_loop_state__: {
 				raw: () => loopScope,
-				has: (entryKey) => Object.prototype.hasOwnProperty.call(loopScope, entryKey),
+				has: (entryKey) => Object.hasOwn(loopScope, entryKey),
 				meta: extra.__minix_loop_meta || null,
 				signal: null
 			}
@@ -5186,7 +5199,7 @@ class MiniX_Compiler {
 								const next = new Set();
 								if (value && typeof value === 'object' && !Array.isArray(value)) {
 									for (const prop in value) {
-										if (!Object.prototype.hasOwnProperty.call(value, prop)) continue;
+										if (!Object.hasOwn(value, prop)) continue;
 										const cssProp = _minix_camelToKebab(prop);
 										next.add(cssProp);
 										const styleValue = value[prop];
@@ -5204,7 +5217,7 @@ class MiniX_Compiler {
 						const next = new Set();
 						if (value && typeof value === 'object' && !Array.isArray(value)) {
 							for (const prop in value) {
-								if (!Object.prototype.hasOwnProperty.call(value, prop)) continue;
+								if (!Object.hasOwn(value, prop)) continue;
 								const cssProp = _minix_camelToKebab(prop);
 								next.add(cssProp);
 								const styleValue = value[prop];
@@ -5220,7 +5233,7 @@ class MiniX_Compiler {
 						const attrs = value;
 						if (!attrs || typeof attrs !== 'object' || Array.isArray(attrs)) break;
 						for (const attr in attrs) {
-							if (!Object.prototype.hasOwnProperty.call(attrs, attr)) continue;
+							if (!Object.hasOwn(attrs, attr)) continue;
 							const attrValue = attrs[attr];
 							if (attrValue == null || attrValue === false) el.removeAttribute(attr);
 							else if (attrValue === true) el.setAttribute(attr, '');
@@ -5290,7 +5303,7 @@ class MiniX_Compiler {
 				if (nextExtra.__minix_loop_meta) runtimeComponent.__minix_loop_state__.meta = nextExtra.__minix_loop_meta;
 				let dirtyMask = 0;
 				const nextKeys = [];
-				for (const k in nextExtra) { if (Object.prototype.hasOwnProperty.call(nextExtra, k)) nextKeys.push(k); }
+				for (const k in nextExtra) { if (Object.hasOwn(nextExtra, k)) nextKeys.push(k); }
 				for (const staleKey of renderKeys) {
 					if (!(staleKey in nextExtra)) {
 						delete loopScope[staleKey];
@@ -5343,7 +5356,7 @@ class MiniX_Compiler {
 		};
 		localComponent.__minix_loop_state__ = {
 			raw: () => loopScope,
-			has: (entryKey) => Object.prototype.hasOwnProperty.call(loopScope, entryKey),
+			has: (entryKey) => Object.hasOwn(loopScope, entryKey),
 			meta: extra.__minix_loop_meta || null,
 			signal: null
 		};
@@ -5493,7 +5506,7 @@ class MiniX_Compiler {
 
 		localComponent.__minix_loop_state__ = {
 			raw: () => loopScope,
-			has: (entryKey) => Object.prototype.hasOwnProperty.call(loopScope, entryKey),
+			has: (entryKey) => Object.hasOwn(loopScope, entryKey),
 			meta: extra.__minix_loop_meta || null,
 			signal: loopSignal
 		};
@@ -5646,7 +5659,7 @@ class MiniX_Compiler {
 
 		localComponent.__minix_loop_state__ = {
 			raw: () => loopScope,
-			has: (entryKey) => Object.prototype.hasOwnProperty.call(loopScope, entryKey),
+			has: (entryKey) => Object.hasOwn(loopScope, entryKey),
 			meta: extra.__minix_loop_meta || null,
 			signal: loopSignal
 		};
@@ -6038,7 +6051,7 @@ class MiniX_Compiler {
 				iterate = (visit) => {
 					let _oi = 0;
 					for (const entryKey in list) {
-						if (!Object.prototype.hasOwnProperty.call(list, entryKey)) continue;
+						if (!Object.hasOwn(list, entryKey)) continue;
 						objEntry.value = list[entryKey]; objEntry.key = entryKey; objEntry.index = _oi;
 						visit(objEntry, _oi++);
 					}
@@ -6575,7 +6588,7 @@ MiniX_Compiler._normalizeClassValue = (value) => {
 		// Compute a lightweight string key: "cls1:1|cls2:0|..."
 		let cacheKey = '';
 		for (const cls in value) {
-			if (Object.prototype.hasOwnProperty.call(value, cls)) {
+			if (Object.hasOwn(value, cls)) {
 				cacheKey += cls + (value[cls] ? '\x01' : '\x00');
 			}
 		}
@@ -6583,7 +6596,7 @@ MiniX_Compiler._normalizeClassValue = (value) => {
 		if (cached) return cached;
 		const next = new Set();
 		for (const cls in value) {
-			if (Object.prototype.hasOwnProperty.call(value, cls) && value[cls]) next.add(cls);
+			if (Object.hasOwn(value, cls) && value[cls]) next.add(cls);
 		}
 		if (MiniX_Compiler._classNormCache.size >= 256) MiniX_Compiler._classNormCache.clear();
 		MiniX_Compiler._classNormCache.set(cacheKey, next);
@@ -6615,7 +6628,7 @@ MiniX_Compiler._normalizeClassValue = (value) => {
 							else if (ws && start !== -1) { next.add(inner.slice(start, k)); start = -1; }
 						}
 					} else if (inner && typeof inner === 'object') {
-						for (const cls in inner) { if (Object.prototype.hasOwnProperty.call(inner, cls) && inner[cls]) next.add(cls); }
+						for (const cls in inner) { if (Object.hasOwn(inner, cls) && inner[cls]) next.add(cls); }
 					}
 				}
 			} else if (typeof entry === 'string') {
@@ -6627,7 +6640,7 @@ MiniX_Compiler._normalizeClassValue = (value) => {
 					else if (ws && start !== -1) { next.add(entry.slice(start, k)); start = -1; }
 				}
 			} else if (entry && typeof entry === 'object') {
-				for (const cls in entry) { if (Object.prototype.hasOwnProperty.call(entry, cls) && entry[cls]) next.add(cls); }
+				for (const cls in entry) { if (Object.hasOwn(entry, cls) && entry[cls]) next.add(cls); }
 			}
 		}
 	}
@@ -6650,7 +6663,7 @@ MiniX_Compiler._patchAttrMap = (el, attrs) => {
 	const seen = Object.create(null);
 	if (attrs && typeof attrs === 'object' && !Array.isArray(attrs)) {
 		for (const attr in attrs) {
-			if (!Object.prototype.hasOwnProperty.call(attrs, attr)) continue;
+			if (!Object.hasOwn(attrs, attr)) continue;
 			seen[attr] = true;
 			MiniX_Compiler._patchAttrValue(el, attr, attrs[attr]);
 		}
@@ -6684,7 +6697,7 @@ MiniX_Compiler._patchStyleValue = (el, styles) => {
 	const seen = Object.create(null);
 	if (styles && typeof styles === 'object' && !Array.isArray(styles)) {
 		for (const prop in styles) {
-			if (!Object.prototype.hasOwnProperty.call(styles, prop)) continue;
+			if (!Object.hasOwn(styles, prop)) continue;
 			const cssProp = _minix_camelToKebab(prop);
 			seen[cssProp] = true;
 			const value = styles[prop];
@@ -7065,7 +7078,7 @@ class MiniX_Component {
 		const scope = Object.create(this._staticScopeCache);
 
 		for (const key in stateRaw) {
-			if (!Object.prototype.hasOwnProperty.call(stateRaw, key)) continue;
+			if (!Object.hasOwn(stateRaw, key)) continue;
 			// State keys shadow same-named entries from the static layer.
 			Object.defineProperty(scope, key, {
 				get: () => stateProxy[key],
@@ -7353,7 +7366,7 @@ class MiniX_Component {
 		this.state = new MiniX_State(initialData, stateOptions);
 		const snapshot = this.state.raw();
 		for (const key in snapshot) {
-			if (!Object.prototype.hasOwnProperty.call(snapshot, key)) continue;
+			if (!Object.hasOwn(snapshot, key)) continue;
 			Object.defineProperty(this.instance, key, {
 				// Use the reactive proxy (state.raw()[key]) so reads inside computed
 				// effects and watchers register proper reactive dependencies.
@@ -7539,12 +7552,12 @@ class MiniX_Component {
 	}
 
 	_hasPropDefault(def = {}) {
-		return Object.prototype.hasOwnProperty.call(def, 'default') ||
-			Object.prototype.hasOwnProperty.call(def, 'fallback');
+		return Object.hasOwn(def, 'default') ||
+			Object.hasOwn(def, 'fallback');
 	}
 
 	_resolvePropDefault(key, def = {}, incoming = {}) {
-		const hasDefault = Object.prototype.hasOwnProperty.call(def, 'default');
+		const hasDefault = Object.hasOwn(def, 'default');
 		const value = hasDefault ? def.default : def.fallback;
 		if (typeof value === 'function' && def.type !== Function) {
 			return value.call(this.instance, incoming, key);
@@ -7606,9 +7619,9 @@ class MiniX_Component {
 		const definitions = this._propDefs || {};
 
 		for (const key in definitions) {
-			if (!Object.prototype.hasOwnProperty.call(definitions, key)) continue;
+			if (!Object.hasOwn(definitions, key)) continue;
 			const def = definitions[key] || {};
-			const hasIncoming = Object.prototype.hasOwnProperty.call(incoming, key);
+			const hasIncoming = Object.hasOwn(incoming, key);
 			if (!hasIncoming && this._hasPropDefault(def)) {
 				resolved[key] = this._resolvePropDefault(key, def, incoming);
 			}
@@ -7621,7 +7634,7 @@ class MiniX_Component {
 			if (this._hasPropDefault(def)) {
 				resolved[key] = this._resolvePropDefault(key, def, incoming);
 				fallbackUsed = true;
-			} else if (Object.prototype.hasOwnProperty.call(previousProps || {}, key)) {
+			} else if (Object.hasOwn(previousProps || {}, key)) {
 				resolved[key] = previousProps[key];
 				fallbackUsed = true;
 			}
@@ -7645,7 +7658,7 @@ class MiniX_Component {
 		this.state.batch(() => {
 			for (let i = 0; i < keys.length; i++) {
 				const key = keys[i];
-				if (Object.prototype.hasOwnProperty.call(raw, key)) {
+				if (Object.hasOwn(raw, key)) {
 					this.state.set(key, nextProps[key]);
 				}
 			}
@@ -8097,8 +8110,8 @@ class MiniX_Component {
 		const instanceSections = this.instance.sections;
 		if (instanceSections && typeof instanceSections === 'object' && !Array.isArray(instanceSections)) {
 			for (const name in instanceSections) {
-				if (!Object.prototype.hasOwnProperty.call(instanceSections, name)) continue;
-				if (!Object.prototype.hasOwnProperty.call(sections, name)) {
+				if (!Object.hasOwn(instanceSections, name)) continue;
+				if (!Object.hasOwn(sections, name)) {
 					sections[name] = instanceSections[name];
 				}
 			}
@@ -8216,14 +8229,14 @@ class MiniX_Component {
 
 		if (propsChanged) {
 			for (const key in previous) {
-				if (!Object.prototype.hasOwnProperty.call(previous, key)) continue;
-				if (!Object.prototype.hasOwnProperty.call(next, key)) {
+				if (!Object.hasOwn(previous, key)) continue;
+				if (!Object.hasOwn(next, key)) {
 					this.propsState.delete(key);
 				}
 			}
 
 			for (const key in next) {
-				if (!Object.prototype.hasOwnProperty.call(next, key)) continue;
+				if (!Object.hasOwn(next, key)) continue;
 				this.propsState.set(key, next[key]);
 			}
 			this._syncPropsToState(next);
