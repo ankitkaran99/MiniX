@@ -703,7 +703,7 @@ class MiniX_State {
 	_queueBatchedTargetNotify(target, prop, newVal, oldVal, meta = MiniX_State._EMPTY_META) {
 		if (MiniX_State._flushingBatchedNotifications) return false;
 		if (MiniX_Effect._batchDepth <= 0) return false;
-		if (!meta) meta = {};
+		if (!meta) meta = MiniX_State._EMPTY_META;
 
 		let stateQueue = MiniX_State._batchedNotifyQueue.get(this);
 		if (!stateQueue) {
@@ -724,13 +724,20 @@ class MiniX_State {
 				prop,
 				newVal,
 				oldVal,
-				meta: { ...meta }
+				// Store the meta reference directly — for the common case this is
+				// a frozen constant that never needs to be mutated. If a subsequent
+				// coalesced write needs to merge new fields in, we copy-on-write below.
+				meta,
+				_metaOwned: false
 			});
 		} else {
 			record.newVal = newVal;
-			// Merge meta in-place — avoids allocating a new object on every
-			// coalesced write in tight mutation loops.
-			if (meta) {
+			if (meta && meta !== MiniX_State._EMPTY_META) {
+				// Copy-on-write: first mutation of a shared frozen meta reference.
+				if (!record._metaOwned) {
+					record.meta = { ...record.meta };
+					record._metaOwned = true;
+				}
 				for (const k in meta) {
 					if (Object.hasOwn(meta, k)) record.meta[k] = meta[k];
 				}
@@ -1447,7 +1454,7 @@ class MiniX_State {
 			this._devCapture('delete', raw, oldVal, undefined, { type: 'delete:path', api: 'delete()' });
 			this._bubbleTargetNotify(rawParent, last, undefined, oldVal, MiniX_State._META_DEL_PATH);
 			if (!Array.isArray(rawParent)) {
-				this._bubbleTargetNotify(rawParent, MiniX_State.ITERATE_KEY, rawParent, rawParent, { type: 'delete:path', structural: true });
+				this._bubbleTargetNotify(rawParent, MiniX_State.ITERATE_KEY, rawParent, rawParent, MiniX_State._META_DEL_PATH_STRUCT);
 			}
 		}
 		return ok;
@@ -1604,10 +1611,11 @@ MiniX_State._NodeClass = (typeof Node !== 'undefined') ? Node : null;
 MiniX_State._META_SET_PATH         = Object.freeze({ type: 'set:path' });
 MiniX_State._META_SET_PATH_STRUCT  = Object.freeze({ type: 'set:path', structural: true });
 MiniX_State._META_SET_PATH_API     = Object.freeze({ type: 'set:path', api: 'set()' });
-MiniX_State._META_DEL_PATH         = Object.freeze(MiniX_State._META_DEL_PATH);
-MiniX_State._META_RESET            = Object.freeze(MiniX_State._META_RESET);
-MiniX_State._META_WATCH            = Object.freeze(MiniX_State._META_WATCH);
-MiniX_State._META_INCREMENT        = Object.freeze(MiniX_State._META_INCREMENT);
+MiniX_State._META_DEL_PATH         = Object.freeze({ type: 'delete:path' });
+MiniX_State._META_DEL_PATH_STRUCT  = Object.freeze({ type: 'delete:path', structural: true });
+MiniX_State._META_RESET            = Object.freeze({ type: 'reset' });
+MiniX_State._META_WATCH            = Object.freeze({ type: 'watch' });
+MiniX_State._META_INCREMENT        = Object.freeze({ type: 'increment' });
 MiniX_State._META_SET      = Object.freeze({ type: 'set' });
 MiniX_State._META_SET_LEN  = Object.freeze({ type: 'set', affectsLength: true });
 MiniX_State._META_SET_STRUCTURAL = Object.freeze({ type: 'set', structural: true });
@@ -3176,7 +3184,18 @@ class MiniX_Compiler {
 		return this;
 	}
 
-	createScope(component, extra = {}, el = null) {
+	createScope(component, extra = null, el = null) {
+		// Fast-path: check the per-element scope cache before walking the DOM
+		// provider chain in _resolveScope. On cache hit (same scopeGen, no extra)
+		// we skip the entire DOM walk and provider invocation.
+		if (!extra && el) {
+			const gen = MiniX_Compiler._scopeGen;
+			const cached = el.__minix_scope_cache__;
+			if (cached !== undefined && el.__minix_scope_cache_gen__ === gen) {
+				return cached;
+			}
+		}
+
 		// Resolve the base scope from the component or from x-data providers
 		const baseScope = this._resolveScope(component, false, MiniX_Compiler._scopeGen, el);
 
@@ -3189,10 +3208,6 @@ class MiniX_Compiler {
 		if (!hasExtra) {
 			if (el) {
 				const gen = MiniX_Compiler._scopeGen;
-				const cached = el.__minix_scope_cache__;
-				if (cached !== undefined && el.__minix_scope_cache_gen__ === gen) {
-					return cached;
-				}
 				el.__minix_scope_cache__ = baseScope;
 				el.__minix_scope_cache_gen__ = gen;
 			}
@@ -3227,7 +3242,7 @@ class MiniX_Compiler {
 		return component._createRenderScope(null, el);
 	}
 
-	_evaluate(expression, scope = {}, fallback = undefined) {
+	_evaluate(expression, scope = null, fallback = undefined) {
 
 		
 		const expr = typeof expression === 'string' ? (expression.includes(' ') || expression !== expression.trim() ? expression.trim() : expression) : String(expression || '').trim();
@@ -3602,7 +3617,7 @@ class MiniX_Compiler {
 		const getter = this._compileGetter(expression);
 		let lastText = undefined;
 		return this._effect(component, () => {
-			const scope = this.createScope(component, {}, el);
+			const scope = this.createScope(component, null, el);
 			const value = getter(scope, '');
 			const text = value == null ? '' : String(value);
 			if (text !== lastText) {
@@ -3618,7 +3633,7 @@ class MiniX_Compiler {
 		let lastSanitized = '';
 		let subtreeCleanup = null;
 		return this._effect(component, () => {
-			const scope = this.createScope(component, {}, el);
+			const scope = this.createScope(component, null, el);
 			const raw = getter(scope, '');
 			const nextRaw = raw == null ? '' : String(raw);
 			if (nextRaw !== lastRaw) {
@@ -3649,7 +3664,7 @@ class MiniX_Compiler {
 		const getter = this._compileGetter(expression);
 		let lastVisible = undefined;
 		return this._effect(component, () => {
-			const scope = this.createScope(component, {}, el);
+			const scope = this.createScope(component, null, el);
 			const visible = Boolean(getter(scope, false));
 			if (visible === lastVisible) return;
 			lastVisible = visible;
@@ -3673,7 +3688,7 @@ class MiniX_Compiler {
 		const getter = this._compileGetter(expression);
 		let lastBoundValue = Symbol('unset');
 		return this._effect(component, () => {
-			const value = getter(this.createScope(component, {}, el), undefined);
+			const value = getter(this.createScope(component, null, el), undefined);
 			if (Object.is(value, lastBoundValue)) return;
 			lastBoundValue = value;
 			MiniX_Compiler._patchAttrValue(el, targetAttr, value);
@@ -3717,6 +3732,12 @@ class MiniX_Compiler {
 		}
 
 
+		// Pre-compile the event handler expression at setup time.
+		// _evaluate() internally calls _compileGetter() on every invocation which
+		// does a cache lookup + potential new Function() compile — calling it once
+		// here removes that overhead from the hot event dispatch path entirely.
+		const _eventGetter = this._compileGetter(expression);
+
 		// Reuse a single fireScope per directive instance to avoid allocating
 		// Object.create(liveScope) + 4 property assignments on every event fire.
 		let _fireScope = null;
@@ -3730,7 +3751,7 @@ class MiniX_Compiler {
 			if (mods.has('prevent')) event.preventDefault();
 			if (mods.has('stop')) event.stopPropagation();
 
-			const liveScope = this.createScope(component, {}, el);
+			const liveScope = this.createScope(component, null, el);
 			if (_fireScope === null || _fireScopeBase !== liveScope) {
 				_fireScope = Object.create(liveScope);
 				_fireScope.$el = el;
@@ -3739,7 +3760,7 @@ class MiniX_Compiler {
 			}
 			_fireScope.$event = event;
 			_fireScope.event  = event;
-			const result = this._evaluate(expression, _fireScope);
+			const result = _eventGetter(_fireScope, undefined);
 			if (typeof result === 'function') result.call(_fireScope, event);
 		};
 		const delegateRoot = this._shouldDelegateEvent(eventName, mods) ? this._getDelegatedEventRoot(component) : null;
@@ -3849,7 +3870,7 @@ class MiniX_Compiler {
 
 	_setModelValue(expression, component, nextValue, el = null) {
 		const normalizedExpr = String(expression || '').trim();
-		const scope = this.createScope(component, {}, el || component.root);
+		const scope = this.createScope(component, null, el || component.root);
 		const loopMeta = component.__minix_loop_state__?.meta;
 
 		if (loopMeta?.itemVar) {
@@ -3911,7 +3932,7 @@ class MiniX_Compiler {
 			if (this._isSimplePath(expression) && this._stateHasPath(component.state, expression)) {
 				return component.state.get(expression);
 			}
-			return this._evaluate(expression, this.createScope(component, {}, el), '');
+			return this._evaluate(expression, this.createScope(component, null, el), '');
 		};
 
 		let lastSyncedValue = Symbol('unset');
@@ -3951,6 +3972,7 @@ class MiniX_Compiler {
 			? 'change'
 			: (['checkbox', 'radio'].includes(el.type) || el.tagName === 'SELECT' ? 'change' : 'input');
 
+		const _modelCtx = { el, expression, component, directive: 'x-model' };
 		const stopListen = component.listener.$listen(el, eventName, (event) => {
 			let nextValue;
 			if (el.type === 'checkbox') nextValue = el.checked;
@@ -3961,7 +3983,7 @@ class MiniX_Compiler {
 			}
 			else nextValue = event.target.value;
 
-			nextValue = this._applyModifiers(nextValue, valueModifiers, { el, expression, component, directive: 'x-model' });
+			nextValue = this._applyModifiers(nextValue, valueModifiers, _modelCtx);
 			this._setModelValue(expression, component, nextValue, el);
 		});
 
@@ -4004,7 +4026,10 @@ class MiniX_Compiler {
 			template.removeAttribute('x-else-if');
 			template.removeAttribute('x-else');
 			branch.el.remove();
-			return { ...branch, template };
+			// Pre-compile the branch condition getter so the reactive effect
+			// only calls getter(scope) instead of _evaluate(expr, scope) on every update.
+			const getter = branch.expression ? this._compileGetter(branch.expression) : null;
+			return { ...branch, template, getter };
 		});
 
 		let mounted = { index: -1, nodes: [], cleanup: null };
@@ -4042,7 +4067,9 @@ class MiniX_Compiler {
 					nextIndex = i;
 					break;
 				}
-				const passed = Boolean(this._evaluate(branch.expression, this.createScope(component, {}, scopeAnchor), false));
+				const passed = Boolean(branch.getter
+					? branch.getter(this.createScope(component, null, scopeAnchor), false)
+					: false);
 				if (passed) {
 					nextIndex = i;
 					break;
@@ -4092,7 +4119,7 @@ class MiniX_Compiler {
 		const getter = this._compileGetter(expression);
 		let lastClassJson = undefined;
 		return this._effect(component, () => {
-			const scope = this.createScope(component, {}, el);
+			const scope = this.createScope(component, null, el);
 			const value = getter(scope, {});
 			let json; try { json = JSON.stringify(value); } catch (_) { json = String(value); }
 			if (json === lastClassJson) return;
@@ -4105,7 +4132,7 @@ class MiniX_Compiler {
 		const getter = this._compileGetter(expression);
 		let lastAttrJson = undefined;
 		return this._effect(component, () => {
-			const attrs = getter(this.createScope(component, {}, el), {});
+			const attrs = getter(this.createScope(component, null, el), {});
 			let json; try { json = JSON.stringify(attrs); } catch (_) { json = String(attrs); }
 			if (json === lastAttrJson) return;
 			lastAttrJson = json;
@@ -4155,7 +4182,7 @@ class MiniX_Compiler {
 		const getter = this._compileGetter(expression);
 		let wasFocused = false;
 		return this._effect(component, () => {
-			const shouldFocus = Boolean(getter(this.createScope(component, {}, el), false));
+			const shouldFocus = Boolean(getter(this.createScope(component, null, el), false));
 			if (shouldFocus && !wasFocused) {
 				Promise.resolve().then(() => el.focus?.());
 				wasFocused = true;
@@ -4169,7 +4196,7 @@ class MiniX_Compiler {
 		const getter = this._compileGetter(expression);
 		let lastDisabled = undefined;
 		return this._effect(component, () => {
-			const disabled = Boolean(getter(this.createScope(component, {}, el), false));
+			const disabled = Boolean(getter(this.createScope(component, null, el), false));
 			if (disabled === lastDisabled) return;
 			lastDisabled = disabled;
 			if (disabled) {
@@ -4186,7 +4213,7 @@ class MiniX_Compiler {
 		const getter = this._compileGetter(expression);
 		let lastStyleJson = undefined;
 		return this._effect(component, () => {
-			const styles = getter(this.createScope(component, {}, el), {});
+			const styles = getter(this.createScope(component, null, el), {});
 			let json; try { json = JSON.stringify(styles); } catch (_) { json = String(styles); }
 			if (json === lastStyleJson) return;
 			lastStyleJson = json;
@@ -4198,7 +4225,7 @@ class MiniX_Compiler {
 		const getter = this._compileGetter(expression);
 		let lastValue = Symbol('unset');
 		return this._effect(component, () => {
-			const value = getter(this.createScope(component, {}, el), '');
+			const value = getter(this.createScope(component, null, el), '');
 			const next = value == null ? '' : String(value);
 			if (next === lastValue) return;
 			lastValue = next;
@@ -4217,7 +4244,7 @@ class MiniX_Compiler {
 	}
 
 	_compileTransitionDirective(el, expression, component) {
-		const opts = expression ? this._evaluate(expression, this.createScope(component, {}, el), {}) : {};
+		const opts = expression ? this._evaluate(expression, this.createScope(component, null, el), {}) : {};
 		const enterClass = opts.enter || 'x-enter';
 		const leaveClass = opts.leave || 'x-leave';
 		const duration = typeof opts.duration === 'number' ? opts.duration : 300;
@@ -4260,7 +4287,7 @@ class MiniX_Compiler {
 		
 		
 		
-		const scope = this.createScope(component, {}, el);
+		const scope = this.createScope(component, null, el);
 		const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
 		while (walker.nextNode()) {
 			const node = walker.currentNode;
@@ -4277,7 +4304,7 @@ class MiniX_Compiler {
 	}
 
 	_resolvePortalTarget(expression, component, el = null) {
-		const targetExpr = this._evaluate(expression, this.createScope(component, {}, el || component.root), null);
+		const targetExpr = this._evaluate(expression, this.createScope(component, null, el || component.root), null);
 		if (!targetExpr) return null;
 		return typeof targetExpr === 'string'
 			? document.querySelector(targetExpr)
@@ -4336,7 +4363,7 @@ class MiniX_Compiler {
 	_compileScopedDataDirective(el, expression, component) {
 		let scopedState;
 		try {
-			const raw = this._evaluate(expression, this.createScope(component, {}, el), {});
+			const raw = this._evaluate(expression, this.createScope(component, null, el), {});
 			scopedState = new MiniX_State(raw || {});
 		} catch (e) {
 			this._warn(`x-data failed: ${expression}`, e);
@@ -4592,10 +4619,8 @@ class MiniX_Compiler {
 		marker.parentNode?.insertBefore(endMarker, marker.nextSibling);
 
 		const resolveScopeAnchor = () => marker.parentNode || connectedScopeAnchor || el;
-		const sourceGetter = (scope, fallback = []) => this._evaluate(sourceExpr, scope, fallback);
-		const keyGetter = keyAttr
-			? ((scope, fallback = undefined) => this._evaluate(keyAttr, scope, fallback))
-			: null;
+		const sourceGetter = this._compileGetter(sourceExpr);
+		const keyGetter = keyAttr ? this._compileGetter(keyAttr) : null;
 		const sourceIsSimplePath = this._isSimplePath(sourceExpr);
 		const sourcePath = sourceIsSimplePath ? this._parseSimplePathSegments(sourceExpr) : null;
 
@@ -4742,7 +4767,7 @@ class MiniX_Compiler {
 		let newVnodesBuffer = bufB;
 
 		const stopEffect = this._effect(component, () => {
-			const runBaseScope = this.createScope(component, {}, marker.parentNode || resolveScopeAnchor());
+			const runBaseScope = this.createScope(component, null, marker.parentNode || resolveScopeAnchor());
 			Object.setPrototypeOf(renderScope, runBaseScope);
 
 			const list = readSourceList(runBaseScope) || [];
@@ -5005,15 +5030,19 @@ class MiniX_Compiler {
 		while (_bn) { contentNodes.push(_bn); _bn = _bn.nextSibling; }
 		const start = document.createComment(`x-for-start:${String(key)}`);
 		const end = document.createComment(`x-for-end:${String(key)}`);
-		const nodes = [start].concat(contentNodes, [end]);
+		const nodes = [start];
+		for (let _ci = 0; _ci < contentNodes.length; _ci++) nodes.push(contentNodes[_ci]);
+		nodes.push(end);
 		const loopScope = Object.assign(Object.create(null), extra);
 		const parentScope = typeof component._createRenderScope === 'function'
 			? component._createRenderScope()
-			: this.createScope(component, {}, hostEl || component.root);
+			: this.createScope(component, null, hostEl || component.root);
 		const loopBaseScope = Object.create(parentScope);
 		const renderScope = Object.create(loopBaseScope);
-		let renderKeys = Object.keys(loopScope);
-		for (const k of renderKeys) renderScope[k] = loopScope[k];
+		// Compute once — reused for both renderKeys and scopeKeys below.
+		const initialKeys = Object.keys(loopScope);
+		let renderKeys = initialKeys;
+		for (const k of initialKeys) renderScope[k] = loopScope[k];
 
 		const runtimeComponent = {
 			renderer: component.renderer,
@@ -5041,7 +5070,7 @@ class MiniX_Compiler {
 		const scopeProvider = () => renderScope;
 		for (const node of contentNodes) this._stampScopeProviderSubtree(node, scopeProvider);
 
-		const scopeKeys = Object.keys(loopScope);
+		const scopeKeys = initialKeys;
 		
 		const bitmapCacheKey = scopeKeys.join('\x00');
 		let bitByKey = blueprint?._bitByKeyCache?.get(bitmapCacheKey);
@@ -5060,12 +5089,18 @@ class MiniX_Compiler {
 		}
 		const fullMask = 0x7fffffff;
 		const resolveNode = (path) => this._resolveLoopPathNode(contentNodes, path);
-		const runtime = {
-			textBindings: (blueprint?.textBindings || []).map((entry) => ({
+		const _tbSrc = blueprint?.textBindings || [];
+		const _tbArr = [];
+		for (let _tbi = 0; _tbi < _tbSrc.length; _tbi++) {
+			const entry = _tbSrc[_tbi];
+			_tbArr.push({
 				node: resolveNode(entry.path),
 				compiled: entry.compiled,
 				depMask: this._extractCompiledDepMask(entry.compiled, bitByKey, fullMask)
-			})),
+			});
+		}
+		const runtime = {
+			textBindings: _tbArr,
 			updates: [],
 			cleanups: []
 		};
@@ -5087,11 +5122,17 @@ class MiniX_Compiler {
 		for (const entry of (blueprint?.updates || [])) {
 			const el = resolveNode(entry.path);
 			if (!el) continue;
+			const needsPrevious = entry.type === 'class' || (entry.type === 'bind' && entry.targetAttr === 'class') || entry.type === 'style' || (entry.type === 'bind' && entry.targetAttr === 'style') || entry.type === 'attr';
 			runtime.updates.push({
-				...entry,
+				path: entry.path,
+				type: entry.type,
+				expression: entry.expression,
+				getter: entry.getter,
+				targetAttr: entry.targetAttr,
+				modifiers: entry.modifiers,
 				el,
 				depMask: this._extractBindingDepMask(entry.expression, bitByKey, fullMask),
-				previous: entry.type === 'class' || (entry.type === 'bind' && entry.targetAttr === 'class') || entry.type === 'style' || (entry.type === 'bind' && entry.targetAttr === 'style') || entry.type === 'attr' ? new Set() : undefined,
+				previous: needsPrevious ? new Set() : undefined,
 				wasFocused: false,
 				originalDisplay: entry.type === 'show' ? (el.style.display || '') : '',
 				lastModelValue: Symbol('unset'),
@@ -5119,6 +5160,7 @@ class MiniX_Compiler {
 					const modifiers = new Set(rawModifiers);
 					const valueModifiers = rawModifiers.length ? rawModifiers.filter((mod) => mod !== 'lazy') : [];
 					const eventName = modifiers.has('lazy') ? 'change' : ((['checkbox', 'radio'].includes(el.type) || el.tagName === 'SELECT') ? 'change' : 'input');
+					const modifierContext = { el, expression: directive.expression, component: runtimeComponent, directive: 'x-model' };
 					const listenCleanup = runtimeComponent.listener.$listen(el, eventName, (event) => {
 						let nextValue;
 						if (el.type === 'checkbox') nextValue = el.checked;
@@ -5128,7 +5170,7 @@ class MiniX_Compiler {
 							for (let i = 0; i < el.selectedOptions.length; i++) nextValue[i] = el.selectedOptions[i].value;
 						}
 						else nextValue = event.target.value;
-						nextValue = this._applyModifiers(nextValue, valueModifiers, { el, expression: directive.expression, component: runtimeComponent, directive: 'x-model' });
+						nextValue = this._applyModifiers(nextValue, valueModifiers, modifierContext);
 						this._setModelValue(directive.expression, runtimeComponent, nextValue, el);
 					});
 					runtime.updates.push({ type: 'model', el, getter, expression: directive.expression, modifiers: directive.modifiers || [], depMask: this._extractBindingDepMask(directive.expression, bitByKey, fullMask), lastModelValue: Symbol('unset'), lastModelJSON: undefined });
@@ -5240,7 +5282,9 @@ class MiniX_Compiler {
 							else el.setAttribute(attr, String(attrValue));
 						}
 						for (const attr of binding.previous) { if (!(attr in attrs)) el.removeAttribute(attr); }
-						binding.previous = new Set(Object.keys(attrs));
+						// Rebuild previous set in-place via for...in — avoids Object.keys() temp array.
+						binding.previous.clear();
+						for (const attr in attrs) { if (Object.hasOwn(attrs, attr)) binding.previous.add(attr); }
 						break;
 					}
 					case 'model': {
@@ -5273,7 +5317,7 @@ class MiniX_Compiler {
 		const effect = new MiniX_Effect(() => {
 			const nextParentScope = typeof component._createRenderScope === 'function'
 				? component._createRenderScope()
-				: this.createScope(component, {}, hostEl || component.root);
+				: this.createScope(component, null, hostEl || component.root);
 			if (nextParentScope !== lastParentScope) {
 				Object.setPrototypeOf(loopBaseScope, nextParentScope);
 				lastParentScope = nextParentScope;
@@ -5330,11 +5374,13 @@ class MiniX_Compiler {
 		while (_smn) { contentNodes.push(_smn); _smn = _smn.nextSibling; }
 		const start = document.createComment(`x-for-start:${String(key)}`);
 		const end = document.createComment(`x-for-end:${String(key)}`);
-		const nodes = [start].concat(contentNodes, [end]);
+		const nodes = [start];
+		for (let _ci2 = 0; _ci2 < contentNodes.length; _ci2++) nodes.push(contentNodes[_ci2]);
+		nodes.push(end);
 		const loopScope = { ...extra };
 		const parentScope = typeof component._createRenderScope === 'function'
 			? component._createRenderScope()
-			: this.createScope(component, {}, hostEl || component.root);
+			: this.createScope(component, null, hostEl || component.root);
 		const localComponent = Object.create(this._createLoopBlockHost(component));
 		
 		localComponent._effects = new Set();
@@ -5478,7 +5524,7 @@ class MiniX_Compiler {
 		const loopSignal = new MiniX_Signal({ version: 0 });
 		const parentScope = typeof component._createRenderScope === 'function'
 			? component._createRenderScope()
-			: this.createScope(component, {}, hostEl || component.root);
+			: this.createScope(component, null, hostEl || component.root);
 		const localComponent = Object.create(this._createLoopBlockHost(component));
 		localComponent.children = [];
 		localComponent._childRecords = new Map();
@@ -5622,12 +5668,14 @@ class MiniX_Compiler {
 		while (_ln) { contentNodes.push(_ln); _ln = _ln.nextSibling; }
 		const start = document.createComment(`x-for-start:${String(key)}`);
 		const end = document.createComment(`x-for-end:${String(key)}`);
-		const nodes = [start].concat(contentNodes, [end]);
+		const nodes = [start];
+		for (let _ci3 = 0; _ci3 < contentNodes.length; _ci3++) nodes.push(contentNodes[_ci3]);
+		nodes.push(end);
 		const loopScope = { ...extra };
 		const loopSignal = new MiniX_Signal({ version: 0 });
 		const parentScope = typeof component._createRenderScope === 'function'
 			? component._createRenderScope()
-			: this.createScope(component, {}, hostEl || component.root);
+			: this.createScope(component, null, hostEl || component.root);
 		const localComponent = Object.create(this._createLoopBlockHost(component));
 		
 		localComponent._effects = new Set();
@@ -5782,10 +5830,17 @@ class MiniX_Compiler {
 			const directives = this._collectDirectives(node);
 			const isScopedRoot = node.hasAttribute('x-data');
 			if (directives.length) {
-				if (directives.some((directive) => directive.structural)) {
+				let hasStructural = false;
+				for (let _di = 0; _di < directives.length; _di++) {
+					if (directives[_di].structural) { hasStructural = true; break; }
+				}
+				if (hasStructural) {
 					plan.unsupported = true;
 				}
-				plan.push({ path: path.slice(), directives: directives.map(d => ({ name: d.name, expression: d.expression, run: d.run })) });
+				// Store directive references directly — avoids a closure + array
+				// allocation per directive. The replay path only reads .name/.expression/.run,
+				// which are all present on the original directive object.
+				plan.push({ path: path.slice(), directives });
 			}
 			if (isScopedRoot) return;
 			let childIndex = 0;
@@ -5967,10 +6022,8 @@ class MiniX_Compiler {
 		
 		
 		const sourceIsSimplePath = this._isSimplePath(sourceExpr);
-		const sourceGetter = (scope, fallback = []) => this._evaluate(sourceExpr, scope, fallback);
-		const keyGetter = keyAttr
-			? ((scope, fallback = undefined) => this._evaluate(keyAttr, scope, fallback))
-			: null;
+		const sourceGetter = this._compileGetter(sourceExpr);
+		const keyGetter = keyAttr ? this._compileGetter(keyAttr) : null;
 		
 		const seenKeys = new Set();
 		let nextBlocks = [];
@@ -5998,7 +6051,7 @@ class MiniX_Compiler {
 		const keyScope = Object.create(null);
 
 		const stopEffect = this._effect(component, () => {
-			const runBaseScope = this.createScope(component, {}, marker.parentNode || scopeAnchor);
+			const runBaseScope = this.createScope(component, null, marker.parentNode || scopeAnchor);
 			const list = sourceGetter(runBaseScope, []);
 			seenKeys.clear();
 			let iterate = null;
@@ -6089,7 +6142,7 @@ class MiniX_Compiler {
 				if (keyAttr) {
 					Object.setPrototypeOf(keyScope, runBaseScope);
 					for (const prop in entryScope) keyScope[prop] = entryScope[prop];
-					key = keyGetter ? keyGetter(keyScope, entry.index) : this._evaluate(keyAttr, keyScope, entry.index);
+					key = keyGetter ? keyGetter(keyScope, entry.index) : entry.index;
 				} else {
 					key = entry.key;
 				}
@@ -6125,7 +6178,10 @@ class MiniX_Compiler {
 				}
 			}
 
-			const allNew = nextBlocks.length > 0 && nextBlocks.every((block) => block._isNew);
+			let allNew = nextBlocks.length > 0;
+			for (let _ni = 0; _ni < nextBlocks.length; _ni++) {
+				if (!nextBlocks[_ni]._isNew) { allNew = false; break; }
+			}
 			if (allNew) {
 				const parentNode = marker.parentNode;
 				if (parentNode) {
@@ -6145,13 +6201,18 @@ class MiniX_Compiler {
 					existingSequence.push(block._nextOldIndex);
 					existingPositions.push(i);
 				}
-				const stablePositions = new Set(this._computeLIS(existingSequence).map((idx) => existingPositions[idx]));
-				let batch = [];
+				const _lisIndices = this._computeLIS(existingSequence);
+				const stablePositions = new Set();
+				for (let _li = 0; _li < _lisIndices.length; _li++) stablePositions.add(existingPositions[_lisIndices[_li]]);
+				// Reuse a single batch array (push in reverse, reverse once before flush)
+				// to avoid O(n²) unshift cost and repeated [] reallocations.
+				const batch = [];
 				let batchReferenceNode = null;
 				const flushBatch = () => {
 					if (!batch.length) return;
+					batch.reverse();
 					this._moveBlocksBatch(marker, batch, batchReferenceNode);
-					batch = [];
+					batch.length = 0;
 					batchReferenceNode = null;
 				};
 				for (let i = nextBlocks.length - 1; i >= 0; i--) {
@@ -6170,7 +6231,7 @@ class MiniX_Compiler {
 						flushBatch();
 						batchReferenceNode = liveReferenceNode;
 					}
-					batch.unshift(block);
+					batch.push(block);
 				}
 				flushBatch();
 			}
@@ -6207,7 +6268,7 @@ class MiniX_Compiler {
 		let eventCleanup = null;
 		const initialSlotChildren = Array.from(el.childNodes, (child) => child.cloneNode(true));
 
-		const slotScopeProvider = () => this.createScope(component, {}, el);
+		const slotScopeProvider = () => this.createScope(component, null, el);
 
 		const stampParentScope = (node) => {
 			if (!node) return node;
@@ -6252,7 +6313,7 @@ class MiniX_Compiler {
 			
 			
 			
-			const scope = this.createScope(component, {}, el.parentNode || el);
+			const scope = this.createScope(component, null, el.parentNode || el);
 			// If the directive's expression is already a literal, registered
 			// component name (the common case for both explicit x-component="name"
 			// and auto-component tag-name elements), skip _evaluate entirely.
@@ -6288,27 +6349,41 @@ class MiniX_Compiler {
 	}
 
 	_evaluateComponentHostProps(el, scope) {
-		const propsExpr = el.getAttribute('x-props');
-		const props = propsExpr ? { ...(this._evaluate(propsExpr, scope, {}) || {}) } : {};
-
-		const attrs = el.attributes || [];
-		for (let i = 0; i < attrs.length; i++) {
-			const attr = attrs[i];
-			const name = attr.name;
-			if (name === 'x-bind') {
-				const value = this._evaluate(attr.value, scope, {});
-				if (value && typeof value === 'object') Object.assign(props, value);
-				continue;
+		// Getters are cached on the element the first time they're compiled so
+		// subsequent reactive re-renders (which call this on every prop update)
+		// don't re-enter _evaluate / _compileGetter for each attribute.
+		if (!el.__minix_prop_getters__) {
+			const cache = { xProps: null, binds: [], propMap: [] };
+			const propsExpr = el.getAttribute('x-props');
+			if (propsExpr) cache.xProps = this._compileGetter(propsExpr);
+			const attrs = el.attributes || [];
+			for (let i = 0; i < attrs.length; i++) {
+				const attr = attrs[i];
+				const name = attr.name;
+				if (name === 'x-bind') {
+					cache.binds.push(this._compileGetter(attr.value));
+					continue;
+				}
+				if (name.startsWith('x-bind:') || name.startsWith(':')) {
+					const raw = name.startsWith(':') ? name.slice(1) : name.slice(7);
+					const dot = raw.indexOf('.');
+					const propName = this._normalizeComponentPropName(dot === -1 ? raw : raw.slice(0, dot));
+					if (!propName || propName === 'key') continue;
+					cache.propMap.push({ propName, getter: this._compileGetter(attr.value) });
+				}
 			}
-			if (name.startsWith('x-bind:') || name.startsWith(':')) {
-				const raw = name.startsWith(':') ? name.slice(1) : name.slice(7);
-				const dot = raw.indexOf('.');
-				const propName = this._normalizeComponentPropName(dot === -1 ? raw : raw.slice(0, dot));
-				if (!propName || propName === 'key') continue;
-				props[propName] = this._evaluate(attr.value, scope);
-			}
+			el.__minix_prop_getters__ = cache;
 		}
-
+		const cache = el.__minix_prop_getters__;
+		const props = cache.xProps ? { ...(cache.xProps(scope, {}) || {}) } : {};
+		for (let i = 0; i < cache.binds.length; i++) {
+			const value = cache.binds[i](scope, {});
+			if (value && typeof value === 'object') Object.assign(props, value);
+		}
+		for (let i = 0; i < cache.propMap.length; i++) {
+			const { propName, getter } = cache.propMap[i];
+			props[propName] = getter(scope);
+		}
 		return props;
 	}
 
@@ -6342,9 +6417,10 @@ class MiniX_Compiler {
 			let cleanup = null;
 			let _hFireScope = null;
 			let _hFireScopeBase = null;
+			const _hGetter = this._compileGetter(expression);
 			const handler = (event) => {
 				if (event.meta?.componentInstance && event.meta.componentInstance !== childComponent.instance) return;
-				const liveScope = this.createScope(parentComponent, {}, el.parentNode || el);
+				const liveScope = this.createScope(parentComponent, null, el.parentNode || el);
 				if (_hFireScope === null || _hFireScopeBase !== liveScope) {
 					_hFireScope = Object.create(liveScope);
 					_hFireScope.$el = el;
@@ -6354,7 +6430,7 @@ class MiniX_Compiler {
 				_hFireScope.$event    = event.payload;
 				_hFireScope.event     = event;
 				_hFireScope.$emitEvent = event;
-				const result = this._evaluate(expression, _hFireScope);
+				const result = _hGetter(_hFireScope, undefined);
 				if (typeof result === 'function') result.call(_hFireScope, event.payload);
 				if (modifiers.includes('once')) cleanup?.();
 			};
@@ -6409,7 +6485,7 @@ class MiniX_Compiler {
 		let eventCleanup = null;
 
 		const mountOrUpdate = () => {
-			const scope = this.createScope(component, {}, start.parentNode || component.root);
+			const scope = this.createScope(component, null, start.parentNode || component.root);
 			const componentName = component._resolveComponentName(expression);
 			const props = this._evaluateComponentHostProps(template, scope);
 
@@ -6497,7 +6573,7 @@ class MiniX_Compiler {
 						const parent = node.parentElement;
 						if (parent?.closest?.('[data-x-once]')) continue;
 						let scope = scopeCache.get(parent);
-						if (!scope) { scope = this.createScope(component, {}, parent); scopeCache.set(parent, scope); }
+						if (!scope) { scope = this.createScope(component, null, parent); scopeCache.set(parent, scope); }
 						node.textContent = component.renderer.interpolateCompiled(entry.template, scope);
 					}
 				});
