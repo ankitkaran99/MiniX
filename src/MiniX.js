@@ -602,7 +602,7 @@ class MiniX_State {
 		this._trackedEffects.add(effect);
 		const watchers = this._getTargetWatcherSet(target, prop, true);
 		const runner = effect._scheduleRunner;
-		const dep = { state: this, depType: 'target', target, prop, runner, _trackedVersion: tv };
+		const dep = { state: this, depType: MiniX_State._DEP_TYPE_TARGET, target, prop, runner, _trackedVersion: tv };
 		propMap.set(prop, dep);
 		watchers.add(runner);
 		if (!effect.deps) effect.deps = new Set();
@@ -613,7 +613,14 @@ class MiniX_State {
 	_queuePlainCallback(cb, newVal, oldVal, propStr, meta) {
 		if (cb.__minix_cbid__ === undefined) cb.__minix_cbid__ = ++MiniX_State._cbIdCounter;
 		const key = cb.__minix_cbid__ + ':' + propStr;
-		MiniX_State._pendingCallbackQueue.set(key, [cb, newVal, oldVal, propStr, meta]);
+		const existing = MiniX_State._pendingCallbackQueue.get(key);
+		if (existing) {
+			// Update in-place — same callback+prop; only newVal and meta change.
+			existing[1] = newVal;
+			existing[4] = meta;
+		} else {
+			MiniX_State._pendingCallbackQueue.set(key, [cb, newVal, oldVal, propStr, meta]);
+		}
 	}
 
 	_notifyGlobalWatchers(newVal, oldVal, prop, meta = MiniX_State._EMPTY_META) {
@@ -699,6 +706,9 @@ class MiniX_State {
 	static _walkParentLinksActive = false;
 
 	static _EMPTY_META = Object.freeze({});
+	// Interned string constants — avoids allocating new string literals in hot
+	// dep-registration paths like _trackTargetEffect (called on every reactive read).
+	static _DEP_TYPE_TARGET = 'target';
 
 	_queueBatchedTargetNotify(target, prop, newVal, oldVal, meta = MiniX_State._EMPTY_META) {
 		if (MiniX_State._flushingBatchedNotifications) return false;
@@ -969,9 +979,9 @@ class MiniX_State {
 							const oldSize = obj.size;
 							const wrapped = self._isWrappable(value) ? self._wrap(value, childPath) : value;
 							if (hadKey && (Object.is(oldVal, wrapped) || Object.is(self._unwrapProxy(oldVal), value))) return receiver;
-							if (hadKey) self._unlinkTargetFromParent(oldVal, obj, String(key));
+							if (hadKey) self._unlinkTargetFromParent(oldVal, obj, key);
 							obj.set(key, wrapped);
-							if (self._isWrappable(value)) self._linkTargetToParent(value, obj, String(key));
+							if (self._isWrappable(value)) self._linkTargetToParent(value, obj, key);
 							self._devCapture('map:set', childPath, oldVal, wrapped, MiniX_State._META_MAP_SET);
 							self._bubbleTargetNotify(obj, key, wrapped, oldVal, MiniX_State._META_MAP_SET);
 							
@@ -993,7 +1003,7 @@ class MiniX_State {
 						if (deleted) {
 							MiniX_Effect._beginBatch();
 							try {
-								self._unlinkTargetFromParent(oldVal, obj, String(key));
+								self._unlinkTargetFromParent(oldVal, obj, key);
 								self._devCapture('map:delete', childPath, oldVal, undefined, MiniX_State._META_MAP_DEL);
 								self._bubbleTargetNotify(obj, key, undefined, oldVal, MiniX_State._META_MAP_DEL);
 								self._bubbleTargetNotify(obj, MiniX_State.SIZE_KEY, obj.size, oldSize, MiniX_State._META_MAP_DEL);
@@ -1009,7 +1019,7 @@ class MiniX_State {
 						if (!obj.size) return undefined;
 						const oldVal = new Map(obj);
 						const oldSize = oldVal.size;
-						for (const [key, value] of oldVal) self._unlinkTargetFromParent(value, obj, String(key));
+						for (const [key, value] of oldVal) self._unlinkTargetFromParent(value, obj, key);
 						obj.clear();
 						MiniX_Effect._beginBatch();
 						try {
@@ -1218,10 +1228,10 @@ class MiniX_State {
 								}
 							}
 							const mutType = 'array:' + prop;
-							const mutMeta = MiniX_State._META_ARR_MUTATORS.get(prop) || Object.freeze({ type: mutType });
-							this._devCapture(mutType, basePath, oldSnapshot, obj.slice(), mutMeta);
-							this._bubbleTargetNotify(obj, MiniX_State.ITERATE_KEY, proxy, oldSnapshot, mutMeta);
-							this._bubbleTargetNotify(obj, 'length', obj.length, oldSnapshot.length, mutMeta);
+							const mutMeta = MiniX_State._META_ARR_MUTATORS.get(prop);
+							this._devCapture(mutType, basePath, oldSnapshot, obj.slice(), mutMeta || MiniX_State._META_SET);
+							this._bubbleTargetNotify(obj, MiniX_State.ITERATE_KEY, proxy, oldSnapshot, mutMeta || MiniX_State._META_SET);
+							this._bubbleTargetNotify(obj, 'length', obj.length, oldSnapshot.length, mutMeta || MiniX_State._META_SET);
 							return result;
 						} finally {
 							MiniX_Effect._endBatch();
@@ -1350,7 +1360,7 @@ class MiniX_State {
 			const hadKey = Object.hasOwn(rawState, last);
 			const oldVal = rawState[last];
 			if (hadKey && Object.is(oldVal, value)) return value;
-			if (hadKey) this._unlinkTargetFromParent(oldVal, rawState, String(last));
+			if (hadKey) this._unlinkTargetFromParent(oldVal, rawState, last);
 			rawState[last] = value;
 			if (this._dev) this._devCapture('set', raw, oldVal, value, MiniX_State._META_SET_PATH_API);
 			this._bubbleTargetNotify(rawState, last, value, oldVal, MiniX_State._META_SET_PATH);
@@ -1391,7 +1401,7 @@ class MiniX_State {
 		const oldVal = parent instanceof Map ? parent.get(last) : parent[last];
 		if (hadKey && Object.is(oldVal, value)) return value;
 
-		if (hadKey) this._unlinkTargetFromParent(oldVal, parent, String(last));
+		if (hadKey) this._unlinkTargetFromParent(oldVal, parent, last);
 		if (parent instanceof Map) parent.set(last, value);
 		else parent[last] = value;
 
@@ -1418,7 +1428,7 @@ class MiniX_State {
 			const oldVal = parent.get(last);
 			const ok = parent.delete(last);
 			if (ok) {
-				this._unlinkTargetFromParent(oldVal, parent, String(last));
+				this._unlinkTargetFromParent(oldVal, parent, last);
 				if (this._dev) this._devCapture('delete', raw, oldVal, undefined, { type: 'delete:path', api: 'delete()' });
 				this._bubbleTargetNotify(parent, last, undefined, oldVal, MiniX_State._META_DEL_PATH);
 			}
@@ -1450,7 +1460,7 @@ class MiniX_State {
 		const oldVal = rawParent[last];
 		const ok = delete rawParent[last];
 		if (ok) {
-			this._unlinkTargetFromParent(oldVal, rawParent, String(last));
+			this._unlinkTargetFromParent(oldVal, rawParent, last);
 			this._devCapture('delete', raw, oldVal, undefined, { type: 'delete:path', api: 'delete()' });
 			this._bubbleTargetNotify(rawParent, last, undefined, oldVal, MiniX_State._META_DEL_PATH);
 			if (!Array.isArray(rawParent)) {
@@ -1600,7 +1610,7 @@ MiniX_State._STRUCTURAL_TYPES = new Set([
 	'set:add', 'set:delete', 'set:clear'
 ]);
 MiniX_State._proxySet = new WeakSet();
-MiniX_State._ARRAY_MUTATORS = new Set(['push', 'pop', 'shift', 'unshift', 'splice', 'sort', 'reverse']);
+MiniX_State._ARRAY_MUTATORS = new Set(['push', 'pop', 'shift', 'unshift', 'splice', 'sort', 'reverse', 'fill', 'copyWithin']);
 MiniX_State._normalizeCache = new Map();
 MiniX_State._compiledPathCache = new Map();
 MiniX_State._pathArrayCache = new WeakMap();
@@ -1911,9 +1921,10 @@ class MiniX_Renderer {
 			if (typeof part === 'string') { out.push(part); continue; }
 			let value = part.getter ? part.getter(scope, '') : this.evaluate(part.expr, scope, '');
 			if (part.pipes && this.modifiers) {
+				const pipeCtx = { value };
 				for (const pipeName of part.pipes) {
 					const handler = this.modifiers.get(pipeName);
-					if (handler) { try { value = handler({ value }); } catch (_) { } }
+					if (handler) { try { pipeCtx.value = value; value = handler(pipeCtx); } catch (_) { } }
 				}
 			}
 			out.push(value == null ? '' : String(value));
@@ -2390,7 +2401,7 @@ class MiniX_Listener {
 		};
 	}
 
-	_runStatement(expression, scope = {}) {
+	_runStatement(expression, scope = null) {
 		const cacheKey = String(expression);
 		let fn = MiniX_Listener._stmtFnCache.get(cacheKey);
 		if (fn === undefined) {
@@ -3287,10 +3298,11 @@ class MiniX_Compiler {
 		}
 
 		if (pipeNames) {
+			const pipeCtx = { value };
 			for (const pipeName of pipeNames) {
 				const handler = this.modifiers.get(pipeName);
 				if (handler) {
-					try { value = handler({ value }); } catch (_) { }
+					try { pipeCtx.value = value; value = handler(pipeCtx); } catch (_) { }
 				}
 			}
 		}
