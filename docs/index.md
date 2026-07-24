@@ -30,7 +30,8 @@ sidebar: Start here for the full Mini-X documentation map, plugin overview, repo
 
 MiniX is a small reactive frontend platform built around one runtime instead of a pile of disconnected utilities. The repository contains:
 
-*   `src/MiniX.js`: the core framework runtime, including deep reactivity, effects, compiler, component system, layouts, plugin hooks, and request client.
+*   `src/mx/`: the modular core framework source files (`App.js`, `Compiler.js`, `Component.js`, `State.js`, `Request.js`, etc.), compiled into `dist/MiniX.js`.
+*   `dist/MiniX.js` & `dist/MiniX.min.js`: the built bundle containing deep reactivity, effects, compiler, component system, layouts, plugin hooks, and request client.
 *   `src/mini-x-plugins/plugin-*.js`: official plugins for global stores, routing, forms, masking, i18n, scrolling, DataTables integration, and debug tooling.
 *   `src/Inspect.js`: a standalone validation engine used by the form plugin but usable independently.
 *   `src/Model.js` and `src/Collection.js`: helpers for reactive domain objects and list handling.
@@ -100,7 +101,7 @@ If you are new to the repository, the useful order is:
 
 ```
 <div id="app"></div>
-<script src="./src/MiniX.js"></script>
+<script src="./dist/MiniX.js"></script>
 <script src="./src/mini-x-plugins/plugin-store.js"></script>
 <script>
   const counterStore = MiniXStore.define('counter', {

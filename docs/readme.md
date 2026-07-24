@@ -67,7 +67,7 @@ Include the script, define a class, and mount it.
 
 ```
 <div id="app"></div>
-<script src="../src/MiniX.js"></script>
+<script src="../dist/MiniX.js"></script>
 <script>
 class CounterApp {
   data() {
