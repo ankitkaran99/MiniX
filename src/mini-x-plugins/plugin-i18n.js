@@ -184,9 +184,23 @@
     };
   }
 
+  function isSameValue(a, b) {
+    if (a === b) return true;
+    if (a == null || b == null) return false;
+    if (typeof a === 'object' && typeof b === 'object') {
+      try {
+        return JSON.stringify(a) === JSON.stringify(b);
+      } catch (_) {
+        return false;
+      }
+    }
+    return false;
+  }
+
   function safeEvaluate(compiler, expression, component, el, fallback) {
+    if (!expression || typeof expression !== 'string') return fallback;
+    const scope = compiler.createScope(component, {}, el);
     try {
-      const scope = compiler.createScope(component, {}, el);
       return compiler._evaluate(expression, scope, fallback);
     } catch (_) {
       return fallback;
@@ -419,7 +433,7 @@
               const namespace = binding.options?.ns || defaultNS;
               if (!isI18nReady(configured, versionState, namespace)) return;
               const translated = configured.t(binding.key, binding.options || {});
-              if (translated === controller.lastValue) return;
+              if (isSameValue(translated, controller.lastValue)) return;
               controller.lastValue = translated;
               writeTranslation(el, binding, translated, component);
             }

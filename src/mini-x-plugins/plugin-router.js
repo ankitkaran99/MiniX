@@ -175,7 +175,10 @@
 
 	// ─── Route Pattern Compilation ────────────────────────────────────────────────
 
-	function compileRoutePattern(fullPath) {
+	const _patternCache = new Map();
+	const _PATTERN_CACHE_LIMIT = 500;
+
+	function _compileRoutePatternRaw(fullPath) {
 		const normalized = normalizePath(fullPath);
 		const keys = [];
 
@@ -208,8 +211,22 @@
 			path: normalized,
 			keys,
 			exactRegex: new RegExp("^" + joined + "$"),
- prefixRegex: new RegExp("^" + joined + "(?:/|$)")
+			prefixRegex: new RegExp("^" + joined + "(?:/|$)")
 		};
+	}
+
+	function compileRoutePattern(fullPath) {
+		const normalized = normalizePath(fullPath);
+		const cached = _patternCache.get(normalized);
+		if (cached) return cached;
+
+		const compiled = _compileRoutePatternRaw(normalized);
+		if (_patternCache.size >= _PATTERN_CACHE_LIMIT) {
+			const oldestKey = _patternCache.keys().next().value;
+			if (oldestKey !== undefined) _patternCache.delete(oldestKey);
+		}
+		_patternCache.set(normalized, compiled);
+		return compiled;
 	}
 
 	function extractParams(record, path) {

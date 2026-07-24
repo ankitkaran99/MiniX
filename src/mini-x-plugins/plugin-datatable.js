@@ -44,22 +44,28 @@
         'mountEl'
     ]);
 
+    const HTML_ESCAPE_REGEX = /[&<>"']/g;
+    const HTML_ESCAPE_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+
     function escapeAttr(value) {
-        return String(value)
-        .replace(/&/g, '&amp;')
-        .replace(/"/g, '&quot;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
+        if (value == null) return '';
+        return String(value).replace(HTML_ESCAPE_REGEX, (c) => HTML_ESCAPE_MAP[c]);
     }
 
+    const SAFE_TAG_REGEX = /^[a-z][a-z0-9-]*$/;
+    const SAFE_ATTR_REGEX = /^[A-Za-z_:][A-Za-z0-9_:.-]*$/;
+    const ON_ATTR_PREFIX = /^on/i;
+
     function safeTagName(value) {
-        const tag = String(value || 'div').trim().toLowerCase();
-        return /^[a-z][a-z0-9-]*$/.test(tag) ? tag : 'div';
+        if (!value) return 'div';
+        const tag = String(value).trim().toLowerCase();
+        return SAFE_TAG_REGEX.test(tag) ? tag : 'div';
     }
 
     function isSafeAttrName(value) {
-        const name = String(value || '');
-        return /^[A-Za-z_:][A-Za-z0-9_:.-]*$/.test(name) && !/^on/i.test(name);
+        if (!value) return false;
+        const name = String(value);
+        return SAFE_ATTR_REGEX.test(name) && !ON_ATTR_PREFIX.test(name);
     }
 
     function encodeCellData(value) {
@@ -73,7 +79,7 @@
 
     function readCellData(mountEl) {
         const raw = mountEl.getAttribute('data-minix-dt-cell-data');
-        if (raw == null || raw === '') return null;
+        if (!raw) return null;
         try {
             return JSON.parse(raw);
         } catch (e) {
